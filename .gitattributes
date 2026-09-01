@@ -1,0 +1,15 @@
+* text=auto
+
+# These are read by Linux inside containers. A CRLF checkout on Windows breaks the
+# shebang line with "bad interpreter: /usr/bin/env bash^M", which is a confusing
+# failure a long way from its cause.
+*.sh        text eol=lf
+*.env       text eol=lf
+*.tsv       text eol=lf
+Dockerfile* text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+*.png binary
+*.safetensors binary
+*.gguf binary
