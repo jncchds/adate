@@ -1,0 +1,16 @@
+bin/
+obj/
+*.user
+.vs/
+compose/models/
+compose/output/
+compose/data/
+compose/.env
+compose/.env.*
+!compose/.env.example
+!compose/.env.*.example
+src/Game.Host/wwwroot/img/
+*.db
+*.db-wal
+*.db-shm
+artifacts/
