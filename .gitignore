@@ -14,3 +14,5 @@ src/Game.Host/wwwroot/img/
 *.db-wal
 *.db-shm
 artifacts/
+compose/custom_nodes/
+compose/input/

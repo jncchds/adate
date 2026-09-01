@@ -1,0 +1,33 @@
+# Model manifest for the adate inference stack.
+#
+# Format: <target path under /models>	<url>	<sha256 or "-">
+# Lines beginning with # are ignored. Tab-separated.
+#
+# HuggingFace-first by policy: every entry below resolves without an account or a
+# token. CivitAI-hosted models can be added here too and will use CIVITAI_TOKEN
+# from the environment if one is set, but nothing required by the game needs it.
+#
+# Sizes are listed so a first boot's download is predictable: ~5.5 GB total.
+
+# --- Image checkpoint -------------------------------------------------------
+# Counterfeit V2.5, fp16. SD1.5-family anime checkpoint, booru-tag dialect.
+# Chosen for the 12GB co-resident target: at ~2.1 GB of weights and roughly 4 GB
+# peak with IP-Adapter at 768px, it leaves room for an 8B Q4 LLM on the same card.
+# The SDXL-family alternatives are better looking and do not fit that budget.
+checkpoints/Counterfeit-V2.5_fp16.safetensors	https://huggingface.co/gsdf/Counterfeit-V2.5/resolve/main/Counterfeit-V2.5_fp16.safetensors	-
+
+# --- Character consistency --------------------------------------------------
+# IP-Adapter Plus (full-image reference). NOT FaceID or InstantID: those depend on
+# InsightFace embeddings trained on real faces and perform poorly on anime.
+ipadapter/ip-adapter-plus_sd15.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus_sd15.safetensors	-
+
+# CLIP vision encoder the IP-Adapter reads its reference image through.
+# Upstream calls this models/image_encoder/model.safetensors; ComfyUI wants it in
+# clip_vision/ under a name that says what it actually is.
+clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors	-
+
+# --- Alpha matting ----------------------------------------------------------
+# BiRefNet is native in ComfyUI as of PR #12747, so this needs a model file but no
+# custom node. Matting happens inside the graph and the client only ever receives
+# PNGs with alpha (HANDOFF 6).
+background_removal/birefnet.safetensors	https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors	-

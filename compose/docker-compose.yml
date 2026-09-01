@@ -1,0 +1,103 @@
+# adate inference stack -- runs on the GPU box, not next to the game.
+#
+# The game, the image service and the LLM are independently addressable and are
+# expected to sit on different machines. Nothing here assumes the game is nearby;
+# every service binds to all interfaces and is reached over the network.
+#
+#   docker compose --env-file profiles/12gb.env up -d
+#
+# The profile decides the VRAM budget. See profiles/ for what each one assumes.
+
+name: adate-inference
+
+services:
+  # First-boot provisioning. Installs pinned custom nodes and downloads models,
+  # then exits. ComfyUI waits for it to complete rather than racing it.
+  provision:
+    image: ${COMFY_IMAGE}
+    entrypoint: ["/bin/bash", "/provision/provision.sh"]
+    environment:
+      MODELS_DIR: /models
+      NODES_DIR: /custom_nodes
+      HF_TOKEN: ${HF_TOKEN:-}
+      CIVITAI_TOKEN: ${CIVITAI_TOKEN:-}
+      IPADAPTER_REF: ${IPADAPTER_REF:-main}
+    volumes:
+      - ./provision:/provision:ro
+      - ${MODELS_PATH}:/models
+      - ${CUSTOM_NODES_PATH}:/custom_nodes
+    restart: "no"
+
+  comfy:
+    image: ${COMFY_IMAGE}
+    ports:
+      - "${COMFY_PORT:-8188}:8188"
+    volumes:
+      - ${MODELS_PATH}:/root/ComfyUI/models
+      - ${CUSTOM_NODES_PATH}:/root/ComfyUI/custom_nodes
+      - ${OUTPUT_PATH}:/root/ComfyUI/output
+      - ${INPUT_PATH}:/root/ComfyUI/input
+    environment:
+      # --listen is what makes ComfyUI accept connections from another machine.
+      # Without it the game gets a refused connection and no explanation.
+      CLI_ARGS: "--listen 0.0.0.0 --port 8188 ${COMFY_EXTRA_ARGS:-}"
+    depends_on:
+      provision:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # OpenAI-compatible chat completions. The game binds to the API shape, never to
+  # a particular server: LM Studio, Ollama and vLLM all satisfy the same contract,
+  # so this service can be swapped or switched off in favour of a native install.
+  llm:
+    image: ${LLM_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    ports:
+      - "${LLM_PORT:-8080}:8080"
+    volumes:
+      - ${MODELS_PATH}/gguf:/models
+    command: >
+      --host 0.0.0.0 --port 8080
+      --hf-repo ${LLM_HF_REPO}
+      --hf-file ${LLM_HF_FILE}
+      --ctx-size ${LLM_CTX:-8192}
+      --n-gpu-layers ${LLM_GPU_LAYERS:-999}
+      --alias ${LLM_ALIAS:-chat}
+    environment:
+      LLAMA_CACHE: /models
+      HF_TOKEN: ${HF_TOKEN:-}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Embeddings for the memory system. Small enough that the 12GB profile runs it
+  # on CPU, keeping the whole VRAM budget for the image model and the LLM.
+  embeddings:
+    image: ${LLM_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    ports:
+      - "${EMBEDDINGS_PORT:-8081}:8080"
+    volumes:
+      - ${MODELS_PATH}/gguf:/models
+    command: >
+      --host 0.0.0.0 --port 8080
+      --embeddings
+      --hf-repo ${EMBEDDINGS_HF_REPO}
+      --hf-file ${EMBEDDINGS_HF_FILE}
+      --ctx-size ${EMBEDDINGS_CTX:-2048}
+      --n-gpu-layers ${EMBEDDINGS_GPU_LAYERS:-0}
+      --alias ${EMBEDDINGS_ALIAS:-embeddings}
+    environment:
+      LLAMA_CACHE: /models
+      HF_TOKEN: ${HF_TOKEN:-}
+    restart: unless-stopped
