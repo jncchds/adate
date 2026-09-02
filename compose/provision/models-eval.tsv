@@ -40,24 +40,6 @@ diffusion_models/flux-2-klein-4b.safetensors	https://huggingface.co/Comfy-Org/va
 text_encoders/qwen_3_4b.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors	-
 vae/flux2-vae.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors	-
 
-# --- Sana 1.6B (NVIDIA) -----------------------------------------------------
-# Apache 2.0 for the transformer, and by far the smallest candidate. Its text
-# encoder is Gemma-2-2b-it under the Gemma licence, which this project is
-# already subject to because the LLM tier is Gemma 4.
-#
-# REQUIRES INSTALL_EXTRA_MODELS=1. ComfyUI 0.34.2 on this box exposes no Sana
-# nodes at all -- verified against /object_info, not assumed -- so Sana needs
-# city96/ComfyUI_ExtraModels, a third-party pack running inside the ComfyUI
-# process. That is a supply-chain decision, which is why it is opt-in.
-#
-# Sana is trained for general photoreal and text rendering rather than anime, so
-# expect it to lose on style. It is in the mix because the age-legibility test is
-# style-agnostic and a 3.2 GB model that passes it would change the 12 GB budget
-# completely.
-sana/transformer.safetensors	https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px_diffusers/resolve/main/transformer/diffusion_pytorch_model.fp16.safetensors	-
-sana/vae.safetensors	https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px_diffusers/resolve/main/vae/diffusion_pytorch_model.fp16.safetensors	-
-text_encoders/gemma-2-2b-it.safetensors	https://huggingface.co/Efficient-Large-Model/gemma-2-2b-it/resolve/main/gemma-2-2b-it.safetensors	-
-
 # --- FLUX.2 klein 9B --------------------------------------------------------
 # Deliberately left commented out. It is the quality ceiling of the FLUX family
 # that fits on a 32 GB card at all, but:

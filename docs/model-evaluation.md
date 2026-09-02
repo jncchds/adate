@@ -36,8 +36,12 @@ ADATE_COMFY=http://192.168.2.33:8188 node eval/run.mjs illustrious pony noobai f
 powershell -File eval/score.ps1 -Models illustrious,pony,noobai,flux2-klein
 ```
 
-Candidates other than Illustrious need `models-eval.tsv` added to `MANIFESTS` and the stack
-restarted. Sana additionally needs `INSTALL_EXTRA_MODELS=1`.
+Candidates other than Illustrious need `models-eval.tsv` in `MANIFESTS` and the stack
+recreated; the 24GB profile ships with it enabled. Sana is a separate manifest and a separate
+flag and needs both: append `models-sana.tsv` to `MANIFESTS` and set `INSTALL_EXTRA_MODELS=1`.
+
+Everything stateful in the stack is a bind mount, so `docker compose down` destroys containers
+and nothing else. Weights already on disk are skipped, so recreating downloads only what is new.
 
 Booru and natural-language phrasings of every case are held side by side in `eval/cases.json`,
 and a model is sent the one matching its dialect. Sending booru tags to a natural-language
@@ -98,7 +102,8 @@ licence and the design agree for once.
 - **Sana has no native ComfyUI support.** Verified against `/object_info` on the box: no Sana
   nodes exist. It needs `city96/ComfyUI_ExtraModels` running inside the ComfyUI process, which
   is a supply-chain decision rather than a download. Its target paths in `models-eval.tsv` are
-  a best guess at what that pack expects and may need adjusting on first run.
+  a best guess at what that pack expects and may need adjusting on first run. They live in
+  `models-sana.tsv`, separate from the rest, so turning Sana off actually skips the 9.7 GB.
 - **FLUX.2 klein 4B is not 4B of VRAM.** 7.75 GB diffusion + 8.04 GB Qwen3-4B text encoder +
   0.34 GB VAE = 16.1 GB, or 11.9 GB with the fp4 encoder. The 12 GB profile cannot host it
   alongside an LLM.

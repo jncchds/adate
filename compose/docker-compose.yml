@@ -24,6 +24,8 @@ services:
       IPADAPTER_REF: ${IPADAPTER_REF:-main}
       MANIFESTS: ${MANIFESTS:-models-sd15.tsv}
       INSTALL_CONTROLNET_AUX: ${INSTALL_CONTROLNET_AUX:-0}
+      INSTALL_EXTRA_MODELS: ${INSTALL_EXTRA_MODELS:-0}
+      EXTRA_MODELS_REF: ${EXTRA_MODELS_REF:-main}
     volumes:
       - ./provision:/provision:ro
       - ${MODELS_PATH}:/models
