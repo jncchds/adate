@@ -1,7 +1,135 @@
-﻿@page "/"
+@page "/"
+@using Game.Core
+@using Game.Core.Characters
+@using Game.Core.Saves
+@using Game.Data.Repositories
+@using Game.Host.Services
+@inject SaveRepository Saves
+@inject CharacterRepository Characters
+@inject CharacterStudio Studio
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
-<PageTitle>Home</PageTitle>
+<PageTitle>New character</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Describe a character</h1>
 
-Welcome to your new app.
+<p class="lede">
+    These attributes are the contract the generated art is judged against. Every one of
+    them should survive all six sprites; hair colour is the first thing to drift.
+</p>
+
+<EditForm Model="@_form" OnValidSubmit="@CreateAsync" FormName="appearance">
+    <DataAnnotationsValidator />
+
+    <div class="grid">
+        <label>
+            Age
+            <InputNumber @bind-Value="_form.Age" min="18" max="99" />
+            <small>Adults only. Injected into every prompt, because tag-based checkpoints
+                read "slim" and "petite" as juvenile without an explicit anchor.</small>
+        </label>
+
+        <label>
+            Hair colour
+            <InputText @bind-Value="_form.HairColor" placeholder="red hair" />
+        </label>
+
+        <label>
+            Hair style
+            <InputText @bind-Value="_form.HairStyle" placeholder="long hair, braid" />
+        </label>
+
+        <label>
+            Eye colour
+            <InputText @bind-Value="_form.EyeColor" placeholder="green eyes" />
+        </label>
+
+        <label>
+            Skin tone
+            <InputText @bind-Value="_form.SkinTone" placeholder="pale skin" />
+        </label>
+
+        <label>
+            Build
+            <InputText @bind-Value="_form.Build" placeholder="athletic" />
+        </label>
+
+        <label>
+            Height
+            <InputText @bind-Value="_form.Height" placeholder="tall" />
+        </label>
+
+        <label>
+            Distinguishing feature
+            <InputText @bind-Value="_form.DistinguishingFeature" placeholder="freckles" />
+            <small>Optional.</small>
+        </label>
+    </div>
+
+    <ValidationSummary />
+
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+
+    <button type="submit" disabled="@_working">
+        @(_working ? "Creating…" : $"Generate {_candidateCount} portraits")
+    </button>
+</EditForm>
+
+@code {
+    private readonly AppearanceForm _form = new();
+    private bool _working;
+    private string? _error;
+    private int _candidateCount = 4;
+
+    protected override void OnInitialized() => _candidateCount = 4;
+
+    private async Task CreateAsync()
+    {
+        _working = true;
+        _error = null;
+
+        try
+        {
+            var appearance = _form.ToAppearance();
+
+            // Validated here so a bad value is reported against the field the player typed
+            // it into, rather than surfacing later as a CHECK constraint or a bad prompt.
+            appearance.Validate();
+
+            // Spike 0 has exactly one save, but it is created and referenced explicitly:
+            // every table carries save_id from day one (HANDOFF 1.4).
+            var save = await Saves.CreateAsync(
+                Studio.StylePackId,
+                Studio.PackFingerprint(),
+                Ceiling.PG13);
+
+            var character = await Characters.CreateAsync(save.Id, appearance);
+
+            Navigation.NavigateTo($"/candidates/{character.Id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _working = false;
+        }
+    }
+
+    private sealed class AppearanceForm
+    {
+        public int Age { get; set; } = 24;
+        public string HairColor { get; set; } = "red hair";
+        public string HairStyle { get; set; } = "long hair";
+        public string EyeColor { get; set; } = "green eyes";
+        public string SkinTone { get; set; } = "pale skin";
+        public string Build { get; set; } = "slim";
+        public string Height { get; set; } = "average height";
+        public string DistinguishingFeature { get; set; } = "freckles";
+
+        public CharacterAppearance ToAppearance() => new(
+            Age, EyeColor, HairColor, HairStyle, SkinTone, Build, Height, DistinguishingFeature);
+    }
+}

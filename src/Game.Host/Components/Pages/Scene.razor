@@ -1,0 +1,157 @@
+@page "/scene/{CharacterId:guid}"
+@using Game.Core.Characters
+@using Game.Core.Content
+@using Game.Core.Scenes
+@using Game.Data.Repositories
+@using Game.Host.Services
+@inject CharacterRepository Characters
+@inject ILocationCatalog Locations
+@inject CharacterStudio Studio
+@rendermode InteractiveServer
+
+<PageTitle>Scene</PageTitle>
+
+<h1>Scene</h1>
+
+@if (_error is not null)
+{
+    <div class="error">
+        <strong>Generation failed.</strong>
+        <p>@_error</p>
+        <button @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_sprites is null || _background is null)
+{
+    <div class="working">
+        <p>Generating @(_sprites is null ? "six expression sprites" : "the background").</p>
+    </div>
+}
+else
+{
+    @* HANDOFF 1.1: the background and the sprite are separate images, stacked as layers in
+       the browser. Nothing is ever flattened server-side, which is what lets one background
+       serve every expression and one sprite serve every location. *@
+    <div class="stage">
+        <img class="layer background" src="@_background" alt="@_location.DisplayName" />
+
+        @* Every sprite is in the DOM at once and switching is an opacity change. The images
+           are already in the browser cache and served immutable, so changing expression
+           refetches nothing and generates nothing. *@
+        @foreach (var (expression, path) in _sprites)
+        {
+            <img class="layer sprite @(expression == _expression ? "shown" : null)"
+                 src="@path"
+                 alt="@expression" />
+        }
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <span class="control-label">Expression</span>
+            @foreach (var expression in CharacterStudio.Expressions)
+            {
+                <button type="button"
+                        class="@(expression == _expression ? "active" : null)"
+                        @onclick="() => _expression = expression">
+                    @expression
+                </button>
+            }
+        </div>
+
+        <div class="control-group">
+            <span class="control-label">Location</span>
+            @foreach (var location in Locations.All())
+            {
+                <button type="button"
+                        class="@(location.Id == _location.Id ? "active" : null)"
+                        @onclick="() => ChangeSceneAsync(location.Id, _time)">
+                    @location.DisplayName
+                </button>
+            }
+        </div>
+
+        <div class="control-group">
+            <span class="control-label">Time</span>
+            @foreach (var time in Enum.GetValues<TimeOfDay>())
+            {
+                <button type="button"
+                        class="@(time == _time ? "active" : null)"
+                        @onclick="() => ChangeSceneAsync(_location.Id, time)">
+                    @time
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid CharacterId { get; set; }
+
+    private CharacterRecord? _character;
+    private IReadOnlyDictionary<string, string>? _sprites;
+    private string? _background;
+    private LocationDefinition _location = null!;
+    private TimeOfDay _time = TimeOfDay.Evening;
+    private string _expression = "neutral";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _location = Locations.All()[0];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _sprites = null;
+        _background = null;
+
+        try
+        {
+            _character = await Characters.GetAsync(CharacterId)
+                ?? throw new InvalidOperationException($"No character with id {CharacterId}.");
+
+            // Sprites first: they are the slow half and the half the spike is judged on.
+            _sprites = await Studio.GenerateSpritesAsync(_character);
+            StateHasChanged();
+
+            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, _location.Id, _time);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Changing location or time regenerates only the background. The sprites are unaffected
+    /// because they contain no scenery at all, which is the whole reason for compositing.
+    /// </summary>
+    private async Task ChangeSceneAsync(string locationId, TimeOfDay time)
+    {
+        if (_character is null)
+        {
+            return;
+        }
+
+        _location = Locations.Get(locationId);
+        _time = time;
+
+        // Held so the previous background stays on screen while the new one generates,
+        // rather than flashing to empty (HANDOFF 9).
+        var previous = _background;
+
+        try
+        {
+            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, locationId, time);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _background = previous;
+        }
+    }
+}

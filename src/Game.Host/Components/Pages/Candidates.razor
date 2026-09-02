@@ -1,0 +1,108 @@
+@page "/candidates/{CharacterId:guid}"
+@using Game.Core.Characters
+@using Game.Data.Repositories
+@using Game.Host.Services
+@inject CharacterRepository Characters
+@inject CharacterStudio Studio
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Choose an anchor</PageTitle>
+
+<h1>Choose an anchor</h1>
+
+<p class="lede">
+    One prompt, @Studio.StylePackId, four seeds. Pick the one that reads most like the
+    character you described — every sprite is generated against it, so this choice decides
+    what "the same person" means for the rest of the save.
+</p>
+
+@if (_error is not null)
+{
+    <div class="error">
+        <strong>Generation failed.</strong>
+        <p>@_error</p>
+        <button @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_candidates is null)
+{
+    <div class="working">
+        <p>Generating four portraits. This runs on the GPU box and takes under a minute if
+            the model is already loaded, longer on a cold start.</p>
+        <p><small>Leaving this page will not cancel it — the work is held outside the
+            circuit and you will rejoin it when you come back.</small></p>
+    </div>
+}
+else
+{
+    <div class="candidate-grid">
+        @foreach (var candidate in _candidates)
+        {
+            <figure class="candidate @(_selected?.Hash == candidate.Hash ? "selected" : null)">
+                <button type="button" @onclick="() => _selected = candidate">
+                    <img src="@candidate.RelativePath" alt="Candidate portrait, seed @candidate.Seed" />
+                </button>
+                <figcaption>seed @candidate.Seed</figcaption>
+            </figure>
+        }
+    </div>
+
+    <button type="button" disabled="@(_selected is null || _approving)" @onclick="ApproveAsync">
+        @(_approving ? "Saving…" : "Use this as the anchor")
+    </button>
+}
+
+@code {
+    [Parameter]
+    public Guid CharacterId { get; set; }
+
+    private CharacterRecord? _character;
+    private IReadOnlyList<Candidate>? _candidates;
+    private Candidate? _selected;
+    private bool _approving;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _candidates = null;
+
+        try
+        {
+            _character = await Characters.GetAsync(CharacterId)
+                ?? throw new InvalidOperationException($"No character with id {CharacterId}.");
+
+            // JobRunner deduplicates by key, so a re-render or a return visit rejoins the
+            // generation already in flight instead of starting a second one.
+            _candidates = await Studio.GenerateCandidatesAsync(_character);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (_selected is null || _character is null)
+        {
+            return;
+        }
+
+        _approving = true;
+
+        try
+        {
+            await Studio.ApproveAnchorAsync(_character.Id, _selected);
+            Navigation.NavigateTo($"/scene/{_character.Id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _approving = false;
+        }
+    }
+}

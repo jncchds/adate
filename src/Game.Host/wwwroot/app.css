@@ -36,3 +36,236 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* ---------------------------------------------------------------- adate ---- */
+
+/*
+ * Tokens are defined once for light and overridden for dark, so nothing has its only
+ * definition inside a media query. The stage keeps a fixed dark ground in both themes:
+ * it is a rendered scene, not part of the page chrome, and a light backdrop behind a
+ * matted sprite makes alpha fringing much harder to judge.
+ */
+:root {
+    color-scheme: light dark;
+
+    --bg: #fbfbfa;
+    --fg: #1a1a1a;
+    --muted: #5a5a5a;
+    --line: #c8c8c8;
+    --field-bg: #ffffff;
+    --accent: #1a1a1a;
+    --accent-fg: #ffffff;
+    --error-fg: #a11;
+    --error-bg: #fff4f4;
+    --notice-bg: #f2f2f0;
+    --stage-bg: #101012;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #121213;
+        --fg: #ececec;
+        --muted: #a2a2a2;
+        --line: #3d3d3f;
+        --field-bg: #1d1d1f;
+        --accent: #ececec;
+        --accent-fg: #121213;
+        --error-fg: #ff8f8f;
+        --error-bg: #2a1a1a;
+        --notice-bg: #1c1c1e;
+        --stage-bg: #050506;
+    }
+}
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: 2rem 1rem 4rem;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.lede {
+    color: var(--muted);
+    max-width: 46rem;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 600;
+}
+
+.grid input {
+    padding: 0.4rem 0.5rem;
+    font: inherit;
+    font-weight: 400;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--field-bg);
+    color: var(--fg);
+}
+
+.grid small {
+    font-weight: 400;
+    color: var(--muted);
+}
+
+button {
+    font: inherit;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--field-bg);
+    color: var(--fg);
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+}
+
+.error {
+    border-left: 3px solid var(--error-fg);
+    background: var(--error-bg);
+    color: var(--fg);
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+}
+
+.error p {
+    color: var(--error-fg);
+}
+
+.working {
+    border-left: 3px solid var(--line);
+    background: var(--notice-bg);
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    color: var(--muted);
+}
+
+/* Candidate grid ------------------------------------------------------------ */
+
+.candidate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.candidate {
+    margin: 0;
+}
+
+.candidate button {
+    padding: 0;
+    border: 3px solid transparent;
+    border-radius: 6px;
+    overflow: hidden;
+    display: block;
+    width: 100%;
+    background: none;
+}
+
+.candidate.selected button {
+    border-color: var(--accent);
+}
+
+.candidate img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.candidate figcaption {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 0.25rem;
+}
+
+/* Composite stage ----------------------------------------------------------- */
+
+/*
+ * HANDOFF 1.1: background and sprite are separate images stacked as absolutely
+ * positioned layers. Nothing is flattened server-side, so one background serves every
+ * expression and one sprite serves every location.
+ */
+.stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--stage-bg);
+    margin: 1.5rem 0;
+}
+
+.layer {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+}
+
+.layer.background {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/*
+ * Every sprite is present at once and switching is an opacity change. The PNGs are
+ * already in the browser cache and served immutable, so an expression change refetches
+ * nothing and generates nothing.
+ */
+.layer.sprite {
+    height: 96%;
+    width: auto;
+    inset: auto 0 0 0;
+    margin: 0 auto;
+    opacity: 0;
+    transition: opacity 140ms ease-in-out;
+    pointer-events: none;
+}
+
+.layer.sprite.shown {
+    opacity: 1;
+}
+
+/* Controls ------------------------------------------------------------------ */
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.control-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.control-label {
+    font-weight: 600;
+    min-width: 6rem;
+}

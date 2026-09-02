@@ -16,3 +16,4 @@ src/Game.Host/wwwroot/img/
 artifacts/
 compose/custom_nodes/
 compose/input/
+src/Game.Host/data/
