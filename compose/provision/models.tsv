@@ -31,3 +31,12 @@ clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors	https://huggingface.co/h
 # custom node. Matting happens inside the graph and the client only ever receives
 # PNGs with alpha (HANDOFF 6).
 background_removal/birefnet.safetensors	https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors	-
+
+# IP-Adapter Plus FACE. Trained on face crops, so it carries identity without
+# dragging the reference's clothing and composition along with it -- which full-image
+# Plus does hard enough to make outfit, pose and expression uncontrollable at any
+# weight that preserves identity.
+#
+# Still CLIP-vision based, so it is safe on anime. NOT FaceID or InstantID: those use
+# InsightFace embeddings trained on real faces and perform poorly here.
+ipadapter/ip-adapter-plus-face_sd15.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus-face_sd15.safetensors	-
