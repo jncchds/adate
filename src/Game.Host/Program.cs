@@ -36,6 +36,7 @@ builder.Services.PostConfigure<StudioOptions>(o =>
 {
     o.StylePackDirectory = ResolveContentPath(o.StylePackDirectory);
     o.LocationsFile = ResolveContentPath(o.LocationsFile);
+    o.PoseDirectory = ResolveContentPath(o.PoseDirectory);
 });
 
 builder.Services.PostConfigure<Game.Imaging.Workflows.WorkflowOptions>(o =>
@@ -54,6 +55,11 @@ builder.Services.AddSingleton<ILocationCatalog>(sp =>
 
 // One compiler per prompt dialect. Spike 0 ships the booru dialect only.
 builder.Services.AddSingleton<IPromptCompiler, BooruPromptCompiler>();
+
+// Pose skeletons are shipped content, seeded into the image store on first use.
+builder.Services.AddSingleton(sp => new PoseCatalog(
+    sp.GetRequiredService<IImageStore>(),
+    sp.GetRequiredService<IOptions<StudioOptions>>().Value.PoseDirectory));
 
 builder.Services.AddSingleton<JobRunner>();
 builder.Services.AddSingleton<CharacterStudio>();

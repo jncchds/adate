@@ -11,7 +11,8 @@
     "scheduler": "normal",
     "steps": 30,
     "cfg": 5.5,
-    "anchorWeight": 0
+    "anchorWeight": 0,
+    "poseStrength": 0.95
   },
   "resolutions": {
     "portrait": {
@@ -26,6 +27,11 @@
       "width": 1216,
       "height": 832
     }
+  },
+  "workflows": {
+    "portrait": "xl-portrait",
+    "sprite": "xl-sprite",
+    "background": "xl-background"
   },
   "mattingModel": "birefnet.safetensors",
   "supportedCeilings": [
@@ -72,6 +78,10 @@
       "negative": [
         "1boy",
         "male focus"
+      ],
+      "outfit": [
+        "white blouse",
+        "pleated skirt"
       ]
     },
     "male": {
@@ -86,8 +96,20 @@
         "1girl",
         "feminine",
         "breasts"
+      ],
+      "outfit": [
+        "white dress shirt",
+        "black trousers"
       ]
     }
+  },
+  "expressions": {
+    "neutral": "neutral expression",
+    "smile": "(smile:1.2), happy",
+    "laughing": "(laughing:1.2), open mouth, closed eyes",
+    "sad": "(crying:1.2), sad, tears",
+    "angry": "(angry:1.2), frown, furrowed brow",
+    "surprised": "(surprised:1.2), wide eyes, open mouth"
   },
   "negativeByCeiling": {
     "PG13": [

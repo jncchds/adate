@@ -79,6 +79,24 @@ public sealed class JsonStylePackLoader : IStylePackLoader
             }
         }
 
+        foreach (var (subject, profile) in pack.Subjects)
+        {
+            if (profile.Outfit.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Subject '{subject}' in style pack '{packId}' has no default outfit. " +
+                    "An unspecified outfit is re-invented on every render, which moves the " +
+                    "silhouette between expressions and breaks the crossfade.");
+            }
+        }
+
+        if (pack.Expressions.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Style pack '{packId}' defines no expressions. Slot names are not usable tags " +
+                "on their own, so the pack has to supply the phrasing for each one.");
+        }
+
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(_cache.GetOrAdd(packId, pack));
     }

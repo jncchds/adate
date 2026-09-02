@@ -139,3 +139,34 @@ female-coded terms did not stop a bare male chest, so each subject carries its o
 Appearance is persisted as JSON, so this needed no migration. A row written before this change
 deserialises with a blank subject and fails `Validate` with a message naming the field, which
 is the right outcome for a save that predates the concept.
+
+## Outfits and expression phrasing are pack vocabulary too
+
+The studio was passing `casual clothes` as the sprite outfit and the raw slot name as the
+expression. Both are placeholder-shaped and both cost measurable consistency: the vague outfit
+came back as a different shirt on one of six frames, and bare mood words moved posture rather
+than just the face.
+
+Concrete outfits now live on the subject profile, since the right garments differ per subject,
+and expression phrasing lives in a pack-level `expressions` map. Both are dialect-specific --
+`(crying:1.2), sad, tears` is booru phrasing and means nothing to a natural-language
+checkpoint -- so neither belongs in `CharacterStudio`.
+
+The loader rejects a pack missing either. They read as optional polish and are not: the
+crossfade is the acceptance criterion, and both of these break it.
+
+## The style pack names its own workflows
+
+`CharacterStudio` hardcoded `"portrait"`, `"sprite"` and `"background"`, which silently meant
+the SD1.5 graphs. A pack and its graphs are one unit — an SDXL pack cannot run an SD1.5 graph —
+so the binding is a `workflows` block in the pack, and switching packs switches graphs with it.
+
+## Pose skeletons are shipped content
+
+`content/poses/*.png`, copied into the image store on first use, because that is where the
+image provider reads pose inputs from. Authored once and reused by every expression in a set:
+a skeleton that varied per expression would move the body between frames, which is the thing
+the crossfade cannot absorb.
+
+The framing tag has to match the skeleton. A full-body skeleton against an `upper body` prompt
+measured 73-77% silhouette overlap where the matched pair measured 93-96%.

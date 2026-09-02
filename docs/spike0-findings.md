@@ -127,6 +127,36 @@ contact sheet.
 The male set was rendered at 0.55 only and drifts further than the female one, mostly in
 camera distance. It has not been re-measured at 0.95.
 
+## Judged in the viewer
+
+The Blazor app now runs against Illustrious end to end: attributes, four candidates, an
+approved seed, six sprites, a background, and the composite. First run through it produced
+73-77% overlap rather than the 93-96% the harness had measured, and three separate causes
+came out of chasing that gap.
+
+**The framing tag must agree with the skeleton.** The sprite intent asked for `upper body`
+while the checked-in skeleton is full-body. ControlNet at 0.95 cannot reconcile a conflict
+like that, so the model re-splits the difference every render and the crop wanders. Matching
+the tag to the skeleton recovered most of the loss on its own.
+
+**A vague outfit is not a neutral outfit.** `casual clothes` was re-interpreted per render --
+one expression came back in a different shirt -- and a changed silhouette costs far more
+overlap than any facial change. Outfits are now concrete garment tags per subject, in the
+pack.
+
+**A slot name is not a tag.** Bare `sad` and `angry` move posture, lean and shoulders. The
+pack now supplies weighted, face-scoped phrasing per slot, e.g. `(crying:1.2), sad, tears`.
+
+After all three, the male set sits at 74-88%, still short of the female set at 93-96% under
+otherwise identical settings. The checked-in skeleton was extracted from a female sprite,
+which is the obvious suspect and is untested.
+
+**What the numbers mean, watched rather than measured.** Frozen at the midpoint of the fade,
+88% reads as a soft dissolve: one body, a faint double edge on the near arm and the hair.
+74% shows a clearly translucent second body. So the criterion has a rough threshold somewhere
+in between, and the per-expression number is what decides whether a slot is usable -- an
+average across the set would hide exactly the frames that fail.
+
 ## Both love interest genders
 
 Illustrious renders men without any difficulty, but the anchor wording matters as much as it

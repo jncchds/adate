@@ -20,6 +20,7 @@ public sealed class CharacterStudio(
     JsonStylePackLoader packText,
     CharacterRepository characters,
     ImageCacheRepository cache,
+    PoseCatalog poses,
     JobRunner jobs,
     IOptions<StudioOptions> options)
 {
@@ -82,7 +83,7 @@ public sealed class CharacterStudio(
 
             var image = await images.GenerateAsync(
                 new ImageRequest(
-                    WorkflowId: "portrait",
+                    WorkflowId: pack.Workflows.Portrait,
                     Positive: positive,
                     Negative: negative,
                     Seed: seed,
@@ -117,41 +118,59 @@ public sealed class CharacterStudio(
         CharacterRecord character,
         CancellationToken ct)
     {
-        if (character.AnchorImageHash is null)
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var seedAndTags = pack.Consistency is ConsistencyStrategy.SeedAndTags;
+
+        if (seedAndTags && character.AnchorSeed is null)
+        {
+            throw new InvalidOperationException(
+                "This character has no approved anchor seed. Under SeedAndTags the seed is " +
+                "what makes the six expressions one person, so there is nothing to hold them " +
+                "together without it.");
+        }
+
+        if (!seedAndTags && character.AnchorImageHash is null)
         {
             throw new InvalidOperationException(
                 "This character has no approved anchor portrait, so there is nothing for the " +
                 "IP-Adapter to hold the sprites consistent against.");
         }
 
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        // Every expression is conditioned on the same skeleton. Varying it would move the
+        // body between frames, which is exactly what the crossfade cannot absorb.
+        var poseHash = seedAndTags
+            ? await poses.HashForAsync(_options.SpritePose, ct).ConfigureAwait(false)
+            : null;
+
         var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Sprite, character.Appearance.Subject);
         var sprites = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var expression in Expressions)
         {
-            var intent = SpriteIntent(expression);
+            var intent = SpriteIntent(pack, character.Appearance.Subject, expression);
             var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Sprite);
 
-            // A fixed seed per expression slot, derived from the expression name. This is
-            // step 2 of the HANDOFF 2 fallback ladder, taken up front: it costs nothing and
-            // it means a disappointing sprite can be regenerated with a changed prompt
-            // without every other sprite shifting underneath it.
-            var seed = DeriveSeed(character.Id, expression.GetHashCode(StringComparison.Ordinal));
+            // Under SeedAndTags all six share the character's approved seed: that shared seed
+            // is the identity, so varying it per slot would hand back six related strangers.
+            // Under IpAdapterPlus the anchor image carries identity instead, which frees the
+            // seed to vary per slot so one disappointing sprite can be regenerated alone.
+            var seed = seedAndTags
+                ? character.AnchorSeed!.Value
+                : DeriveSeed(character.Id, expression.GetHashCode(StringComparison.Ordinal));
 
             var image = await images.GenerateAsync(
                 new ImageRequest(
-                    WorkflowId: "sprite",
+                    WorkflowId: pack.Workflows.Sprite,
                     Positive: positive,
                     Negative: negative,
                     Seed: seed,
                     Width: pack.Resolutions.Sprite.Width,
                     Height: pack.Resolutions.Sprite.Height,
                     PackFingerprint: PackFingerprint(),
-                    AnchorImageHash: character.AnchorImageHash,
-                    AnchorWeight: pack.Sampler.AnchorWeight,
-                    PoseImageHash: null,
-                    PoseStrength: null,
+                    AnchorImageHash: seedAndTags ? null : character.AnchorImageHash,
+                    AnchorWeight: seedAndTags ? null : pack.Sampler.AnchorWeight,
+                    PoseImageHash: poseHash,
+                    PoseStrength: poseHash is null ? null : pack.Sampler.PoseStrength,
                     Ceiling: _options.Ceiling),
                 ct).ConfigureAwait(false);
 
@@ -184,7 +203,7 @@ public sealed class CharacterStudio(
 
         var image = await images.GenerateAsync(
             new ImageRequest(
-                WorkflowId: "background",
+                WorkflowId: pack.Workflows.Background,
                 Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background),
                 Negative: compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Background, subject: null),
                 // Backgrounds are generated once per location and time and then reused for
@@ -211,8 +230,19 @@ public sealed class CharacterStudio(
     private static SceneIntent PortraitIntent() =>
         new("studio", TimeOfDay.Midday, "casual clothes", "looking at viewer", "neutral", Framing.Portrait);
 
-    private static SceneIntent SpriteIntent(string expression) =>
-        new("studio", TimeOfDay.Midday, "casual clothes", "standing", expression, Framing.Bust);
+    /// <summary>
+    /// The framing tag has to agree with the pose skeleton. Measured: a full-body skeleton
+    /// against an "upper body" prompt drops silhouette overlap between expressions from
+    /// 93-96% to 73-77%, because the model reconciles the conflict differently every time and
+    /// the crop wanders. Changing the skeleton means changing this to match.
+    /// </summary>
+    private static SceneIntent SpriteIntent(StylePack pack, string subject, string expression) =>
+        new("studio",
+            TimeOfDay.Midday,
+            string.Join(", ", pack.SubjectFor(subject).Outfit),
+            "standing",
+            pack.ExpressionFor(expression),
+            Framing.HalfBody);
 
     /// <summary>
     /// A stable seed from an id and a slot. Generation must be reproducible: the same
@@ -239,11 +269,21 @@ public sealed class StudioOptions
 {
     public const string SectionName = "Studio";
 
-    public string StylePackId { get; set; } = "counterfeit-anime";
+    public string StylePackId { get; set; } = "illustrious-anime";
 
     public string StylePackDirectory { get; set; } = "stylepacks";
 
     public string LocationsFile { get; set; } = Path.Combine("content", "locations.json");
+
+    /// <summary>Authored OpenPose skeletons, one PNG per pose slot.</summary>
+    public string PoseDirectory { get; set; } = Path.Combine("content", "poses");
+
+    /// <summary>
+    /// The pose slot every expression sprite is conditioned on. One slot in Spike 0: the six
+    /// expressions have to share a skeleton to be crossfadable, so a second slot would be a
+    /// second set of six rather than a variation within this one.
+    /// </summary>
+    public string SpritePose { get; set; } = "standing";
 
     /// <summary>HANDOFF 2: four candidate portraits, same prompt, four seeds.</summary>
     public int CandidateCount { get; set; } = 4;

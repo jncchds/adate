@@ -4,8 +4,17 @@
     {
       "name": "game",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/Game.Host", "--launch-profile", "http", "--no-launch-profile-args"],
-      "port": 5220
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/Game.Host",
+        "--urls",
+        "http://localhost:5177"
+      ],
+      "port": 5177,
+      "env": {
+        "ADATE_Comfy__BaseAddress": "http://192.168.2.33:8188"
+      }
     }
   ]
 }

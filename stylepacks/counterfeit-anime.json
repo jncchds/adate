@@ -11,7 +11,8 @@
     "scheduler": "karras",
     "steps": 28,
     "cfg": 7,
-    "anchorWeight": 0.75
+    "anchorWeight": 0.75,
+    "poseStrength": 0
   },
   "resolutions": {
     "portrait": {
@@ -26,6 +27,11 @@
       "width": 768,
       "height": 512
     }
+  },
+  "workflows": {
+    "portrait": "portrait",
+    "sprite": "sprite",
+    "background": "background"
   },
   "mattingModel": "birefnet.safetensors",
   "supportedCeilings": [
@@ -65,6 +71,10 @@
       "negative": [
         "1boy",
         "male focus"
+      ],
+      "outfit": [
+        "white blouse",
+        "pleated skirt"
       ]
     },
     "male": {
@@ -79,8 +89,20 @@
         "1girl",
         "feminine",
         "breasts"
+      ],
+      "outfit": [
+        "white dress shirt",
+        "black trousers"
       ]
     }
+  },
+  "expressions": {
+    "neutral": "neutral expression",
+    "smile": "(smile:1.2), happy",
+    "laughing": "(laughing:1.2), open mouth, closed eyes",
+    "sad": "(crying:1.2), sad, tears",
+    "angry": "(angry:1.2), frown, furrowed brow",
+    "surprised": "(surprised:1.2), wide eyes, open mouth"
   },
   "negativeByCeiling": {
     "PG13": [

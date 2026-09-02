@@ -30,6 +30,12 @@ public sealed record StylePack
     public required ResolutionSet Resolutions { get; init; }
 
     /// <summary>
+    /// Which ComfyUI graph serves each job. A pack and its graphs are one unit — an SDXL pack
+    /// cannot run an SD1.5 graph — so the binding belongs here rather than at the call site.
+    /// </summary>
+    public required WorkflowSet Workflows { get; init; }
+
+    /// <summary>
     /// Background removal model used inside the Comfy graph (HANDOFF 6). Matting happens
     /// server-side in the graph so the client only ever receives PNGs with alpha.
     /// </summary>
@@ -61,6 +67,36 @@ public sealed record StylePack
     /// </remarks>
     public IReadOnlyDictionary<string, SubjectProfile> Subjects { get; init; }
         = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tags for each expression slot, keyed by the slot name the game uses.
+    /// </summary>
+    /// <remarks>
+    /// A bare slot name is not a usable tag. Measured, "sad" and "angry" alone move the whole
+    /// body — posture, lean, shoulders — where a weighted face-scoped phrase such as
+    /// <c>(crying:1.2), sad, tears</c> changes the face and leaves the body where the skeleton
+    /// put it. That difference is the crossfade.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> Expressions { get; init; }
+        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Tags for <paramref name="slot"/>, or a throw naming what the pack does offer.</summary>
+    public string ExpressionFor(string slot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slot);
+
+        foreach (var (key, tags) in Expressions)
+        {
+            if (string.Equals(key, slot, StringComparison.OrdinalIgnoreCase))
+            {
+                return tags;
+            }
+        }
+
+        var known = Expressions.Count == 0 ? "none" : string.Join(", ", Expressions.Keys.Order(StringComparer.Ordinal));
+        throw new InvalidOperationException(
+            $"Style pack '{Id}' defines no expression '{slot}'. Known expressions: {known}.");
+    }
 
     /// <summary>
     /// The anchor for <paramref name="subject"/>, or a throw naming what the pack does offer.
@@ -109,18 +145,40 @@ public sealed record StylePack
 /// Added to the negative prompt for character renders only. Backgrounds negate every
 /// subject regardless, so applying these there would be redundant.
 /// </param>
+/// <param name="Outfit">
+/// Concrete garment tags for this subject, used when a scene does not name an outfit.
+/// Measured: a vague placeholder like "casual clothes" is re-interpreted per render — one
+/// expression came back in a different shirt — which moves the silhouette and breaks the
+/// crossfade far more than any facial change does. Vague is not neutral here.
+/// </param>
 public sealed record SubjectProfile(
     IReadOnlyList<string> Positive,
-    IReadOnlyList<string> Negative);
+    IReadOnlyList<string> Negative,
+    IReadOnlyList<string> Outfit);
 
 public sealed record LoraSpec(string File, double ModelWeight, double ClipWeight);
 
+public sealed record WorkflowSet(
+    string Portrait,
+    string Sprite,
+    string Background);
+
+/// <param name="AnchorWeight">
+/// IP-Adapter weight. Zero for packs that carry identity in the seed instead.
+/// </param>
+/// <param name="PoseStrength">
+/// ControlNet strength for the pose skeleton. Measured on Illustrious: 0.55 holds the torso
+/// but lets arms and framing wander, giving 86-89% silhouette overlap between expressions;
+/// 0.95 gives 93-96%, which is the difference between a crossfade that ghosts and one that
+/// nearly does not.
+/// </param>
 public sealed record SamplerSettings(
     string SamplerName,
     string Scheduler,
     int Steps,
     double Cfg,
-    double AnchorWeight);
+    double AnchorWeight,
+    double PoseStrength);
 
 /// <summary>
 /// Native generation resolutions per job. Off-native sizes cost quality on SD1.5 and

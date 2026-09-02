@@ -34,7 +34,8 @@ internal static class TestContent
         BaseModel = "sd15",
         Dialect = PromptDialect.Booru,
         Consistency = ConsistencyStrategy.IpAdapterPlus,
-        Sampler = new SamplerSettings("dpmpp_2m", "karras", 28, 7.0, 0.75),
+        Sampler = new SamplerSettings("dpmpp_2m", "karras", 28, 7.0, 0.75, 0.95),
+        Workflows = new WorkflowSet("portrait", "sprite", "background"),
         Resolutions = new ResolutionSet(
             new Size(512, 768),
             new Size(640, 960),
@@ -45,8 +46,13 @@ internal static class TestContent
         NegativeBase = ["lowres", "worst quality"],
         Subjects = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase)
         {
-            ["female"] = new(["1girl", "solo", "adult", "mature female"], ["1boy"]),
-            ["male"] = new(["1boy", "solo", "adult", "male focus", "mature male"], ["1girl", "feminine"]),
+            ["female"] = new(["1girl", "solo", "adult", "mature female"], ["1boy"], ["white blouse", "pleated skirt"]),
+            ["male"] = new(["1boy", "solo", "adult", "male focus", "mature male"], ["1girl", "feminine"], ["white dress shirt", "black trousers"]),
+        },
+        Expressions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["neutral"] = "neutral expression",
+            ["smile"] = "(smile:1.2), happy",
         },
         NegativeByCeiling = new Dictionary<string, IReadOnlyList<string>>
         {
