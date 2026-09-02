@@ -80,9 +80,7 @@
     "female": {
       "positive": [
         "1girl",
-        "solo",
-        "adult",
-        "mature female"
+        "solo"
       ],
       "negative": [
         "1boy",
@@ -96,18 +94,19 @@
         {
           "from": 16,
           "tags": [
-            "young adult"
+            "teenage",
+            "(mature female:0.4)"
           ]
         },
         {
           "from": 18,
           "tags": [
-            "(mature female:1.3)",
+            "(mature female:1.1)",
             "young adult"
           ]
         },
         {
-          "from": 30,
+          "from": 25,
           "tags": [
             "(mature female:1.3)",
             "adult"
@@ -117,15 +116,8 @@
           "from": 40,
           "tags": [
             "(mature female:1.4)",
-            "middle-aged"
-          ]
-        },
-        {
-          "from": 60,
-          "tags": [
-            "(old woman:1.4)",
-            "elderly",
-            "wrinkles"
+            "middle-aged",
+            "aged"
           ]
         }
       ]
@@ -134,9 +126,7 @@
       "positive": [
         "1boy",
         "solo",
-        "adult",
-        "male focus",
-        "mature male"
+        "male focus"
       ],
       "negative": [
         "1girl",
@@ -151,18 +141,19 @@
         {
           "from": 16,
           "tags": [
-            "young adult"
+            "teenage",
+            "(masculine:1.2)"
           ]
         },
         {
           "from": 18,
           "tags": [
-            "(mature male:1.3)",
+            "(mature male:1.0)",
             "young adult"
           ]
         },
         {
-          "from": 30,
+          "from": 25,
           "tags": [
             "(mature male:1.3)",
             "adult"
@@ -172,15 +163,8 @@
           "from": 40,
           "tags": [
             "(mature male:1.4)",
-            "middle-aged"
-          ]
-        },
-        {
-          "from": 60,
-          "tags": [
-            "(old man:1.4)",
-            "elderly",
-            "wrinkles"
+            "middle-aged",
+            "aged"
           ]
         }
       ]

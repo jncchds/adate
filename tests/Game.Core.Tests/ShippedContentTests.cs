@@ -124,4 +124,56 @@ public class ShippedContentTests
     {
         Assert.Contains(PackId, await PackLoader().ListAsync());
     }
+
+    /// <summary>
+    /// Every shipped pack, not just the one this class otherwise focuses on. A band gap is
+    /// invisible until a character of that age is created, which could be long after release.
+    /// </summary>
+    [Fact]
+    public async Task Every_shipped_pack_covers_every_permitted_age_with_every_subject()
+    {
+        var loader = PackLoader();
+
+        foreach (var packId in await loader.ListAsync())
+        {
+            var pack = await loader.LoadAsync(packId);
+
+            foreach (var (subject, profile) in pack.Subjects)
+            {
+                for (var age = Characters.CharacterAppearance.MinimumAge; age <= 99; age++)
+                {
+                    var band = profile.BandFor(age);
+                    Assert.True(
+                        band.Tags.Count > 0,
+                        $"pack {packId}, subject {subject}, age {age}: band has no tags");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The maturity anchor lives in the age band, not in the subject. Carrying it in both
+    /// would emit it twice at two different weights, and the heavier one would silently win.
+    /// </summary>
+    [Fact]
+    public async Task No_shipped_pack_carries_a_maturity_anchor_in_both_places()
+    {
+        var loader = PackLoader();
+
+        foreach (var packId in await loader.ListAsync())
+        {
+            var pack = await loader.LoadAsync(packId);
+
+            foreach (var (subject, profile) in pack.Subjects)
+            {
+                foreach (var tag in profile.Positive)
+                {
+                    Assert.False(
+                        tag.Contains("mature", StringComparison.OrdinalIgnoreCase) ||
+                        tag.Equals("adult", StringComparison.OrdinalIgnoreCase),
+                        $"pack {packId}, subject {subject}: {tag} belongs in an age band, not in the subject");
+                }
+            }
+        }
+    }
 }

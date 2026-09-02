@@ -1,0 +1,58 @@
+{
+  "_comment": "Candidate tag sets for the four age bands the game needs, rendered across every runnable checkpoint so they can be compared by eye. These are proposals to be judged, not settled content -- what lands in stylepacks/*.json should be whatever this sweep shows actually works.",
+  "_seed": 4242,
+  "_negative": {
+    "_comment": "The pack's alwaysNegative terms are included here even though the paired battery omits them. A sweep that deliberately probes the young end of the range is exactly where they belong, and it also means the sweep renders under the same protections the game does.",
+    "booru": "loli, shota, child, toddler, infant, (child:1.4), lowres, worst quality, low quality, bad anatomy, bad hands, jpeg artifacts, watermark, text, blurry, nsfw, nude, nipples, topless, cleavage, revealing clothes, suggestive, bare pectorals, open shirt, shirtless, exposed chest",
+    "natural": "a child, a toddler, low quality, bad anatomy, watermark, text, blur, nudity, revealing clothing, suggestive"
+  },
+  "bands": [
+    {
+      "id": "1-teen",
+      "label": "16-18 teen",
+      "_comment": "Two changes at the teen band, both from the first sweep. (mature female:0.4) damps rather than removes the adult anchor: dropping it entirely is what the negatives guard against, and weakening it reads younger without reaching for juvenile vocabulary. On the male side the first sweep came back androgynous, because `mature male` is what carries maleness on these checkpoints and the teen band has none -- `(masculine:1.2)` replaces it without adding age.",
+      "female": "1girl, solo, teenage, high school student",
+      "male": "1boy, solo, male focus, teenage, high school student",
+      "bare": {
+        "female": "1girl, solo, teenage, (mature female:0.4)",
+        "male": "1boy, solo, male focus, (masculine:1.2), teenage"
+      }
+    },
+    {
+      "id": "2-student",
+      "label": "18-25 student",
+      "female": "1girl, solo, (mature female:1.1), young adult, college student",
+      "male": "1boy, solo, male focus, (mature male:1.1), young adult, college student",
+      "bare": {
+        "female": "1girl, solo, (mature female:1.1), young adult",
+        "male": "1boy, solo, male focus, (mature male:1.0), young adult"
+      }
+    },
+    {
+      "id": "3-youngadult",
+      "label": "25-40 young adult",
+      "female": "1girl, solo, (mature female:1.3), adult, office lady",
+      "male": "1boy, solo, male focus, (mature male:1.3), adult, salaryman",
+      "bare": {
+        "female": "1girl, solo, (mature female:1.3), adult",
+        "male": "1boy, solo, male focus, (mature male:1.3), adult"
+      }
+    },
+    {
+      "id": "4-middleaged",
+      "label": "40+ middle-aged",
+      "female": "1girl, solo, (mature female:1.4), (milf:1.2), middle-aged, mature woman",
+      "male": "1boy, solo, male focus, (mature male:1.4), middle-aged, stubble, mature man",
+      "bare": {
+        "female": "1girl, solo, (mature female:1.4), middle-aged, aged",
+        "male": "1boy, solo, male focus, (mature male:1.4), middle-aged, aged"
+      }
+    }
+  ],
+  "_appearance": {
+    "_comment": "Held identical across every band and every model, so the only variable is the band vocabulary. Deliberately plain: a distinctive outfit or hair would give the eye something other than the face to compare.",
+    "booru": "brown hair, shoulder length hair, blue eyes, fair skin, white shirt, standing, cowboy shot, looking at viewer, simple background",
+    "natural": "with shoulder length brown hair and blue eyes, fair skin, wearing a white shirt, standing, waist up, looking at the viewer, plain background."
+  },
+  "_comment2": "Two variants per band. `withRole` carries an occupation tag; `bare` does not. The first sweep showed occupations doing much of the age work -- and dragging their own outfits in with them, which fights the outfit the game controls separately. The bare variant is what a shipped ageBands block can actually use."
+}

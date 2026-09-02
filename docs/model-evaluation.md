@@ -134,6 +134,53 @@ is the axis Counterfeit failed outright.
 
 One miss worth noting: the `age` prompts asked for a white blouse and got a white dress.
 
+## The four age bands, swept
+
+`eval/sweep.mjs` renders every band for every runnable checkpoint and both subjects,
+holding seed, appearance and negative constant. There is no score: the question is "does
+each band read as its label", which no pixel difference answers.
+
+| Model | Female bands | Male bands |
+|---|---|---|
+| Illustrious XL v2.0 | four clearly distinct | four clearly distinct |
+| NoobAI-XL v1.1 | teen and student nearly identical | teen and student nearly identical |
+| Pony V6 XL | weak; all read early thirties | **none**; all four are the same man |
+
+Illustrious is the only candidate that separates all four bands on both subjects, and Pony
+fails outright on males. Combined with the earlier criteria and the licences, that settles
+the checkpoint question.
+
+### Two things the sweep changed
+
+**Occupation tags cheat.** The first pass used `high school student`, `college student`,
+`office lady`, `salaryman`. Separation was excellent -- and the occupations brought their
+own clothes, so the declared white shirt came back as a school uniform in one band and a
+shirt and tie in another. The game controls outfit separately, so an age band that dresses
+the character is a band that fights it. The shipped bands are occupation-free, and pay for
+it: the adult bands separate noticeably less at 25-40 against 40+.
+
+**The male teen band came back androgynous.** `mature male` is what carries maleness on
+these checkpoints, and the teen band deliberately has none of it. `(masculine:1.2)`
+replaces it without adding age.
+
+### What ships
+
+| Band | Female | Male |
+|---|---|---|
+| 16-18 | `teenage, (mature female:0.4)` | `teenage, (masculine:1.2)` |
+| 18-25 | `(mature female:1.1), young adult` | `(mature male:1.0), young adult` |
+| 25-40 | `(mature female:1.3), adult` | `(mature male:1.3), adult` |
+| 40+ | `(mature female:1.4), middle-aged, aged` | `(mature male:1.4), middle-aged, aged` |
+
+The teen band damps the maturity anchor to 0.4 rather than removing it. Removing it
+entirely is what the `alwaysNegative` terms exist to guard against, and damping reads
+younger without reaching for juvenile vocabulary. Characters in this band are held at PG13
+by `ContentPolicy` regardless of anything here.
+
+The maturity anchor moved out of `subjects[].positive` and into the bands. Carrying it in
+both would put it in the prompt twice at two different weights, and the heavier one would
+silently win.
+
 ## Licences, which are not a footnote
 
 | Model | Licence | Commercial use |
