@@ -18,7 +18,9 @@ set -euo pipefail
 
 MODELS_DIR="${MODELS_DIR:-/models}"
 NODES_DIR="${NODES_DIR:-/root/ComfyUI/custom_nodes}"
-MANIFEST="${MANIFEST:-/provision/models.tsv}"
+# Space-separated list. The profile picks which model sets this box needs, so a 12GB
+# machine never downloads the 13GB of SDXL weights it could not run anyway.
+MANIFESTS="${MANIFESTS:-models-sd15.tsv}"
 
 log() { printf '[provision] %s\n' "$*"; }
 die() { printf '[provision] FATAL: %s\n' "$*" >&2; exit 1; }
@@ -32,6 +34,12 @@ die() { printf '[provision] FATAL: %s\n' "$*" >&2; exit 1; }
 # exactly why the pin matters.
 IPADAPTER_REPO="https://github.com/cubiq/ComfyUI_IPAdapter_plus.git"
 IPADAPTER_REF="${IPADAPTER_REF:-main}"
+
+# OpenPose and DWPose preprocessors. Needed to turn a reference image into a pose
+# skeleton, which is how a pose slot gets defined once and reused for every
+# expression in a set -- the thing that lets sprites crossfade without the body moving.
+CONTROLNET_AUX_REPO="https://github.com/Fannovel16/comfyui_controlnet_aux.git"
+CONTROLNET_AUX_REF="${CONTROLNET_AUX_REF:-main}"
 
 MANAGER_REPO="https://github.com/ltdrdata/ComfyUI-Manager.git"
 
@@ -122,13 +130,21 @@ log "provisioning into ${MODELS_DIR}"
 install_node "ComfyUI-Manager" "${MANAGER_REPO}"
 install_node "ComfyUI_IPAdapter_plus" "${IPADAPTER_REPO}" "${IPADAPTER_REF}"
 
-[ -f "${MANIFEST}" ] || die "model manifest ${MANIFEST} not found"
+if [ "-e" = "1" ]; then
+    install_node "comfyui_controlnet_aux" "${CONTROLNET_AUX_REPO}" "${CONTROLNET_AUX_REF}"
+fi
 
-while IFS=$'\t' read -r target url sha || [ -n "${target}" ]; do
-    case "${target}" in
-        ''|'#'*) continue ;;
-    esac
-    download "${target}" "${url}" "${sha:--}"
-done < "${MANIFEST}"
+for name in ${MANIFESTS}; do
+    manifest="/provision/${name}"
+    [ -f "${manifest}" ] || die "model manifest ${manifest} not found"
+
+    log "reading ${name}"
+    while IFS=$'\t' read -r target url sha || [ -n "${target}" ]; do
+        case "${target}" in
+            ''|'#'*) continue ;;
+        esac
+        download "${target}" "${url}" "${sha:--}"
+    done < "${manifest}"
+done
 
 log "provisioning complete"

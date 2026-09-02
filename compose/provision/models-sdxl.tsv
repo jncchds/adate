@@ -1,0 +1,30 @@
+# SDXL / Illustrious model set -- the 24GB profile.
+#
+# Format: <target path under /models>	<url>	<sha256 or "-">
+# Tab-separated. Lines beginning with # are ignored.
+#
+# ~13 GB total. Do not pull this set on a 12GB card: Illustrious plus a ControlNet
+# plus an IP-Adapter does not leave room for a co-resident LLM there. See
+# docs/spike0-findings.md.
+
+# --- Image checkpoint -------------------------------------------------------
+# Illustrious XL v2.0, the 2026 anime base. Booru-tag dialect like Counterfeit, so
+# the prompt compiler is unchanged, but with far stronger prompt adherence --
+# which is what the outfit and framing failures in Spike 0 came down to.
+checkpoints/Illustrious-XL-v2.0.safetensors	https://huggingface.co/OnomaAIResearch/Illustrious-XL-v2.0/resolve/main/Illustrious-XL-v2.0.safetensors	-
+
+# --- Character consistency --------------------------------------------------
+# IP-Adapter Plus for SDXL. Reads through the same ViT-H encoder the SD1.5 set
+# already uses, so clip_vision is shared between the two model sets.
+ipadapter/ip-adapter-plus_sdxl_vit-h.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors	-
+clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors	-
+
+# --- Pose control -----------------------------------------------------------
+# ControlNet OpenPose for SDXL. Takes pose and framing away from the prompt, which
+# Spike 0 showed cannot carry them: with seed and anchor fixed, changing only the
+# mood tag still moved the body, and sprites that differ in pose cannot crossfade.
+controlnet/controlnet-openpose-sdxl-1.0.safetensors	https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0/resolve/main/diffusion_pytorch_model.safetensors	-
+
+# --- Alpha matting ----------------------------------------------------------
+# Native to ComfyUI as of PR #12747; needs the model file but no custom node.
+background_removal/birefnet.safetensors	https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors	-

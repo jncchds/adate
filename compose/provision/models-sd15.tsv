@@ -1,13 +1,11 @@
-# Model manifest for the adate inference stack.
+# SD1.5 model set -- the 12GB profile.
 #
 # Format: <target path under /models>	<url>	<sha256 or "-">
-# Lines beginning with # are ignored. Tab-separated.
+# Tab-separated. Lines beginning with # are ignored.
 #
-# HuggingFace-first by policy: every entry below resolves without an account or a
-# token. CivitAI-hosted models can be added here too and will use CIVITAI_TOKEN
-# from the environment if one is set, but nothing required by the game needs it.
+# HuggingFace-first: every entry resolves without an account or a token.
+# ~5.5 GB total.
 #
-# Sizes are listed so a first boot's download is predictable: ~5.5 GB total.
 
 # --- Image checkpoint -------------------------------------------------------
 # Counterfeit V2.5, fp16. SD1.5-family anime checkpoint, booru-tag dialect.
@@ -32,11 +30,3 @@ clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors	https://huggingface.co/h
 # PNGs with alpha (HANDOFF 6).
 background_removal/birefnet.safetensors	https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors	-
 
-# IP-Adapter Plus FACE. Trained on face crops, so it carries identity without
-# dragging the reference's clothing and composition along with it -- which full-image
-# Plus does hard enough to make outfit, pose and expression uncontrollable at any
-# weight that preserves identity.
-#
-# Still CLIP-vision based, so it is safe on anime. NOT FaceID or InstantID: those use
-# InsightFace embeddings trained on real faces and perform poorly here.
-ipadapter/ip-adapter-plus-face_sd15.safetensors	https://huggingface.co/h94/IP-Adapter/resolve/main/models/ip-adapter-plus-face_sd15.safetensors	-
