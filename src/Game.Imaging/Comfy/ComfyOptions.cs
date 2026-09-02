@@ -25,4 +25,11 @@ public sealed class ComfyOptions
     /// websocket; this only matters when the socket drops mid-generation.
     /// </summary>
     public TimeSpan HistoryPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long to keep re-reading <c>/history</c> after the websocket says a prompt has
+    /// finished. ComfyUI emits the completion frame before it writes the entry, so a fast
+    /// graph can be reported done a moment before its outputs are readable.
+    /// </summary>
+    public TimeSpan HistorySettleTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }

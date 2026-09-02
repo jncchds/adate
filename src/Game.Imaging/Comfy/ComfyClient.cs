@@ -453,10 +453,27 @@ public sealed class ComfyClient : IComfyClient
         IReadOnlyList<string> outputNodes,
         CancellationToken ct)
     {
-        var entry = await TryGetHistoryAsync(promptId, ct).ConfigureAwait(false)
-            ?? throw new ComfyException($"Prompt {promptId} completed but has no /history entry.");
+        // History is eventually consistent with the websocket. The completion frame is
+        // emitted before the entry is written, so a graph that finishes quickly can be
+        // reported done a moment before its outputs are readable. Poll rather than assume.
+        var deadline = DateTimeOffset.UtcNow + _options.HistorySettleTimeout;
 
-        return ExtractImages(entry, promptId, outputNodes);
+        while (true)
+        {
+            if (await TryGetHistoryAsync(promptId, ct).ConfigureAwait(false) is { } entry)
+            {
+                return ExtractImages(entry, promptId, outputNodes);
+            }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new ComfyException(
+                    $"Prompt {promptId} reported completion but never appeared in /history " +
+                    $"within {_options.HistorySettleTimeout}.");
+            }
+
+            await Task.Delay(_options.HistoryPollInterval, ct).ConfigureAwait(false);
+        }
     }
 
     // ------------------------------------------------------------ view/upload
