@@ -33,15 +33,36 @@ function patch(graph, path, value) {
   graph[node].inputs[field] = value;
 }
 
+/**
+ * Retries transport failures, not HTTP errors. Loading a cold 16 GB model blocks ComfyUI's
+ * event loop for minutes, so connections are refused or time out while a perfectly healthy
+ * server is busy. A 400 from ComfyUI means the graph is wrong and retrying it is pointless.
+ */
+async function resilient(label, fn, attempts = 12) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err.fatal || i >= attempts) throw err;
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+}
+
 async function post(path, body) {
-  const res = await fetch(`${comfy}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+  return resilient(`POST ${path}`, async () => {
+    const res = await fetch(`${comfy}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      // Not retryable: the server answered and rejected the request.
+      throw Object.assign(new Error(`POST ${path} -> ${res.status}: ${text.slice(0, 600)}`), { fatal: true });
+    }
+    return JSON.parse(text);
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`POST ${path} -> ${res.status}: ${text.slice(0, 600)}`);
-  return JSON.parse(text);
 }
 
 /**
@@ -49,14 +70,26 @@ async function post(path, body) {
  * optimisation for progress reporting and this has no progress to report, while /history
  * is the authoritative record either way.
  */
-async function run(graph, timeoutMs = 600_000) {
+// 30 minutes. A warm SDXL render is 6s, but FLUX.2 klein reads 16 GB off a spinning disk on
+// first use and the box stops answering HTTP while it does. 600s was not enough and the run
+// was abandoned while ComfyUI was still working on it.
+async function run(graph, timeoutMs = 1_800_000) {
   const { prompt_id: id } = await post('/prompt', { prompt: graph });
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const res = await fetch(`${comfy}/history/${id}`);
-    const hist = await res.json();
-    const entry = hist[id];
+    // The box stops answering HTTP while it reads a cold model off the disk, and a
+    // 16 GB one takes long enough to blow Node's default header timeout. The prompt is
+    // still running server-side, so a failed poll is a reason to poll again, not to
+    // abandon a generation that will finish.
+    let entry;
+    try {
+      const res = await fetch(`${comfy}/history/${id}`);
+      entry = (await res.json())[id];
+    } catch {
+      await new Promise(r => setTimeout(r, 5000));
+      continue;
+    }
 
     if (entry) {
       const status = entry.status ?? {};
@@ -76,14 +109,36 @@ async function run(graph, timeoutMs = 600_000) {
 
 async function fetchImage({ filename, subfolder, type }) {
   const q = new URLSearchParams({ filename, subfolder: subfolder ?? '', type: type ?? 'output' });
-  const res = await fetch(`${comfy}/view?${q}`);
-  if (!res.ok) throw new Error(`/view -> ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+  return resilient('/view', async () => {
+    const res = await fetch(`${comfy}/view?${q}`);
+    if (!res.ok) throw new Error(`/view -> ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  });
+}
+
+/**
+ * Evicts resident models. The box runs with --highvram, which keeps everything loaded
+ * between runs -- correct for the game, where one checkpoint is used all session, and wrong
+ * here, where each candidate is a fresh multi-gigabyte checkpoint. Without this the third
+ * model in a run OOMs while nvidia-smi still reports free VRAM, because ComfyUI's estimator
+ * refuses the allocation rather than evicting on its own.
+ */
+async function freeModels() {
+  await resilient('POST /free', async () => {
+    const res = await fetch(`${comfy}/free`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ unload_models: true, free_memory: true }),
+    });
+    if (!res.ok) throw new Error(`POST /free -> ${res.status}`);
+  });
 }
 
 for (const key of keys) {
   const model = models[key];
   if (!model) throw new Error(`unknown model '${key}'`);
+
+  await freeModels();
 
   const dialect = model.dialect;
   const shared = battery._shared[dialect];

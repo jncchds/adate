@@ -53,11 +53,34 @@ Measured on an RTX 5090, ComfyUI 0.34.2 / cu130, seed 4242, 832x1216.
 
 | Model | age | negative | subject | outfit ↓ | s/image |
 |---|---|---|---|---|---|
-| Illustrious XL v2.0 | **1.97%** | 24.43% | 10.71% | 11.58% | 6.1 |
-| Pony Diffusion V6 XL | — | — | — | — | — |
-| NoobAI-XL v1.1 | — | — | — | — | — |
-| FLUX.2 klein 4B | — | — | — | — | — |
-| Sana 1.6B | — | — | — | — | — |
+| Illustrious XL v2.0 | 1.97% | 24.43% | 10.71% | 11.58% | 6.1 |
+| Pony Diffusion V6 XL | 2.25% | 12.52% | 8.55% | 11.43% | 6.1 |
+| NoobAI-XL v1.1 | **4.77%** | **28.63%** | **12.32%** | **6.54%** | 6.1 |
+| FLUX.2 klein 4B | blocked | blocked | blocked | blocked | — |
+| Sana 1.6B | not run | not run | not run | not run | — |
+
+**No model passes `age`.** 4.77% is the best of three and it is still, by eye, the same young
+woman at 19 and at 65. The criterion that motivated this evaluation is failed by every
+candidate that ran, which makes it a property of booru-tag anime checkpoints rather than a
+reason to prefer one. An adults-only tier cannot lean on the age tag on any of them.
+
+### Read by eye
+
+**NoobAI wins on the numbers and loses on its prior.** Best negative bite, best subject
+separation, and much the best outfit stability at 6.54% -- the body barely moves between
+expressions, which is exactly what the crossfade needs. But its unprompted output skews
+sexualised: the plain "white shirt" case came back with an emphasised bust, and the portrait
+case came back bare-shouldered with nothing in the prompt asking for either. At a PG13 default
+that is work the negative list has to undo on every render.
+
+**Pony is the wrong style.** It renders painterly semi-realism, not clean anime, and washed
+out at that. It also has the weakest negatives of the three at 12.52% -- variant b still has a
+detailed garden behind the subject -- and it ignored the declared blouse and skirt in the age
+case entirely in favour of an ornate gown. Weak adherence is the failure Counterfeit was
+dropped for.
+
+**Illustrious is the middle and the safest.** Clean anime, negatives that bite hard, every
+declared feature rendered, and the least sexualised prior of the three.
 
 ### Illustrious, read by eye
 
@@ -96,6 +119,28 @@ after tuning a pack around a model that cannot be used.
 The OpenRAIL restrictions on Illustrious are also worth reading rather than skimming: they
 prohibit exactly the class of output the content clamp exists to prevent, which means the
 licence and the design agree for once.
+
+## FLUX.2 klein 4B is blocked by system RAM, not VRAM
+
+The run never completed. ComfyUI stayed inside the model load for over twenty minutes with
+24.4 GB of VRAM still free, and did not answer an interrupt, because the interrupt flag is
+only checked between nodes and it never left the loader.
+
+`/system_stats` says why: **the container sees 8.28 GB of system RAM**, with 5.97 GB free.
+FLUX.2 klein stages 7.75 GB of diffusion weights and an 8.04 GB text encoder through that. The
+card was never the constraint.
+
+Two ways forward, and they are not equivalent:
+
+* Raise the memory ceiling the container gets. On WSL2 that is `memory=` in `.wslconfig`,
+  which defaults to half of host RAM. This is the real fix and it also removes an unexamined
+  limit from every other measurement on this box.
+* Use `qwen_3_4b_fp4_flux2.safetensors` (3.85 GB) instead of the bf16 encoder, bringing the
+  total to 11.9 GB. Cheaper, but it measures a quantised encoder rather than the model, which
+  is a different question from the one being asked.
+
+Until one of those happens the FLUX row is unmeasured, not failed. Nothing here says anything
+about its output.
 
 ## Known unknowns
 
