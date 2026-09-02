@@ -12,9 +12,10 @@ baseline it dismissed is the right one.**
 
 | Concern | Mechanism | Cost |
 |---|---|---|
+| Subject | Pack-supplied anchor tags per subject, e.g. female or male | free |
 | Identity | Appearance tags + a fixed per-character seed | free |
 | Expression | Weighted mood tags, e.g. `(laughing:1.2), open mouth, closed eyes` | free |
-| Pose and framing | ControlNet OpenPose, one authored skeleton per pose slot | ~1 s |
+| Pose and framing | ControlNet OpenPose at strength 0.95 to the end of sampling | ~1 s |
 | Transparency | BiRefNet in-graph, native to ComfyUI | ~1 s |
 | **Total** | Illustrious XL v2.0 @ 832×1216, 30 steps | **~9 s per sprite** |
 
@@ -101,13 +102,59 @@ the SD1.5 pack and for any future strategy that does reference an image.
 
 ---
 
-## Still open
+## The acceptance test
 
-- The six-expression set has not been rendered through the final pipeline and judged as a
-  crossfade. That is the remaining Spike 0 acceptance test.
-- `StudioOptions.StylePackId` still points at `counterfeit-anime`; the Blazor app has never
-  been run against Illustrious.
-- `CharacterStudio` still passes an anchor image hash for sprites. Under `SeedAndTags` it
-  should pass the character's stored `anchor_seed` and a pose skeleton instead.
-- Peak VRAM under `--highvram` is unmeasured. Sampling `system_stats` proved too coarse;
-  `nvidia-smi` on the box is the way to get a real number.
+Six expressions, one seed, one skeleton, rendered through the final pipeline and measured as
+alpha-mask overlap against the neutral frame. Overlap is the crossfade criterion: whatever
+does not overlap is body that appears in one frame and not the other, and ghosts during the
+fade.
+
+| Pose conditioning | Overlap with neutral |
+|---|---|
+| strength 0.55, ends at 80% of sampling | 85.7 - 89.1% |
+| strength 0.95, ends at 100% of sampling | 93.0 - 95.9% |
+
+**Identity and matting pass outright.** Six frames read as one person, in one outfit, with a
+clean matte, for both a female and a male character.
+
+**Pose stability passes only at the higher setting.** At 0.55 the skeleton is a suggestion:
+the torso lands but arms and framing wander, and a tenth of the sprite differs frame to frame.
+At 0.95 the head, torso and crop hold still. What still moves is arms and loose hair, which is
+where the residual 5% lives, so a crossfade is close to clean rather than clean. Whether that
+is good enough is a judgement to make against a real crossfade in the viewer, not against a
+contact sheet.
+
+The male set was rendered at 0.55 only and drifts further than the female one, mostly in
+camera distance. It has not been re-measured at 0.95.
+
+## Both love interest genders
+
+Illustrious renders men without any difficulty, but the anchor wording matters as much as it
+does for the age anchor, and in the same direction:
+
+| Anchor | Result at one seed, identical appearance tags |
+|---|---|
+| `1boy, solo, adult` | androgynous, reads young |
+| `+ male focus` | marginally older |
+| `+ mature male`, with `1girl, feminine` negated | clearly an adult man |
+
+So the subject anchor is pack data, keyed per subject, exactly like the quality prefix and the
+ceiling negatives. `1girl` and `mature female` were hardcoded in the compiler until this
+point, which meant a male love interest could not be expressed at all.
+
+A PG13 ceiling built only from female-coded terms is also not a PG13 ceiling: `cleavage` and
+`nipples` did not stop a bare male chest. The ceiling lists now carry male-coded terms too.
+
+## The candidate picker varies tags, not seeds
+
+Three seeds against identical tags produce the same character in three poses. Three tag sets
+at one seed produce three different characters. The seed is what holds one character together
+across expressions; it is too weak to be the axis a player picks along.
+
+This qualifies the earlier four-seed result rather than overturning it. Those four faces did
+differ, but they differ in framing and hair flow far more than in who they are.
+
+Framing is also unstable across seeds -- `cowboy shot` gave a tight crop at one seed and a
+full body at another -- so candidate portraits want the same skeleton the sprites use, or the
+player is comparing candidates that are not framed alike.
+

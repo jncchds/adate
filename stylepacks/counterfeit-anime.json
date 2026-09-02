@@ -10,16 +10,27 @@
     "samplerName": "dpmpp_2m",
     "scheduler": "karras",
     "steps": 28,
-    "cfg": 7.0,
+    "cfg": 7,
     "anchorWeight": 0.75
   },
   "resolutions": {
-    "portrait": { "width": 512, "height": 768 },
-    "sprite": { "width": 640, "height": 960 },
-    "background": { "width": 768, "height": 512 }
+    "portrait": {
+      "width": 512,
+      "height": 768
+    },
+    "sprite": {
+      "width": 640,
+      "height": 960
+    },
+    "background": {
+      "width": 768,
+      "height": 512
+    }
   },
   "mattingModel": "birefnet.safetensors",
-  "supportedCeilings": ["PG13"],
+  "supportedCeilings": [
+    "PG13"
+  ],
   "positivePrefix": [
     "masterpiece",
     "best quality",
@@ -43,6 +54,34 @@
     "monochrome",
     "greyscale"
   ],
+  "subjects": {
+    "female": {
+      "positive": [
+        "1girl",
+        "solo",
+        "adult",
+        "mature female"
+      ],
+      "negative": [
+        "1boy",
+        "male focus"
+      ]
+    },
+    "male": {
+      "positive": [
+        "1boy",
+        "solo",
+        "adult",
+        "male focus",
+        "mature male"
+      ],
+      "negative": [
+        "1girl",
+        "feminine",
+        "breasts"
+      ]
+    }
+  },
   "negativeByCeiling": {
     "PG13": [
       "nsfw",
@@ -60,7 +99,11 @@
       "child",
       "toddler",
       "baby face",
-      "young"
+      "young",
+      "bare pectorals",
+      "open shirt",
+      "shirtless",
+      "exposed chest"
     ]
   }
 }

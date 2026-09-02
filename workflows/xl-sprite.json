@@ -155,9 +155,9 @@
         "30",
         0
       ],
-      "strength": 0.55,
+      "strength": 0.95,
       "start_percent": 0,
-      "end_percent": 0.8
+      "end_percent": 1
     }
   }
 }

@@ -61,6 +61,34 @@
     "gun",
     "weapon"
   ],
+  "subjects": {
+    "female": {
+      "positive": [
+        "1girl",
+        "solo",
+        "adult",
+        "mature female"
+      ],
+      "negative": [
+        "1boy",
+        "male focus"
+      ]
+    },
+    "male": {
+      "positive": [
+        "1boy",
+        "solo",
+        "adult",
+        "male focus",
+        "mature male"
+      ],
+      "negative": [
+        "1girl",
+        "feminine",
+        "breasts"
+      ]
+    }
+  },
   "negativeByCeiling": {
     "PG13": [
       "nsfw",
@@ -77,7 +105,11 @@
       "child",
       "toddler",
       "baby face",
-      "young"
+      "young",
+      "bare pectorals",
+      "open shirt",
+      "shirtless",
+      "exposed chest"
     ]
   }
 }

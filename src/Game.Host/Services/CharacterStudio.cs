@@ -52,6 +52,13 @@ public sealed class CharacterStudio(
     /// seed is the point — the player is choosing between interpretations of the attributes
     /// they declared, not between different characters.
     /// </summary>
+    /// <remarks>
+    /// Measured, this is a weaker choice than it reads: three seeds against identical tags
+    /// gave one character in three poses, differing far more in framing and hair flow than in
+    /// who they were. A picker worth the name varies appearance tags as well, and pins the
+    /// framing with the same skeleton the sprites use. Left as-is for now because changing it
+    /// changes what the player is being asked to decide, which is a design call.
+    /// </remarks>
     public Task<IReadOnlyList<Candidate>> GenerateCandidatesAsync(CharacterRecord character) =>
         jobs.RunAsync($"candidates:{character.Id}", ct => GenerateCandidatesCoreAsync(character, ct));
 
@@ -63,7 +70,7 @@ public sealed class CharacterStudio(
         var intent = PortraitIntent();
 
         var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Portrait);
-        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Portrait);
+        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Portrait, character.Appearance.Subject);
 
         var results = new List<Candidate>(_options.CandidateCount);
 
@@ -118,7 +125,7 @@ public sealed class CharacterStudio(
         }
 
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
-        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Sprite);
+        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Sprite, character.Appearance.Subject);
         var sprites = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var expression in Expressions)
@@ -179,7 +186,7 @@ public sealed class CharacterStudio(
             new ImageRequest(
                 WorkflowId: "background",
                 Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background),
-                Negative: compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Background),
+                Negative: compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Background, subject: null),
                 // Backgrounds are generated once per location and time and then reused for
                 // the life of the save, so the seed only needs to be stable, not varied.
                 Seed: DeriveSeed(saveId.Value, locationId.GetHashCode(StringComparison.Ordinal) ^ (int)time),

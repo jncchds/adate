@@ -117,3 +117,25 @@ need replacing — which is exactly why the pin matters.
   export. See [workflows/README.md](../workflows/README.md).
 - The ComfyUI client has never spoken to a real ComfyUI server. The protocol tests are the
   closest thing to proof until it does.
+
+## Subject is style-pack data, not an enum
+
+HANDOFF 4's compiler sketch hardcodes `1girl` and `mature female`. That made a male love
+interest impossible to express, and the game needs both per playthrough.
+
+`CharacterAppearance` now carries a `Subject` key, resolved against a `subjects` block in the
+style pack. An enum in `Game.Core` would have been simpler and type-checked, but the tokens
+behind each key are checkpoint-specific — measured, `1boy, solo, adult` renders androgynous on
+Illustrious and only reads as an adult man once `male focus, mature male` is present with
+`1girl, feminine` negated — so they belong with the other pack vocabulary. Adding a subject,
+or supporting a checkpoint that needs different wording, is then data rather than a release.
+
+An unknown subject throws rather than falling back. Rendering a male love interest as a woman
+because a pack was missing a key is worse than failing the render.
+
+`CompileNegative` gained a `subject` parameter for the same reason: a PG13 list of
+female-coded terms did not stop a bare male chest, so each subject carries its own.
+
+Appearance is persisted as JSON, so this needed no migration. A row written before this change
+deserialises with a blank subject and fails `Validate` with a message naming the field, which
+is the right outcome for a save that predates the concept.

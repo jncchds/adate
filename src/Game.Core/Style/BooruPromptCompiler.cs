@@ -61,13 +61,10 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
 
         appearance.Validate();
 
-        // 2. Subject.
-        tags.Add("1girl");
-        tags.Add("solo");
-
-        // 3. Age anchor -- before any body descriptor, deliberately.
-        tags.Add("adult");
-        tags.Add("mature female");
+        // 2. Subject, and 3. the age anchor -- before any body descriptor, deliberately.
+        //    Both come from the pack: the tokens that read as an adult man differ from the
+        //    ones that read as an adult woman, and both differ per checkpoint.
+        tags.AddRange(pack.SubjectFor(appearance.Subject).Positive);
         tags.Add($"{appearance.Age.ToString(CultureInfo.InvariantCulture)} years old");
 
         // 4. Identity. Most stable attributes first; hair colour leads because HANDOFF 2
@@ -107,7 +104,11 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         return Join(tags);
     }
 
-    public string CompileNegative(StylePack pack, Ceiling ceiling, RenderTarget target)
+    public string CompileNegative(
+        StylePack pack,
+        Ceiling ceiling,
+        RenderTarget target,
+        string? subject)
     {
         ArgumentNullException.ThrowIfNull(pack);
 
@@ -124,6 +125,19 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         if (pack.NegativeByCeiling.TryGetValue(ceiling.ToString(), out var ceilingTags))
         {
             tags.AddRange(ceilingTags);
+        }
+
+        if (target is not RenderTarget.Background)
+        {
+            if (string.IsNullOrWhiteSpace(subject))
+            {
+                throw new ArgumentException(
+                    $"A {target} negative prompt needs the subject it is rendering, so the " +
+                    "pack's subject negatives can be applied.",
+                    nameof(subject));
+            }
+
+            tags.AddRange(pack.SubjectFor(subject).Negative);
         }
 
         if (target is RenderTarget.Sprite)

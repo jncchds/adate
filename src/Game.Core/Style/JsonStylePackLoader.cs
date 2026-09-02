@@ -61,6 +61,24 @@ public sealed class JsonStylePackLoader : IStylePackLoader
                 $"Style pack '{packId}' supports no content ceilings, so it can never render anything.");
         }
 
+        if (pack.Subjects.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Style pack '{packId}' declares no subjects, so it cannot render a character. " +
+                "Every pack needs at least one entry under 'subjects'.");
+        }
+
+        foreach (var (subject, profile) in pack.Subjects)
+        {
+            if (profile.Positive.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Subject '{subject}' in style pack '{packId}' has no positive tags. " +
+                    "Without them the checkpoint picks a subject on its own, which is the " +
+                    "bug this block exists to prevent.");
+            }
+        }
+
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(_cache.GetOrAdd(packId, pack));
     }

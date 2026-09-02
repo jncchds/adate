@@ -24,6 +24,19 @@
 
     <div class="grid">
         <label>
+            Love interest
+            <InputSelect @bind-Value="_form.Subject">
+                @foreach (var subject in _subjects)
+                {
+                    <option value="@subject">@subject</option>
+                }
+            </InputSelect>
+            <small>Resolved against the style pack's subject anchors. The tokens that read as
+                an adult man are not the ones that read as an adult woman, so this is a
+                declared attribute rather than something inferred from the others.</small>
+        </label>
+
+        <label>
             Age
             <InputNumber @bind-Value="_form.Age" min="18" max="99" />
             <small>Adults only. Injected into every prompt, because tag-based checkpoints
@@ -85,7 +98,17 @@
     private string? _error;
     private int _candidateCount = 4;
 
-    protected override void OnInitialized() => _candidateCount = 4;
+    // The pack decides which subjects exist, so the choice cannot be a hardcoded list here.
+    private IReadOnlyList<string> _subjects = ["female"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _candidateCount = 4;
+
+        var pack = await Studio.GetPackAsync();
+        _subjects = [.. pack.Subjects.Keys.Order(StringComparer.Ordinal)];
+        _form.Subject = _subjects[0];
+    }
 
     private async Task CreateAsync()
     {
@@ -120,6 +143,7 @@
 
     private sealed class AppearanceForm
     {
+        public string Subject { get; set; } = "female";
         public int Age { get; set; } = 24;
         public string HairColor { get; set; } = "red hair";
         public string HairStyle { get; set; } = "long hair";
@@ -130,6 +154,6 @@
         public string DistinguishingFeature { get; set; } = "freckles";
 
         public CharacterAppearance ToAppearance() => new(
-            Age, EyeColor, HairColor, HairStyle, SkinTone, Build, Height, DistinguishingFeature);
+            Subject, Age, EyeColor, HairColor, HairStyle, SkinTone, Build, Height, DistinguishingFeature);
     }
 }

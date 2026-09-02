@@ -179,7 +179,7 @@ public class BooruPromptCompilerTests
     [Fact]
     public void Negative_combines_pack_base_and_ceiling_tags()
     {
-        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite);
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite, "female");
 
         Assert.Contains("lowres", negative, StringComparison.Ordinal);
         Assert.Contains("nsfw", negative, StringComparison.Ordinal);
@@ -188,7 +188,7 @@ public class BooruPromptCompilerTests
     [Fact]
     public void Sprite_negative_suppresses_scenery_that_would_survive_matting()
     {
-        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite);
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite, "female");
 
         Assert.Contains("detailed background", negative, StringComparison.Ordinal);
     }
@@ -196,7 +196,7 @@ public class BooruPromptCompilerTests
     [Fact]
     public void Background_negative_suppresses_people()
     {
-        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Background);
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Background, null);
 
         Assert.Contains("1girl", negative, StringComparison.Ordinal);
         Assert.Contains("person", negative, StringComparison.Ordinal);
@@ -210,6 +210,66 @@ public class BooruPromptCompilerTests
     public void Unsupported_ceiling_is_refused()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            Compiler().CompileNegative(TestContent.Pack(), Ceiling.Explicit, RenderTarget.Sprite));
+            Compiler().CompileNegative(TestContent.Pack(), Ceiling.Explicit, RenderTarget.Sprite, "female"));
+    }
+
+    /// <summary>
+    /// The subject anchor comes from the pack, so a male love interest is expressible without
+    /// touching this class. Measured on Illustrious XL: without <c>mature male</c> the render
+    /// reads androgynous and young, which is why the anchor is content rather than a constant.
+    /// </summary>
+    [Theory]
+    [InlineData("female", "1girl", "mature female")]
+    [InlineData("male", "1boy", "mature male")]
+    public void Subject_anchor_comes_from_the_pack(string subject, string expected, string anchor)
+    {
+        var prompt = Positive(RenderTarget.Sprite, TestContent.Appearance(subject));
+
+        Assert.Contains(expected, prompt.Split(", "), StringComparer.Ordinal);
+        Assert.Contains(anchor, prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// HANDOFF 1.9 applies to every subject. The age tag must still precede the body
+    /// descriptors, whichever anchor was substituted in front of it.
+    /// </summary>
+    [Theory]
+    [InlineData("female")]
+    [InlineData("male")]
+    public void Age_anchor_precedes_the_build_tag(string subject)
+    {
+        var tags = Positive(RenderTarget.Sprite, TestContent.Appearance(subject)).Split(", ");
+
+        Assert.True(
+            Array.IndexOf(tags, "24 years old") < Array.IndexOf(tags, "slim"),
+            "The age anchor must precede every body descriptor.");
+    }
+
+    [Fact]
+    public void Subject_negatives_are_applied_to_character_renders()
+    {
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite, "male");
+
+        Assert.Contains("1girl", negative, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Silently falling back to another subject would render a male love interest as a woman,
+    /// which is worse than not rendering at all.
+    /// </summary>
+    [Fact]
+    public void Unknown_subject_is_refused()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            Positive(RenderTarget.Sprite, TestContent.Appearance("nonesuch")));
+
+        Assert.Contains("nonesuch", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Character_negative_requires_a_subject()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite, null));
     }
 }

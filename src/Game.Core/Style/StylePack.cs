@@ -48,6 +48,46 @@ public sealed record StylePack
     public IReadOnlyList<string> NegativeBase { get; init; } = [];
 
     /// <summary>
+    /// Subject anchors, keyed by <see cref="Characters.CharacterAppearance.Subject"/>. A game
+    /// declares which subjects its love interests may use; the pack supplies the vocabulary
+    /// each one needs, because the right tokens are checkpoint-specific and not something
+    /// the compiler can know.
+    /// </summary>
+    /// <remarks>
+    /// Measured on Illustrious XL: <c>1boy, solo, adult</c> alone renders androgynous and
+    /// young, and only reads as an adult man once <c>male focus, mature male</c> is present
+    /// with <c>1girl, feminine</c> negated. That is the male half of the HANDOFF 1.9 age
+    /// anchor, and it is pack data for the same reason the female half's wording is.
+    /// </remarks>
+    public IReadOnlyDictionary<string, SubjectProfile> Subjects { get; init; }
+        = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The anchor for <paramref name="subject"/>, or a throw naming what the pack does offer.
+    /// A missing subject is a content error, not a reason to silently fall back to another
+    /// one: rendering a male love interest as a woman is worse than failing.
+    /// </summary>
+    public SubjectProfile SubjectFor(string subject)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subject);
+
+        // Deserialisation replaces the dictionary with a case-sensitive one, so the match is
+        // done here rather than relying on the comparer. Subject keys come from saved
+        // character data and pack JSON authored by different hands; casing is not a contract.
+        foreach (var (key, profile) in Subjects)
+        {
+            if (string.Equals(key, subject, StringComparison.OrdinalIgnoreCase))
+            {
+                return profile;
+            }
+        }
+
+        var known = Subjects.Count == 0 ? "none" : string.Join(", ", Subjects.Keys.Order(StringComparer.Ordinal));
+        throw new InvalidOperationException(
+            $"Style pack '{Id}' defines no subject '{subject}'. Known subjects: {known}.");
+    }
+
+    /// <summary>
     /// Extra negative tokens applied per ceiling. Keyed by <see cref="Ceiling"/> name.
     /// A PG13 save adds its nudity/suggestive negatives from here.
     /// </summary>
@@ -56,6 +96,22 @@ public sealed record StylePack
 
     public bool Supports(Ceiling ceiling) => SupportedCeilings.Contains(ceiling);
 }
+
+/// <summary>
+/// The tokens that establish who the subject of an image is.
+/// </summary>
+/// <param name="Positive">
+/// Emitted immediately after the quality prefix and before the age tag, in this order.
+/// Position is load-bearing: tag checkpoints weight early tokens most, and HANDOFF 1.9
+/// requires the age anchor to precede every body descriptor.
+/// </param>
+/// <param name="Negative">
+/// Added to the negative prompt for character renders only. Backgrounds negate every
+/// subject regardless, so applying these there would be redundant.
+/// </param>
+public sealed record SubjectProfile(
+    IReadOnlyList<string> Positive,
+    IReadOnlyList<string> Negative);
 
 public sealed record LoraSpec(string File, double ModelWeight, double ClipWeight);
 

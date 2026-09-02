@@ -7,7 +7,8 @@ namespace Game.Core.Tests;
 
 internal static class TestContent
 {
-    public static CharacterAppearance Appearance() => new(
+    public static CharacterAppearance Appearance(string subject = "female") => new(
+        Subject: subject,
         Age: 24,
         EyeColor: "green eyes",
         HairColor: "red hair",
@@ -42,6 +43,11 @@ internal static class TestContent
         SupportedCeilings = [Ceiling.PG13],
         PositivePrefix = ["masterpiece", "best quality"],
         NegativeBase = ["lowres", "worst quality"],
+        Subjects = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["female"] = new(["1girl", "solo", "adult", "mature female"], ["1boy"]),
+            ["male"] = new(["1boy", "solo", "adult", "male focus", "mature male"], ["1girl", "feminine"]),
+        },
         NegativeByCeiling = new Dictionary<string, IReadOnlyList<string>>
         {
             ["PG13"] = ["nsfw", "nude"],

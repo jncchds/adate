@@ -9,6 +9,7 @@ namespace Game.Data.Tests;
 public class DatabaseTests
 {
     private static CharacterAppearance Appearance() => new(
+        Subject: "female",
         Age: 24,
         EyeColor: "green eyes",
         HairColor: "red hair",

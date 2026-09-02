@@ -31,5 +31,11 @@ public interface IPromptCompiler
         StylePack pack,
         RenderTarget target);
 
-    string CompileNegative(StylePack pack, Ceiling ceiling, RenderTarget target);
+    /// <param name="subject">
+    /// The character's subject key, required for every target except
+    /// <see cref="RenderTarget.Background"/>. The pack's per-subject negatives are not
+    /// cosmetic: measured, a PG13 ceiling built only from female-coded terms let a bare
+    /// male chest through, so each subject carries the terms its own ceiling needs.
+    /// </param>
+    string CompileNegative(StylePack pack, Ceiling ceiling, RenderTarget target, string? subject);
 }
