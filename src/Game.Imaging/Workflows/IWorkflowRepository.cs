@@ -1,9 +1,7 @@
-using System.Text.Json.Nodes;
-
 namespace Game.Imaging.Workflows;
 
-/// <summary>Supplies workflow templates and their node id maps by logical id.</summary>
+/// <summary>Supplies workflow templates, their node id maps and their fingerprints.</summary>
 public interface IWorkflowRepository
 {
-    Task<(WorkflowManifest Manifest, JsonObject Graph)> GetAsync(string workflowId, CancellationToken ct = default);
+    Task<LoadedWorkflow> GetAsync(string workflowId, CancellationToken ct = default);
 }

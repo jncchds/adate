@@ -77,10 +77,14 @@ Graph must include:
 - **IP-Adapter Plus** (`ip-adapter-plus_sd15.safetensors`) with the CLIP vision encoder,
   taking the anchor image as reference. **Not FaceID or InstantID** — those rely on
   InsightFace embeddings trained on real faces and perform poorly on anime.
-- **Remove Background (BiRefNet)**, native to ComfyUI, before the save. Matting happens
-  inside the graph so the client only ever receives a PNG with alpha.
-- A `SaveImage` writing **RGBA PNG**. If alpha is lost here, the composite fails no matter
-  how good the faces are.
+- **`LoadBackgroundRemovalModel`** (`birefnet.safetensors`) feeding **`RemoveBackground`**.
+  Note the names: BiRefNet is native to ComfyUI but neither node has "BiRefNet" in its name.
+- **`RemoveBackground` returns a `MASK`, not an RGBA image**, so the mask must go through
+  **`InvertMask`** and then **`JoinImageWithAlpha`** before the save. The inversion is not
+  optional: `JoinImageWithAlpha` treats the mask as the region to cut away, so without it
+  you get a character-shaped hole in an opaque background. Verified on hardware.
+- A `SaveImage`, which does preserve the alpha channel. Verified: output is PNG colour
+  type 6 with roughly 2% partial-alpha edge feathering, and hair strands survive.
 
 The `anchor` input is a *filename*, not a path. The game uploads the anchor to ComfyUI via
 `POST /upload/image` first, because the game and ComfyUI do not share a filesystem — they
@@ -103,9 +107,27 @@ All three load `Counterfeit-V2.5_fp16.safetensors`. The checkpoint is named in t
 (`stylepacks/counterfeit-anime.json`) and may be set directly in the graph for now; a
 `checkpoint` input can be exposed later when a second pack exists.
 
-## Verifying a graph before wiring it up
+## Status
 
-Run each one by hand in the ComfyUI UI with varied inputs first (HANDOFF §8 step 2). Then:
+All three graphs are written and have been run against real hardware — RTX 5090, ComfyUI
+0.34.2, `cu130-slim`. Measured warm, with the checkpoint already resident:
+
+| Workflow | Size | Time |
+|---|---|---|
+| `portrait` | 512×768 | 3.5–4.4 s |
+| `background` | 768×512 | 4.0 s |
+| `sprite` | 640×960 | ~4 s of sampling plus matting |
+
+Cold start is about 100 s for the first image of a session, and about 87 s again the first
+time the IP-Adapter and matting models load. Both are one-off model loads amortised across
+the session, not per-image cost. Against HANDOFF §2 that puts four candidates near 16 s
+warm, comfortably inside the 60 s budget.
+
+## Re-verifying after an edit
+
+The graph and its manifest are hashed into every image's content address, so editing either
+one correctly invalidates art produced by the previous version — an identical request
+against an edited graph misses cache and regenerates.
 
 ```bash
 ADATE_Comfy__BaseAddress=http://<gpu-box>:8188 dotnet run --project src/Game.Cli -- generate portrait "1girl, solo, red hair, green eyes" --seed 42 --size 512x768

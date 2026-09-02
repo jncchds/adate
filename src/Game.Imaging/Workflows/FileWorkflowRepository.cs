@@ -13,7 +13,7 @@ public sealed class FileWorkflowRepository : IWorkflowRepository
 {
     private static readonly JsonSerializerOptions ManifestJson = new(JsonSerializerDefaults.Web);
 
-    private readonly ConcurrentDictionary<string, Task<(WorkflowManifest, JsonObject)>> _cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Task<LoadedWorkflow>> _cache = new(StringComparer.Ordinal);
     private readonly string _root;
 
     public FileWorkflowRepository(IOptions<WorkflowOptions> options)
@@ -22,7 +22,7 @@ public sealed class FileWorkflowRepository : IWorkflowRepository
         _root = Path.GetFullPath(options.Value.Directory);
     }
 
-    public Task<(WorkflowManifest Manifest, JsonObject Graph)> GetAsync(string workflowId, CancellationToken ct = default)
+    public Task<LoadedWorkflow> GetAsync(string workflowId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowId);
 
@@ -31,7 +31,7 @@ public sealed class FileWorkflowRepository : IWorkflowRepository
         return _cache.GetOrAdd(workflowId, id => LoadAsync(id, ct));
     }
 
-    private async Task<(WorkflowManifest, JsonObject)> LoadAsync(string workflowId, CancellationToken ct)
+    private async Task<LoadedWorkflow> LoadAsync(string workflowId, CancellationToken ct)
     {
         var manifestPath = Path.Combine(_root, $"{workflowId}.manifest.json");
         if (!File.Exists(manifestPath))
@@ -42,8 +42,8 @@ public sealed class FileWorkflowRepository : IWorkflowRepository
                 manifestPath);
         }
 
-        await using var manifestStream = File.OpenRead(manifestPath);
-        var manifest = await JsonSerializer.DeserializeAsync<WorkflowManifest>(manifestStream, ManifestJson, ct)
+        var manifestText = await File.ReadAllTextAsync(manifestPath, ct);
+        var manifest = JsonSerializer.Deserialize<WorkflowManifest>(manifestText, ManifestJson)
             ?? throw new InvalidOperationException($"Workflow manifest '{manifestPath}' deserialised to null.");
 
         if (!string.Equals(manifest.Id, workflowId, StringComparison.Ordinal))
@@ -66,7 +66,10 @@ public sealed class FileWorkflowRepository : IWorkflowRepository
             ?? throw new InvalidOperationException($"Workflow graph '{graphPath}' is not a JSON object.");
 
         Validate(manifest, graph, graphPath);
-        return (manifest, graph);
+
+        // Both texts, because the node id map decides which graph inputs a request can
+        // reach at all: a manifest edit changes the output just as a graph edit does.
+        return new LoadedWorkflow(manifest, graph, Caching.ContentAddress.OfManifest(manifestText + graphText));
     }
 
     /// <summary>

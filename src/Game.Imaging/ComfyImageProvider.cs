@@ -22,15 +22,19 @@ public sealed class ComfyImageProvider(
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var hash = ContentAddress.For(req);
+        // Loaded before the cache is consulted, because the graph's fingerprint is part of
+        // the address. Templates are held in memory after first read, so this costs nothing
+        // on the cache-hit path beyond a dictionary lookup.
+        var workflow = await workflows.GetAsync(req.WorkflowId, ct).ConfigureAwait(false);
+        var manifest = workflow.Manifest;
+
+        var hash = ContentAddress.For(req, workflow.Fingerprint);
 
         if (store.Exists(hash))
         {
             log.LogDebug("Cache hit for {WorkflowId} at {Hash}.", req.WorkflowId, hash);
             return new GeneratedImage(hash, store.RelativePath(hash), req.Width, req.Height, FromCache: true);
         }
-
-        var (manifest, graph) = await workflows.GetAsync(req.WorkflowId, ct).ConfigureAwait(false);
 
         // The anchor lives in our store, not on the ComfyUI host, so it has to be pushed
         // across before the graph can reference it. Uploaded under its own content hash,
@@ -52,7 +56,7 @@ public sealed class ComfyImageProvider(
             [WorkflowInputs.AnchorWeight] = req.AnchorWeight,
         };
 
-        var patched = WorkflowPatcher.Patch(graph, manifest, values);
+        var patched = WorkflowPatcher.Patch(workflow.Graph, manifest, values);
 
         var stopwatch = Stopwatch.StartNew();
 

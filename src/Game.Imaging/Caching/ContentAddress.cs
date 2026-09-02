@@ -23,13 +23,22 @@ public static class ContentAddress
     /// contract: reordering or inserting a field invalidates every cached image in
     /// existence. Append only, and only alongside a bump of the version tag.
     /// </summary>
-    public static string For(ImageRequest req)
+    /// <param name="workflowFingerprint">
+    /// Hash of the graph and node id map that will render this request. The graph is as
+    /// much a generation parameter as the prompt: rewiring a sampler or inserting a mask
+    /// inversion changes the output for an otherwise identical request. It is passed in
+    /// rather than carried on the request because only the provider knows which workflow
+    /// version is actually loaded.
+    /// </summary>
+    public static string For(ImageRequest req, string workflowFingerprint)
     {
         ArgumentNullException.ThrowIfNull(req);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowFingerprint);
 
         var sb = new StringBuilder();
-        Append(sb, "v1");
+        Append(sb, "v2");
         Append(sb, req.WorkflowId);
+        Append(sb, workflowFingerprint);
         Append(sb, req.PackFingerprint);
         Append(sb, req.Positive);
         Append(sb, req.Negative);

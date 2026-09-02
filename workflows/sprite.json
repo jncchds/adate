@@ -72,9 +72,13 @@
     "class_type": "RemoveBackground",
     "inputs": { "bg_removal_model": ["20", 0], "image": ["6", 0] }
   },
+  "23": {
+    "class_type": "InvertMask",
+    "inputs": { "mask": ["21", 0] }
+  },
   "22": {
     "class_type": "JoinImageWithAlpha",
-    "inputs": { "image": ["6", 0], "alpha": ["21", 0] }
+    "inputs": { "image": ["6", 0], "alpha": ["23", 0] }
   },
 
   "7": {

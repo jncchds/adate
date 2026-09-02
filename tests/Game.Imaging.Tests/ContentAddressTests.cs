@@ -6,6 +6,8 @@ namespace Game.Imaging.Tests;
 
 public class ContentAddressTests
 {
+    private const string Fingerprint = "workflow-fingerprint";
+
     private static ImageRequest Baseline() => new(
         WorkflowId: "sprite",
         Positive: "1girl, blue eyes",
@@ -21,7 +23,7 @@ public class ContentAddressTests
     [Fact]
     public void Address_is_a_lowercase_sha256()
     {
-        var hash = ContentAddress.For(Baseline());
+        var hash = ContentAddress.For(Baseline(), Fingerprint);
 
         Assert.Equal(64, hash.Length);
         Assert.True(ContentAddress.IsWellFormed(hash));
@@ -30,7 +32,7 @@ public class ContentAddressTests
     [Fact]
     public void Identical_requests_address_the_same_file()
     {
-        Assert.Equal(ContentAddress.For(Baseline()), ContentAddress.For(Baseline()));
+        Assert.Equal(ContentAddress.For(Baseline(), Fingerprint), ContentAddress.For(Baseline(), Fingerprint));
     }
 
     public static TheoryData<string, ImageRequest> Variations() => new()
@@ -56,7 +58,7 @@ public class ContentAddressTests
     [MemberData(nameof(Variations))]
     public void Changing_any_parameter_changes_the_address(string field, ImageRequest changed)
     {
-        Assert.NotEqual(ContentAddress.For(Baseline()), ContentAddress.For(changed));
+        Assert.NotEqual(ContentAddress.For(Baseline(), Fingerprint), ContentAddress.For(changed, Fingerprint));
         Assert.True(true, field);
     }
 
@@ -70,7 +72,7 @@ public class ContentAddressTests
         var a = Baseline() with { Positive = "ab", Negative = "c" };
         var b = Baseline() with { Positive = "a", Negative = "bc" };
 
-        Assert.NotEqual(ContentAddress.For(a), ContentAddress.For(b));
+        Assert.NotEqual(ContentAddress.For(a, Fingerprint), ContentAddress.For(b, Fingerprint));
     }
 
     [Fact]
@@ -79,8 +81,22 @@ public class ContentAddressTests
         var none = Baseline() with { AnchorImageHash = null, AnchorWeight = null };
         var alsoNone = Baseline() with { AnchorImageHash = null, AnchorWeight = null };
 
-        Assert.Equal(ContentAddress.For(none), ContentAddress.For(alsoNone));
-        Assert.NotEqual(ContentAddress.For(none), ContentAddress.For(Baseline()));
+        Assert.Equal(ContentAddress.For(none, Fingerprint), ContentAddress.For(alsoNone, Fingerprint));
+        Assert.NotEqual(ContentAddress.For(none, Fingerprint), ContentAddress.For(Baseline(), Fingerprint));
+    }
+
+    /// <summary>
+    /// The graph is as much a generation parameter as the prompt. Found the hard way:
+    /// inserting a mask inversion into the sprite workflow produced visibly different art
+    /// for a byte-identical request, and the old key would have gone on serving the
+    /// pre-fix image forever, because a content-addressed file is never regenerated.
+    /// </summary>
+    [Fact]
+    public void Editing_the_workflow_graph_changes_the_address()
+    {
+        Assert.NotEqual(
+            ContentAddress.For(Baseline(), "before-the-mask-inversion"),
+            ContentAddress.For(Baseline(), "after-the-mask-inversion"));
     }
 
     [Fact]
