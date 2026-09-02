@@ -54,6 +54,18 @@ public sealed record StylePack
     public IReadOnlyList<string> NegativeBase { get; init; } = [];
 
     /// <summary>
+    /// Negatives applied to every character render at every ceiling, with no path that omits
+    /// them. Terms that must never describe a generated character, whatever the tier.
+    /// </summary>
+    /// <remarks>
+    /// This list exists because the ceiling lists cannot do the job. A game may set its floor
+    /// at 16, so PG13 is the tier that renders teenagers, and terms describing how a teenager
+    /// looks cannot live there. Splitting them out means the protective terms never depend on
+    /// which tier is active, and the tier lists are free to describe their own tier.
+    /// </remarks>
+    public IReadOnlyList<string> AlwaysNegative { get; init; } = [];
+
+    /// <summary>
     /// Subject anchors, keyed by <see cref="Characters.CharacterAppearance.Subject"/>. A game
     /// declares which subjects its love interests may use; the pack supplies the vocabulary
     /// each one needs, because the right tokens are checkpoint-specific and not something
@@ -131,6 +143,14 @@ public sealed record StylePack
         = new Dictionary<string, IReadOnlyList<string>>();
 
     public bool Supports(Ceiling ceiling) => SupportedCeilings.Contains(ceiling);
+
+    /// <summary>
+    /// The most this pack is willing to render. A cap that <see cref="Content.ContentPolicy"/>
+    /// applies alongside the game setting and the age clamp.
+    /// </summary>
+    public Ceiling HighestCeiling => SupportedCeilings.Count == 0
+        ? Ceiling.PG13
+        : SupportedCeilings.Max();
 }
 
 /// <summary>

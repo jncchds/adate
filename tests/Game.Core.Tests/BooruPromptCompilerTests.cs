@@ -1,4 +1,5 @@
 using Game.Core.Characters;
+using Game.Core.Content;
 using Game.Core.Scenes;
 using Game.Core.Style;
 
@@ -153,11 +154,17 @@ public class BooruPromptCompilerTests
         Assert.StartsWith("masterpiece,", prompt, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Below the absolute floor there is no prompt at all. Between the floor and 18 there is
+    /// a prompt, and <see cref="Content.ContentPolicy"/> is what constrains it — see
+    /// <c>ContentPolicyTests</c>. Compiling a prompt for a 17-year-old is not the boundary;
+    /// what that prompt is allowed to depict is.
+    /// </summary>
     [Fact]
-    public void Underage_appearance_is_rejected_before_a_prompt_exists()
+    public void Appearance_below_the_absolute_floor_is_rejected_before_a_prompt_exists()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Positive(RenderTarget.Sprite, TestContent.Appearance() with { Age = 17 }));
+            Positive(RenderTarget.Sprite, TestContent.Appearance() with { Age = 15 }));
     }
 
     [Theory]
@@ -264,6 +271,24 @@ public class BooruPromptCompilerTests
             Positive(RenderTarget.Sprite, TestContent.Appearance("nonesuch")));
 
         Assert.Contains("nonesuch", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The protections that do not depend on tier. Asserted across every ceiling and both
+    /// subjects, because the failure mode this guards against is a tier list being edited in
+    /// a way that quietly drops them.
+    /// </summary>
+    [Theory]
+    [InlineData(Ceiling.PG13, "female")]
+    [InlineData(Ceiling.PG13, "male")]
+    public void Always_negative_terms_are_present_regardless_of_tier(Ceiling ceiling, string subject)
+    {
+        var negative = Compiler().CompileNegative(TestContent.Pack(), ceiling, RenderTarget.Sprite, subject);
+
+        foreach (var term in TestContent.Pack().AlwaysNegative)
+        {
+            Assert.Contains(term, negative.Split(", "), StringComparer.Ordinal);
+        }
     }
 
     [Fact]

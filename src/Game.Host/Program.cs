@@ -37,6 +37,10 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.StylePackDirectory = ResolveContentPath(o.StylePackDirectory);
     o.LocationsFile = ResolveContentPath(o.LocationsFile);
     o.PoseDirectory = ResolveContentPath(o.PoseDirectory);
+
+    // Fail at startup rather than at the first render: a game that has declared an
+    // impossible age floor should not serve a single page.
+    o.Content.Validate();
 });
 
 builder.Services.PostConfigure<Game.Imaging.Workflows.WorkflowOptions>(o =>

@@ -170,3 +170,40 @@ the crossfade cannot absorb.
 
 The framing tag has to match the skeleton. A full-body skeleton against an `upper body` prompt
 measured 73-77% silhouette overlap where the matched pair measured 93-96%.
+
+## Age bands: the clamp is derived, never configured
+
+A game chooses two things — its minimum character age (16 for a teen-romance setting, 18 for
+an adult one) and whether adult content is enabled. It does not choose whether a character
+under 18 is limited to PG13. That is computed from the character's own age in
+`ContentPolicy.Resolve`, takes no parameter, and no configuration value reaches it.
+
+`Resolve` is the only way to obtain a `ContentDecision`, and a decision is what the generation
+path needs, so there is no route from a character record to an image that skips it.
+`CharacterStudio` never reads a configured ceiling directly: the configured value is a maximum,
+not a decision.
+
+Enforced a second time in the schema, because a cache row outlives the process that wrote it
+and is what a later session reads back. Migration 002 refuses to store a sprite above PG13 for
+a character under 18, and refuses to lower an age below 18 once such art exists.
+
+Intimacy that exceeds what may be depicted resolves to a fade, not an error — a story reaching
+for a moment it cannot show should cut away. For a character under 18 that is the only outcome
+intimacy ever has, and the narration is constrained with it: an undepicted scene narrated in
+detail has not been faded to black in any meaningful sense.
+
+## Minor-safety negatives cannot live in a ceiling tier
+
+`young` and `baby face` were in the PG13 negative list. Once a game may set its floor at 16,
+PG13 is the tier that renders teenagers, and terms describing how a teenager looks cannot live
+in the tier that has to render them.
+
+They moved to `alwaysNegative`, applied to every character render at every ceiling with no
+path that omits them, and the loader refuses a pack that declares none. The tier lists are now
+free to describe their own tier, and the tiers that depict intimacy — adults only by
+construction — carry the strongest anti-juvenile terms, because that is where getting it wrong
+matters most.
+
+This is prompt-level mitigation, not a guarantee. The checkpoint is Danbooru-trained and will
+comply with whatever survives the negatives, so the structural clamp above is what the design
+actually rests on.

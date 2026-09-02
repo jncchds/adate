@@ -39,9 +39,14 @@ public class DatabaseTests
         using var db = new TempDatabase();
 
         db.Database.Migrate();
+        var applied = db.Scalar<long>("SELECT COUNT(*) FROM schema_migration;");
+
         db.Database.Migrate();
 
-        Assert.Equal(1, db.Scalar<long>("SELECT COUNT(*) FROM schema_migration;"));
+        // Counted against the first run rather than a literal, so adding a migration does
+        // not fail a test that is about running twice, not about how many there are.
+        Assert.True(applied > 0, "no migrations were applied at all");
+        Assert.Equal(applied, db.Scalar<long>("SELECT COUNT(*) FROM schema_migration;"));
     }
 
     /// <summary>
@@ -78,7 +83,7 @@ public class DatabaseTests
 
     /// <summary>HANDOFF 1.9, enforced in the schema as well as in code.</summary>
     [Fact]
-    public async Task Underage_characters_are_rejected()
+    public async Task Characters_below_the_absolute_floor_are_rejected()
     {
         using var db = new TempDatabase();
         var saves = new SaveRepository(db.Database);
@@ -87,7 +92,44 @@ public class DatabaseTests
         var save = await saves.CreateAsync("counterfeit-anime", "fingerprint", Ceiling.PG13);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            characters.CreateAsync(save.Id, Appearance() with { Age = 17 }));
+            characters.CreateAsync(save.Id, Appearance() with { Age = 15 }));
+    }
+
+    /// <summary>
+    /// The database half of the age clamp. <c>ContentPolicy</c> is the only route to a
+    /// ceiling in code, but a cache row outlives the process that wrote it, so the schema
+    /// refuses the row independently of whatever the caller believed.
+    /// </summary>
+    [Fact]
+    public async Task A_sprite_above_pg13_cannot_be_stored_for_a_minor()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+        var cache = new ImageCacheRepository(db.Database);
+
+        var save = await saves.CreateAsync("counterfeit-anime", "fingerprint", Ceiling.Explicit);
+        var character = await characters.CreateAsync(save.Id, Appearance() with { Age = 17 });
+
+        await Assert.ThrowsAsync<SqliteException>(() => cache.RecordSpriteAsync(
+            new string('a', 64), save.Id, character.Id,
+            "outfit", "standing", "neutral", Ceiling.Explicit, "img/a.png"));
+    }
+
+    [Fact]
+    public async Task A_minor_may_still_have_pg13_art()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+        var cache = new ImageCacheRepository(db.Database);
+
+        var save = await saves.CreateAsync("counterfeit-anime", "fingerprint", Ceiling.PG13);
+        var character = await characters.CreateAsync(save.Id, Appearance() with { Age = 16 });
+
+        await cache.RecordSpriteAsync(
+            new string('b', 64), save.Id, character.Id,
+            "outfit", "standing", "neutral", Ceiling.PG13, "img/b.png");
     }
 
     [Fact]

@@ -90,6 +90,14 @@ public sealed class JsonStylePackLoader : IStylePackLoader
             }
         }
 
+        if (pack.AlwaysNegative.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Style pack '{packId}' declares no alwaysNegative terms. Those are the " +
+                "protections that hold at every ceiling, so a pack without them is not one " +
+                "that can be loaded.");
+        }
+
         if (pack.Expressions.Count == 0)
         {
             throw new InvalidOperationException(

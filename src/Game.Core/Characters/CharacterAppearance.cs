@@ -12,10 +12,15 @@ namespace Game.Core.Characters;
 /// checkpoint-specific. Not inferred from any other attribute.
 /// </param>
 /// <param name="Age">
-/// HANDOFF 1.9: an explicit adult age, injected into every prompt. Tag-based checkpoints
-/// associate terms like "petite" and "youthful" with juvenile features and drift without
-/// an anchor. Validated by <see cref="Validate"/>, never inferred.
+/// HANDOFF 1.9: an explicit age, injected into every prompt, and the input the content
+/// clamp is computed from. Validated by <see cref="Validate"/>, never inferred.
 /// </param>
+/// <remarks>
+/// Measured: varying only the age tag from 19 to 68 barely changes the render on Illustrious.
+/// So the tag is a declaration of intent and a policy input, and is <em>not</em> evidence that
+/// the image depicts someone of that age. Anything that depends on the subject reading as an
+/// adult needs stronger tags than this one and needs to be checked, not assumed.
+/// </remarks>
 public sealed record CharacterAppearance(
     string Subject,
     int Age,
@@ -27,7 +32,11 @@ public sealed record CharacterAppearance(
     string Height,
     string DistinguishingFeature)
 {
-    public const int MinimumAge = 18;
+    /// <summary>
+    /// The absolute floor across every game. A game may declare a higher minimum, and
+    /// <see cref="Content.ContentPolicy"/> clamps anyone under 18 to PG13 regardless.
+    /// </summary>
+    public const int MinimumAge = Content.ContentPolicy.LowestPermittedMinimumAge;
 
     /// <summary>Throws if the record could not legally or usefully be sent to a generator.</summary>
     public void Validate()

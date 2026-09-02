@@ -1,5 +1,6 @@
 using Game.Core;
 using Game.Core.Characters;
+using Game.Core.Content;
 using Game.Core.Saves;
 using Game.Core.Scenes;
 using Game.Core.Style;
@@ -40,6 +41,18 @@ public sealed class CharacterStudio(
         await packs.LoadAsync(_options.StylePackId, ct).ConfigureAwait(false);
 
     /// <summary>
+    /// The effective ceiling for one character, after the game setting, the pack and the
+    /// age clamp. Every ceiling in this class comes from here; none reads the configured
+    /// value directly, because the configured value is a maximum and not a decision.
+    /// </summary>
+    private Ceiling CeilingFor(CharacterRecord character, StylePack pack) =>
+        ContentPolicy.Resolve(
+            _options.Content,
+            character.Appearance.Age,
+            pack.HighestCeiling,
+            Intimacy.None).Ceiling;
+
+    /// <summary>
     /// Hash of the pack manifest, which enters the image cache key so art never survives an
     /// edit to the checkpoint, LoRA set or sampler settings that produced it.
     /// </summary>
@@ -71,7 +84,8 @@ public sealed class CharacterStudio(
         var intent = PortraitIntent();
 
         var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Portrait);
-        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Portrait, character.Appearance.Subject);
+        var ceiling = CeilingFor(character, pack);
+        var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Portrait, character.Appearance.Subject);
 
         var results = new List<Candidate>(_options.CandidateCount);
 
@@ -94,7 +108,7 @@ public sealed class CharacterStudio(
                     AnchorWeight: null,
                     PoseImageHash: null,
                     PoseStrength: null,
-                    Ceiling: _options.Ceiling),
+                    Ceiling: ceiling),
                 ct).ConfigureAwait(false);
 
             results.Add(new Candidate(image.Hash, image.RelativePath, seed));
@@ -142,7 +156,8 @@ public sealed class CharacterStudio(
             ? await poses.HashForAsync(_options.SpritePose, ct).ConfigureAwait(false)
             : null;
 
-        var negative = compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Sprite, character.Appearance.Subject);
+        var ceiling = CeilingFor(character, pack);
+        var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Sprite, character.Appearance.Subject);
         var sprites = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var expression in Expressions)
@@ -171,12 +186,12 @@ public sealed class CharacterStudio(
                     AnchorWeight: seedAndTags ? null : pack.Sampler.AnchorWeight,
                     PoseImageHash: poseHash,
                     PoseStrength: poseHash is null ? null : pack.Sampler.PoseStrength,
-                    Ceiling: _options.Ceiling),
+                    Ceiling: ceiling),
                 ct).ConfigureAwait(false);
 
             await cache.RecordSpriteAsync(
                 image.Hash, character.SaveId, character.Id,
-                intent.Outfit, intent.Pose, expression, _options.Ceiling, image.RelativePath, ct)
+                intent.Outfit, intent.Pose, expression, ceiling, image.RelativePath, ct)
                 .ConfigureAwait(false);
 
             sprites[expression] = image.RelativePath;
@@ -201,11 +216,17 @@ public sealed class CharacterStudio(
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var intent = new SceneIntent(locationId, time, "", "", "", Framing.FullBody);
 
+        var backgroundCeiling = _options.Content.MaxCeiling < pack.HighestCeiling
+            ? _options.Content.MaxCeiling
+            : pack.HighestCeiling;
+
         var image = await images.GenerateAsync(
             new ImageRequest(
                 WorkflowId: pack.Workflows.Background,
                 Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background),
-                Negative: compiler.CompileNegative(pack, _options.Ceiling, RenderTarget.Background, subject: null),
+                // A background has no subject, so no age clamp applies -- only the game
+                // setting and the pack.
+                Negative: compiler.CompileNegative(pack, backgroundCeiling, RenderTarget.Background, subject: null),
                 // Backgrounds are generated once per location and time and then reused for
                 // the life of the save, so the seed only needs to be stable, not varied.
                 Seed: DeriveSeed(saveId.Value, locationId.GetHashCode(StringComparison.Ordinal) ^ (int)time),
@@ -216,7 +237,7 @@ public sealed class CharacterStudio(
                 AnchorWeight: null,
                 PoseImageHash: null,
                 PoseStrength: null,
-                Ceiling: _options.Ceiling),
+                Ceiling: backgroundCeiling),
             ct).ConfigureAwait(false);
 
         await cache.RecordBackgroundAsync(image.Hash, saveId, locationId, time, image.RelativePath, ct)
@@ -288,6 +309,9 @@ public sealed class StudioOptions
     /// <summary>HANDOFF 2: four candidate portraits, same prompt, four seeds.</summary>
     public int CandidateCount { get; set; } = 4;
 
-    /// <summary>Hardcoded for Spike 0 (HANDOFF 1.8), but threaded through everything.</summary>
-    public Ceiling Ceiling { get; set; } = Ceiling.PG13;
+    /// <summary>
+    /// Per-game content configuration. Defaults to adults-only and PG13: a game that says
+    /// nothing gets the most restrictive setting rather than the most permissive one.
+    /// </summary>
+    public GameContentSettings Content { get; set; } = GameContentSettings.SafeDefault;
 }

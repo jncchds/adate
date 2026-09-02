@@ -44,6 +44,7 @@ internal static class TestContent
         SupportedCeilings = [Ceiling.PG13],
         PositivePrefix = ["masterpiece", "best quality"],
         NegativeBase = ["lowres", "worst quality"],
+        AlwaysNegative = ["loli", "shota", "child"],
         Subjects = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase)
         {
             ["female"] = new(["1girl", "solo", "adult", "mature female"], ["1boy"], ["white blouse", "pleated skirt"]),

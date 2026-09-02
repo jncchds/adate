@@ -60,6 +60,15 @@
     "monochrome",
     "greyscale"
   ],
+  "alwaysNegative": [
+    "loli",
+    "shota",
+    "child",
+    "toddler",
+    "infant",
+    "kindergartener",
+    "(child:1.4)"
+  ],
   "subjects": {
     "female": {
       "positive": [
@@ -120,12 +129,40 @@
       "shota",
       "child",
       "toddler",
-      "baby face",
-      "young",
       "bare pectorals",
       "open shirt",
       "shirtless",
       "exposed chest"
+    ],
+    "Suggestive": [
+      "nude",
+      "nipples",
+      "topless",
+      "bottomless",
+      "underwear",
+      "lingerie",
+      "loli",
+      "shota",
+      "child",
+      "toddler",
+      "bare pectorals",
+      "open shirt",
+      "shirtless",
+      "exposed chest",
+      "young",
+      "baby face",
+      "childlike",
+      "petite",
+      "flat chest",
+      "school uniform"
+    ],
+    "Explicit": [
+      "young",
+      "baby face",
+      "childlike",
+      "petite",
+      "flat chest",
+      "school uniform"
     ]
   }
 }

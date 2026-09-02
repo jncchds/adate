@@ -119,8 +119,16 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
                 $"Supported: {string.Join(", ", pack.SupportedCeilings)}.");
         }
 
-        var tags = new List<string>(24);
+        var tags = new List<string>(32);
         tags.AddRange(pack.NegativeBase);
+
+        if (target is not RenderTarget.Background)
+        {
+            // Unconditional, and first among the negatives so nothing later can be read as
+            // qualifying them. Not gated on ceiling, subject, age or anything else: the whole
+            // point is that there is no configuration under which these are absent.
+            tags.AddRange(pack.AlwaysNegative);
+        }
 
         if (pack.NegativeByCeiling.TryGetValue(ceiling.ToString(), out var ceilingTags))
         {
