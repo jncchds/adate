@@ -1,0 +1,51 @@
+{
+  "_comment": "UNVERIFIED. ComfyUI has no native Sana nodes -- confirmed against /object_info on the box -- so this graph targets city96/ComfyUI_ExtraModels, which is not installed here. The node class names and input names below are written from that pack's documentation and have never been run. Expect the first attempt to fail with a class_type error; fix it against the box's own /object_info rather than guessing further. Node ids match the FLUX graph so eval/models.json can share a patch map shape.",
+
+  "1": {
+    "class_type": "SanaCheckpointLoader",
+    "inputs": { "ckpt_name": "sana/transformer.safetensors", "model": "SanaMS_1600M_P1_D20" }
+  },
+  "2": {
+    "class_type": "GemmaLoader",
+    "inputs": { "model_name": "gemma-2-2b-it.safetensors", "device": "cpu", "dtype": "bfloat16" }
+  },
+  "3": {
+    "class_type": "ExtraVAELoader",
+    "inputs": { "vae_name": "sana/vae.safetensors", "vae_type": "dcae-f32c32-sana-1.0", "dtype": "bfloat16" }
+  },
+  "4": {
+    "class_type": "GemmaTextEncode",
+    "inputs": { "text": "", "GEMMA": ["2", 0] }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": { "width": 832, "height": 1216, "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "seed": 0,
+      "steps": 20,
+      "cfg": 5.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": ["4", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0],
+      "denoise": 1
+    }
+  },
+  "7": {
+    "class_type": "GemmaTextEncode",
+    "inputs": { "text": "", "GEMMA": ["2", 0] }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["6", 0], "vae": ["3", 0] }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "images": ["8", 0], "filename_prefix": "adate/eval" }
+  }
+}

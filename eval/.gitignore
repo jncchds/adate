@@ -1,0 +1,3 @@
+# Rendered evaluation output. Results live in docs/model-evaluation.md; the PNGs are
+# reproducible from the checked-in graphs and cases, and are large.
+out/

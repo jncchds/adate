@@ -1,0 +1,82 @@
+{
+  "_comment": "Candidates for docs/model-evaluation.md. `patch` maps a logical input to a node path in the graph, exactly as a workflow manifest does. `dialect` decides which phrasing of each battery case is sent, because a booru case sent to a natural-language model measures the dialect and not the model.",
+  "illustrious": {
+    "displayName": "Illustrious XL v2.0",
+    "graph": "sdxl.json",
+    "dialect": "booru",
+    "licence": "creativeml-openrail-m",
+    "commercialUse": "permitted, with the OpenRAIL use restrictions",
+    "patch": {
+      "positive": "2.inputs.text",
+      "negative": "3.inputs.text",
+      "seed": "5.inputs.seed",
+      "checkpoint": "1.inputs.ckpt_name"
+    },
+    "defaults": {
+      "checkpoint": "Illustrious-XL-v2.0.safetensors"
+    }
+  },
+  "pony": {
+    "displayName": "Pony Diffusion V6 XL",
+    "graph": "sdxl.json",
+    "dialect": "booru",
+    "licence": "modified fair-ai-public-license-1.0-sd",
+    "commercialUse": "prohibited in any monetised application",
+    "_comment_prefix": "Pony is trained with a score_N quality ladder and produces noticeably worse output without it, so omitting it would measure the missing prefix rather than the model.",
+    "positivePrefix": "score_9, score_8_up, score_7_up",
+    "negativePrefix": "score_6, score_5, score_4",
+    "patch": {
+      "positive": "2.inputs.text",
+      "negative": "3.inputs.text",
+      "seed": "5.inputs.seed",
+      "checkpoint": "1.inputs.ckpt_name"
+    },
+    "defaults": {
+      "checkpoint": "ponyDiffusionV6XL.safetensors"
+    }
+  },
+  "noobai": {
+    "displayName": "NoobAI-XL v1.1 (eps)",
+    "graph": "sdxl.json",
+    "dialect": "booru",
+    "licence": "fair-ai-public-license-1.0-sd",
+    "commercialUse": "prohibited",
+    "patch": {
+      "positive": "2.inputs.text",
+      "negative": "3.inputs.text",
+      "seed": "5.inputs.seed",
+      "checkpoint": "1.inputs.ckpt_name"
+    },
+    "defaults": {
+      "checkpoint": "NoobAI-XL-v1.1.safetensors"
+    }
+  },
+  "flux2-klein": {
+    "displayName": "FLUX.2 klein 4B",
+    "graph": "flux2-klein.json",
+    "dialect": "natural",
+    "licence": "apache-2.0",
+    "commercialUse": "permitted, unrestricted",
+    "_comment_negative": "The negative is still sent so the negative-bite case runs and returns its real answer rather than being skipped as assumed-zero.",
+    "patch": {
+      "positive": "4.inputs.text",
+      "negative": "7.inputs.text",
+      "seed": "6.inputs.seed"
+    },
+    "defaults": {}
+  },
+  "sana": {
+    "displayName": "Sana 1.6B (NVIDIA)",
+    "graph": "sana.json",
+    "dialect": "natural",
+    "licence": "apache-2.0 (gemma licence on the text encoder)",
+    "commercialUse": "permitted",
+    "_comment": "Requires city96/ComfyUI_ExtraModels on the box; ComfyUI has no native Sana nodes. Node class names below follow that pack and are unverified against a running instance -- expect to adjust on first run.",
+    "patch": {
+      "positive": "4.inputs.text",
+      "negative": "7.inputs.text",
+      "seed": "6.inputs.seed"
+    },
+    "defaults": {}
+  }
+}

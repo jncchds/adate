@@ -1,0 +1,72 @@
+# Checkpoint evaluation set. NOT needed to run the game -- pull this only to
+# re-run docs/model-evaluation.md.
+#
+# Format: <target path under /models>	<url>	<sha256 or "-">
+#
+# ~29 GB on top of the SDXL set. Every file size below was read from the
+# Hugging Face API, not estimated.
+#
+# LICENCES DIFFER AND THEY ARE NOT A FOOTNOTE. Two of these four cannot ship in a
+# monetised product. They are still worth measuring -- evaluating is not
+# distributing -- but see docs/model-evaluation.md before choosing one.
+
+# --- Pony Diffusion V6 XL ---------------------------------------------------
+# Booru-adjacent dialect with its own score_N prefix convention, so it needs its
+# own positivePrefix in a pack. Modified Fair AI Public License 1.0-SD:
+# inference is not permitted in applications allowing any form of monetisation,
+# with named exceptions for CivitAI and Hugging Face.
+checkpoints/ponyDiffusionV6XL.safetensors	https://huggingface.co/LyliaEngine/Pony_Diffusion_V6_XL/resolve/main/ponyDiffusionV6XL_v6StartWithThisOne.safetensors	-
+
+# --- NoobAI-XL v1.1 ---------------------------------------------------------
+# Full Danbooru + e621, eps-prediction. The eps build rather than the v-pred one
+# deliberately: v-pred needs ModelSamplingDiscrete in the graph, and a comparison
+# that changes the sampler alongside the checkpoint measures two things at once.
+# fair-ai-public-license-1.0-sd: commercialisation prohibited.
+checkpoints/NoobAI-XL-v1.1.safetensors	https://huggingface.co/Laxhar/noobai-XL-1.1/resolve/main/NoobAI-XL-v1.1.safetensors	-
+
+# --- FLUX.2 klein 4B --------------------------------------------------------
+# Apache 2.0, and the only candidate here with no commercial restriction at all.
+#
+# Not a checkpoint: ComfyUI loads it as diffusion model + text encoder + VAE, so
+# it needs its own workflow rather than CheckpointLoaderSimple. Note the real
+# size -- "4B" is the diffusion model alone, and the text encoder is a whole
+# Qwen3-4B on top of it. 7.75 + 8.04 + 0.34 = 16.1 GB, or 11.9 GB with the fp4
+# encoder, which is why the 12 GB profile cannot host this.
+#
+# It also accepts no negative prompt: guidance is distilled into the model, so
+# there is no unconditional pass for a negative embedding to attach to. The
+# pack's alwaysNegative terms would be inert here. See docs/decisions.md.
+diffusion_models/flux-2-klein-4b.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/diffusion_models/flux-2-klein-4b.safetensors	-
+text_encoders/qwen_3_4b.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors	-
+vae/flux2-vae.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors	-
+
+# --- Sana 1.6B (NVIDIA) -----------------------------------------------------
+# Apache 2.0 for the transformer, and by far the smallest candidate. Its text
+# encoder is Gemma-2-2b-it under the Gemma licence, which this project is
+# already subject to because the LLM tier is Gemma 4.
+#
+# REQUIRES INSTALL_EXTRA_MODELS=1. ComfyUI 0.34.2 on this box exposes no Sana
+# nodes at all -- verified against /object_info, not assumed -- so Sana needs
+# city96/ComfyUI_ExtraModels, a third-party pack running inside the ComfyUI
+# process. That is a supply-chain decision, which is why it is opt-in.
+#
+# Sana is trained for general photoreal and text rendering rather than anime, so
+# expect it to lose on style. It is in the mix because the age-legibility test is
+# style-agnostic and a 3.2 GB model that passes it would change the 12 GB budget
+# completely.
+sana/transformer.safetensors	https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px_diffusers/resolve/main/transformer/diffusion_pytorch_model.fp16.safetensors	-
+sana/vae.safetensors	https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px_diffusers/resolve/main/vae/diffusion_pytorch_model.fp16.safetensors	-
+text_encoders/gemma-2-2b-it.safetensors	https://huggingface.co/Efficient-Large-Model/gemma-2-2b-it/resolve/main/gemma-2-2b-it.safetensors	-
+
+# --- FLUX.2 klein 9B --------------------------------------------------------
+# Deliberately left commented out. It is the quality ceiling of the FLUX family
+# that fits on a 32 GB card at all, but:
+#
+#   * the diffusion weights come from black-forest-labs/FLUX.2-klein-9B, which is
+#     gated -- set HF_TOKEN and accept the terms before uncommenting;
+#   * non-commercial licence, so it can never ship;
+#   * the text encoder alone is Qwen3-8B: 16.4 GB at bf16, 8.7 GB at fp8mixed.
+#
+# Uncomment only to answer "how much are we giving up by staying small", and
+# expect roughly 27 GB of download for an answer you cannot act on.
+# text_encoders/qwen_3_8b_fp8mixed.safetensors	https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/resolve/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors	-

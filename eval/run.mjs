@@ -1,0 +1,135 @@
+// Checkpoint evaluation runner. Drives ComfyUI directly rather than going through
+// Game.Imaging, deliberately: this measures models, not our pipeline, and the candidates
+// need structurally different graphs that the game's workflow system has no reason to know
+// about (FLUX loads a diffusion model, a text encoder and a VAE separately).
+//
+//   node eval/run.mjs <model-key> [more keys...]
+//   ADATE_COMFY=http://192.168.2.33:8188 node eval/run.mjs illustrious
+//
+// Writes PNGs to eval/out/<model>/<case>-<variant>.png and a manifest to
+// eval/out/<model>/results.json. Scoring is eval/score.ps1, run afterwards.
+
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const comfy = process.env.ADATE_COMFY ?? 'http://127.0.0.1:8188';
+
+const models = JSON.parse(readFileSync(join(here, 'models.json'), 'utf8'));
+const battery = JSON.parse(readFileSync(join(here, 'cases.json'), 'utf8'));
+
+const keys = process.argv.slice(2);
+if (keys.length === 0) {
+  console.error('usage: node eval/run.mjs <model-key> [...]');
+  console.error('known: ' + Object.keys(models).filter(k => !k.startsWith('_')).join(', '));
+  process.exit(2);
+}
+
+/** Sets graph.<node>.inputs.<field> from a "3.inputs.text" style path, as a manifest does. */
+function patch(graph, path, value) {
+  const [node, , field] = path.split('.');
+  if (!graph[node]) throw new Error(`graph has no node '${node}' for path '${path}'`);
+  graph[node].inputs[field] = value;
+}
+
+async function post(path, body) {
+  const res = await fetch(`${comfy}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`POST ${path} -> ${res.status}: ${text.slice(0, 600)}`);
+  return JSON.parse(text);
+}
+
+/**
+ * Submits and waits. Polls /history rather than opening a websocket: the socket is an
+ * optimisation for progress reporting and this has no progress to report, while /history
+ * is the authoritative record either way.
+ */
+async function run(graph, timeoutMs = 600_000) {
+  const { prompt_id: id } = await post('/prompt', { prompt: graph });
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const res = await fetch(`${comfy}/history/${id}`);
+    const hist = await res.json();
+    const entry = hist[id];
+
+    if (entry) {
+      const status = entry.status ?? {};
+      if (status.status_str === 'error') {
+        const err = (status.messages ?? []).find(m => m[0] === 'execution_error');
+        throw new Error(`ComfyUI execution error: ${JSON.stringify(err?.[1] ?? status).slice(0, 800)}`);
+      }
+      for (const out of Object.values(entry.outputs ?? {})) {
+        if (out.images?.length) return out.images[0];
+      }
+      throw new Error(`prompt ${id} finished with no images`);
+    }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  throw new Error(`prompt ${id} did not complete within ${timeoutMs}ms`);
+}
+
+async function fetchImage({ filename, subfolder, type }) {
+  const q = new URLSearchParams({ filename, subfolder: subfolder ?? '', type: type ?? 'output' });
+  const res = await fetch(`${comfy}/view?${q}`);
+  if (!res.ok) throw new Error(`/view -> ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+for (const key of keys) {
+  const model = models[key];
+  if (!model) throw new Error(`unknown model '${key}'`);
+
+  const dialect = model.dialect;
+  const shared = battery._shared[dialect];
+  if (!shared) throw new Error(`no shared prompts for dialect '${dialect}'`);
+
+  const template = JSON.parse(readFileSync(join(here, 'graphs', model.graph), 'utf8'));
+  const outDir = join(here, 'out', key);
+  mkdirSync(outDir, { recursive: true });
+
+  const results = { model: key, ...model, comfy, cases: [] };
+  console.log(`\n=== ${model.displayName}  [${model.licence}]`);
+
+  for (const testCase of battery.cases) {
+    for (const [variantName, variant] of Object.entries(testCase.variants)) {
+      const graph = structuredClone(template);
+
+      for (const [name, value] of Object.entries(model.defaults ?? {})) {
+        patch(graph, model.patch[name], value);
+      }
+
+      const body = variant[dialect];
+      if (!body) throw new Error(`case ${testCase.id}/${variantName} has no ${dialect} phrasing`);
+
+      const positive = [model.positivePrefix, shared.prefix, body].filter(Boolean).join(', ');
+
+      // A case may override the negative -- that is the whole point of the negative case.
+      const caseNegative = variant.negative ?? shared.negative;
+      const negative = [model.negativePrefix, caseNegative].filter(Boolean).join(', ');
+
+      patch(graph, model.patch.positive, positive);
+      patch(graph, model.patch.negative, negative);
+      patch(graph, model.patch.seed, battery._shared.seed);
+
+      const label = `${testCase.id}-${variantName}`;
+      const started = Date.now();
+      const ref = await run(graph);
+      const seconds = (Date.now() - started) / 1000;
+
+      const file = join(outDir, `${label}.png`);
+      writeFileSync(file, await fetchImage(ref));
+
+      console.log(`  ${label.padEnd(12)} ${seconds.toFixed(1)}s`);
+      results.cases.push({ case: testCase.id, variant: variantName, file, seconds, positive, negative });
+    }
+  }
+
+  writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
+  console.log(`  -> ${join(outDir, 'results.json')}`);
+}

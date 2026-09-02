@@ -41,6 +41,11 @@ IPADAPTER_REF="${IPADAPTER_REF:-main}"
 CONTROLNET_AUX_REPO="https://github.com/Fannovel16/comfyui_controlnet_aux.git"
 CONTROLNET_AUX_REF="${CONTROLNET_AUX_REF:-main}"
 
+# Sana support. ComfyUI has no native Sana nodes, so evaluating it means trusting a
+# third-party pack with the whole ComfyUI process. Opt-in and pinned for that reason.
+EXTRA_MODELS_REPO="https://github.com/city96/ComfyUI_ExtraModels.git"
+EXTRA_MODELS_REF="${EXTRA_MODELS_REF:-main}"
+
 MANAGER_REPO="https://github.com/ltdrdata/ComfyUI-Manager.git"
 
 install_node() {
@@ -130,8 +135,15 @@ log "provisioning into ${MODELS_DIR}"
 install_node "ComfyUI-Manager" "${MANAGER_REPO}"
 install_node "ComfyUI_IPAdapter_plus" "${IPADAPTER_REPO}" "${IPADAPTER_REF}"
 
-if [ "-e" = "1" ]; then
+if [ "${INSTALL_CONTROLNET_AUX:-0}" = "1" ]; then
     install_node "comfyui_controlnet_aux" "${CONTROLNET_AUX_REPO}" "${CONTROLNET_AUX_REF}"
+fi
+
+# Sana is not supported natively by ComfyUI -- it needs a third-party node pack, which is
+# why this is opt-in and pinned rather than part of the default stack. Only needed to run
+# the Sana row of docs/model-evaluation.md.
+if [ "${INSTALL_EXTRA_MODELS:-0}" = "1" ]; then
+    install_node "ComfyUI_ExtraModels" "${EXTRA_MODELS_REPO}" "${EXTRA_MODELS_REF}"
 fi
 
 for name in ${MANIFESTS}; do

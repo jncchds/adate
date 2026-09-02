@@ -1,0 +1,98 @@
+{
+  "_comment": "The battery. Each case is a pair of renders identical except for the named variable, so the score is a mean absolute pixel difference attributable to that variable alone. Booru and natural phrasings say the same thing; sending booru tags to a natural-language model would measure the dialect rather than the model.",
+
+  "_shared": {
+    "seed": 4242,
+    "booru": {
+      "prefix": "masterpiece, best quality, very aesthetic, absurdres",
+      "negative": "lowres, worst quality, low quality, bad anatomy, bad hands, jpeg artifacts, watermark, text, blurry"
+    },
+    "natural": {
+      "prefix": "A high quality anime illustration.",
+      "negative": "low quality, bad anatomy, watermark, text, blur"
+    }
+  },
+
+  "cases": [
+    {
+      "id": "age",
+      "question": "Does the declared age change the image at all?",
+      "why": "A game may set its floor at 16, so an adults-only tier must be able to make an adult read as an adult. Illustrious scores near zero here, which is what prompted the whole evaluation.",
+      "scoreMeans": "higher is better; near zero means the age tag is inert",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, 19 years old, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A 19 year old woman with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1girl, solo, 65 years old, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A 65 year old woman with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        }
+      }
+    },
+    {
+      "id": "negative",
+      "question": "Does the negative prompt do anything?",
+      "why": "The minor-safety terms in alwaysNegative are a negative prompt. On a guidance-distilled model they attach to nothing, and this measures whether that is true of a given candidate rather than assuming it.",
+      "scoreMeans": "higher is better; zero means negatives are inert and that safety layer does not exist",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, 24 years old, standing in a cafe, cowboy shot",
+          "natural": "A 24 year old woman standing in a cafe, waist up.",
+          "negative": ""
+        },
+        "b": {
+          "booru": "1girl, solo, 24 years old, standing in a cafe, cowboy shot",
+          "natural": "A 24 year old woman standing in a cafe, waist up.",
+          "negative": "detailed background, scenery, cafe, indoors, furniture"
+        }
+      }
+    },
+    {
+      "id": "subject",
+      "question": "Are an adult woman and an adult man clearly different people?",
+      "why": "Both love interest genders are first class. A model that renders them near-identically cannot serve half the game.",
+      "scoreMeans": "higher is better",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, adult, mature female, 30 years old, black hair, short hair, brown eyes, white shirt, standing, cowboy shot, simple background",
+          "natural": "A 30 year old woman with short black hair and brown eyes, wearing a white shirt, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1boy, solo, adult, male focus, mature male, 30 years old, black hair, short hair, brown eyes, white shirt, standing, cowboy shot, simple background",
+          "natural": "A 30 year old man with short black hair and brown eyes, wearing a white shirt, standing, waist up, plain background."
+        }
+      }
+    },
+    {
+      "id": "outfit",
+      "question": "Does a declared outfit survive a change of expression?",
+      "why": "Measured on Illustrious, a vague outfit was re-invented per expression and the changed silhouette broke the crossfade. This is the same failure in miniature: the outfit is concrete and only the expression differs, so a high score means the model moved something it was not asked to.",
+      "scoreMeans": "LOWER is better; this is the one inverted case",
+      "invert": true,
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, adult, 24 years old, red hair, long straight hair, green eyes, white blouse, pleated skirt, neutral expression, standing, cowboy shot, simple background",
+          "natural": "A 24 year old woman with long straight red hair and green eyes, wearing a white blouse and a pleated skirt, neutral expression, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1girl, solo, adult, 24 years old, red hair, long straight hair, green eyes, white blouse, pleated skirt, (laughing:1.2), open mouth, standing, cowboy shot, simple background",
+          "natural": "A 24 year old woman with long straight red hair and green eyes, wearing a white blouse and a pleated skirt, laughing with her mouth open, standing, waist up, plain background."
+        }
+      }
+    },
+    {
+      "id": "feature",
+      "question": "Does a declared distinguishing feature appear?",
+      "why": "Counterfeit never rendered freckles, which was one of the four recorded Spike 0 failures. Scored by eye from the contact sheet, not mechanically.",
+      "scoreMeans": "visual only",
+      "visualOnly": true,
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, adult, 24 years old, blonde hair, twin braids, blue eyes, freckles, eyepatch, portrait, simple background",
+          "natural": "A 24 year old woman with blonde twin braids, blue eyes, freckles across her nose, and an eyepatch over one eye, head and shoulders, plain background."
+        }
+      }
+    }
+  ]
+}
