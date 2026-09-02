@@ -74,6 +74,13 @@ internal static class TestContent
         },
     };
 
+    /// <summary>An intent through the gate at <paramref name="ceiling"/>, for compiler tests.</summary>
+    public static ApprovedIntent Approved(SceneIntent? intent = null, Ceiling ceiling = Ceiling.PG13) =>
+        ApprovedIntent.Approve(
+            ContentPolicy.Resolve(new GameContentSettings(18, ceiling), 24, ceiling, Intimacy.None),
+            intent ?? Intent(),
+            Pack());
+
     public static ILocationCatalog Locations() => new StubCatalog();
 
     private sealed class StubCatalog : ILocationCatalog

@@ -114,6 +114,8 @@ public sealed record StylePack
 
     /// <summary>
     /// Whether <paramref name="tag"/> may appear in a positive prompt at <paramref name="ceiling"/>.
+    /// Consulted by <see cref="Content.ApprovedIntent"/>, which is the only thing that should
+    /// call it: this answers what a pack allows, not what a scene may do.
     /// </summary>
     public bool PermitsPositive(string tag, Ceiling ceiling)
     {

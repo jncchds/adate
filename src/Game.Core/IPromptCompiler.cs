@@ -25,18 +25,17 @@ public interface IPromptCompiler
 {
     PromptDialect Dialect { get; }
 
-    /// <param name="ceiling">
-    /// The effective ceiling from <see cref="Content.ContentPolicy"/>. Terms the pack
-    /// restricts above it are dropped from the LLM-written parts of the intent. Measured: a
-    /// ceiling enforced only by negative prompts does not hold, because a positive asking for
-    /// the opposite wins.
+    /// <param name="approved">
+    /// An intent that has already passed the content gate. Taking
+    /// <see cref="Content.ApprovedIntent"/> rather than a raw <see cref="SceneIntent"/> is the
+    /// point: what may be depicted is decided upstream, where the character's age is known,
+    /// and a compiler cannot be handed something unvetted.
     /// </param>
     string CompilePositive(
         CharacterAppearance? appearance,
-        SceneIntent intent,
+        Content.ApprovedIntent approved,
         StylePack pack,
-        RenderTarget target,
-        Ceiling ceiling);
+        RenderTarget target);
 
     /// <param name="subject">
     /// The character's subject key, required for every target except

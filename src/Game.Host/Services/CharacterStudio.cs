@@ -6,6 +6,7 @@ using Game.Core.Scenes;
 using Game.Core.Style;
 using Game.Data.Repositories;
 using Game.Imaging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Game.Host.Services;
@@ -23,6 +24,7 @@ public sealed class CharacterStudio(
     ImageCacheRepository cache,
     PoseCatalog poses,
     JobRunner jobs,
+    ILogger<CharacterStudio> log,
     IOptions<StudioOptions> options)
 {
     private readonly StudioOptions _options = options.Value;
@@ -41,16 +43,37 @@ public sealed class CharacterStudio(
         await packs.LoadAsync(_options.StylePackId, ct).ConfigureAwait(false);
 
     /// <summary>
-    /// The effective ceiling for one character, after the game setting, the pack and the
-    /// age clamp. Every ceiling in this class comes from here; none reads the configured
-    /// value directly, because the configured value is a maximum and not a decision.
+    /// The content decision for one character, after the game setting, the pack and the age
+    /// clamp. Every ceiling in this class comes from here; none reads the configured value
+    /// directly, because the configured value is a maximum and not a decision.
     /// </summary>
-    private Ceiling CeilingFor(CharacterRecord character, StylePack pack) =>
-        ContentPolicy.Resolve(
-            _options.Content,
-            character.Appearance.Age,
-            pack.HighestCeiling,
-            Intimacy.None).Ceiling;
+    private ContentDecision DecisionFor(CharacterRecord character, StylePack pack, Intimacy intimacy) =>
+        ContentPolicy.Resolve(_options.Content, character.Appearance.Age, pack.HighestCeiling, intimacy);
+
+    /// <summary>
+    /// Vets a scene intent and hands back a task the image pipeline may execute. The gate sits
+    /// here, at the boundary where a scene becomes an image job, rather than inside the prompt
+    /// compiler: what may be depicted is a story-side decision, and the compiler does not know
+    /// how old the character is.
+    /// </summary>
+    private ApprovedIntent Approve(
+        CharacterRecord character,
+        StylePack pack,
+        SceneIntent intent,
+        Intimacy intimacy = Intimacy.None)
+    {
+        var decision = DecisionFor(character, pack, intimacy);
+        var approved = ApprovedIntent.Approve(decision, intent, pack);
+
+        if (approved.Removed.Count > 0)
+        {
+            log.LogInformation(
+                "Content gate removed {Count} term(s) from a {Ceiling} scene for character {Character}: {Terms}",
+                approved.Removed.Count, decision.Ceiling, character.Id, string.Join(", ", approved.Removed));
+        }
+
+        return approved;
+    }
 
     /// <summary>
     /// Hash of the pack manifest, which enters the image cache key so art never survives an
@@ -83,8 +106,9 @@ public sealed class CharacterStudio(
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var intent = PortraitIntent();
 
-        var ceiling = CeilingFor(character, pack);
-        var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Portrait, ceiling);
+        var approved = Approve(character, pack, intent);
+        var ceiling = approved.Ceiling;
+        var positive = compiler.CompilePositive(character.Appearance, approved, pack, RenderTarget.Portrait);
         var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Portrait, character.Appearance.Subject);
 
         var results = new List<Candidate>(_options.CandidateCount);
@@ -156,14 +180,15 @@ public sealed class CharacterStudio(
             ? await poses.HashForAsync(_options.SpritePose, ct).ConfigureAwait(false)
             : null;
 
-        var ceiling = CeilingFor(character, pack);
+        var ceiling = DecisionFor(character, pack, Intimacy.None).Ceiling;
         var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Sprite, character.Appearance.Subject);
         var sprites = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var expression in Expressions)
         {
-            var intent = SpriteIntent(pack, character.Appearance.Subject, expression);
-            var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Sprite, ceiling);
+            var approved = Approve(character, pack, SpriteIntent(pack, character.Appearance.Subject, expression));
+            var intent = approved.Intent;
+            var positive = compiler.CompilePositive(character.Appearance, approved, pack, RenderTarget.Sprite);
 
             // Under SeedAndTags all six share the character's approved seed: that shared seed
             // is the identity, so varying it per slot would hand back six related strangers.
@@ -216,16 +241,20 @@ public sealed class CharacterStudio(
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var intent = new SceneIntent(locationId, time, "", "", "", Framing.FullBody);
 
+        // A background has no subject, so no age clamp applies -- only the game setting and
+        // the pack. It still goes through the gate: a location is authored content, but the
+        // route to an image is the same one, and there should not be a second one.
         var backgroundCeiling = _options.Content.MaxCeiling < pack.HighestCeiling
             ? _options.Content.MaxCeiling
             : pack.HighestCeiling;
 
+        var approved = ApprovedIntent.Approve(
+            new ContentDecision(backgroundCeiling, Depict: true, Narration.Full), intent, pack);
+
         var image = await images.GenerateAsync(
             new ImageRequest(
                 WorkflowId: pack.Workflows.Background,
-                Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background, backgroundCeiling),
-                // A background has no subject, so no age clamp applies -- only the game
-                // setting and the pack.
+                Positive: compiler.CompilePositive(null, approved, pack, RenderTarget.Background),
                 Negative: compiler.CompileNegative(pack, backgroundCeiling, RenderTarget.Background, subject: null),
                 // Backgrounds are generated once per location and time and then reused for
                 // the life of the save, so the seed only needs to be stable, not varied.

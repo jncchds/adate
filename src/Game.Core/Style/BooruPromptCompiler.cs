@@ -27,13 +27,14 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
 
     public string CompilePositive(
         CharacterAppearance? appearance,
-        SceneIntent intent,
+        ApprovedIntent approved,
         StylePack pack,
-        RenderTarget target,
-        Ceiling ceiling)
+        RenderTarget target)
     {
-        ArgumentNullException.ThrowIfNull(intent);
+        ArgumentNullException.ThrowIfNull(approved);
         ArgumentNullException.ThrowIfNull(pack);
+
+        var intent = approved.Intent;
 
         var tags = new List<string>(32);
 
@@ -82,14 +83,12 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         Add(tags, appearance.Height);
         Add(tags, appearance.DistinguishingFeature);
 
-        // 5. Performance: what this particular image shows. These three are the only fields
-        //    the LLM writes, so they are the only ones filtered: everything else in this
-        //    prompt is authored content or a player-declared attribute. Measured, a ceiling
-        //    made of negatives does not hold against a positive asking for the opposite, so
-        //    the term is refused here rather than subtracted later.
-        AddPermitted(tags, intent.Expression, pack, ceiling);
-        AddPermitted(tags, intent.Outfit, pack, ceiling);
-        AddPermitted(tags, intent.Pose, pack, ceiling);
+        // 5. Performance: what this particular image shows. Added as given -- ApprovedIntent
+        //    has already removed anything the ceiling refuses, and re-checking here would put
+        //    a content decision in a class that does not know the character's age.
+        Add(tags, intent.Expression);
+        Add(tags, intent.Outfit);
+        Add(tags, intent.Pose);
         tags.Add(FramingTag(intent.Framing));
 
         // 6. Background handling.
@@ -198,24 +197,6 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         Framing.FullBody => "full body",
         _ => throw new ArgumentOutOfRangeException(nameof(framing), framing, "Unhandled framing."),
     };
-
-    /// <summary>
-    /// Adds a comma-separated intent field, dropping any tag the pack does not permit at this
-    /// ceiling. Dropped silently rather than thrown: scene intent comes from an LLM, and one
-    /// unusable outfit should cost the scene its outfit, not the player their turn.
-    /// </summary>
-    private static void AddPermitted(List<string> tags, string? value, StylePack pack, Ceiling ceiling)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-
-        foreach (var part in value.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (pack.PermitsPositive(part, ceiling))
-            {
-                tags.Add(part);
-            }
-        }
-    }
 
     private static void Add(List<string> tags, string? value)
     {
