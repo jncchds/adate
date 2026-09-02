@@ -42,7 +42,13 @@ public sealed class ComfyImageProvider(
         string? anchorFilename = null;
         if (req.AnchorImageHash is { } anchorHash)
         {
-            anchorFilename = await UploadAnchorAsync(anchorHash, ct).ConfigureAwait(false);
+            anchorFilename = await UploadAsync(anchorHash, "anchor portrait", ct).ConfigureAwait(false);
+        }
+
+        string? poseFilename = null;
+        if (req.PoseImageHash is { } poseHash)
+        {
+            poseFilename = await UploadAsync(poseHash, "pose skeleton", ct).ConfigureAwait(false);
         }
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -54,6 +60,8 @@ public sealed class ComfyImageProvider(
             [WorkflowInputs.Height] = req.Height,
             [WorkflowInputs.Anchor] = anchorFilename,
             [WorkflowInputs.AnchorWeight] = req.AnchorWeight,
+            [WorkflowInputs.PoseImage] = poseFilename,
+            [WorkflowInputs.PoseStrength] = req.PoseStrength,
         };
 
         var patched = WorkflowPatcher.Patch(workflow.Graph, manifest, values);
@@ -87,17 +95,16 @@ public sealed class ComfyImageProvider(
         return new GeneratedImage(hash, store.RelativePath(hash), req.Width, req.Height, FromCache: false);
     }
 
-    private async Task<string> UploadAnchorAsync(string anchorHash, CancellationToken ct)
+    private async Task<string> UploadAsync(string hash, string what, CancellationToken ct)
     {
-        if (!store.Exists(anchorHash))
+        if (!store.Exists(hash))
         {
             throw new InvalidOperationException(
-                $"Anchor image '{anchorHash}' is not in the image store. " +
-                "A sprite cannot be generated before its character's anchor portrait has been approved.");
+                $"The {what} '{hash}' is not in the image store, so it cannot be sent to ComfyUI.");
         }
 
-        var anchorBytes = await store.ReadAsync(anchorHash, ct).ConfigureAwait(false);
-        var uploaded = await comfy.UploadImageAsync($"{anchorHash}.png", anchorBytes, ct).ConfigureAwait(false);
+        var bytes = await store.ReadAsync(hash, ct).ConfigureAwait(false);
+        var uploaded = await comfy.UploadImageAsync($"{hash}.png", bytes, ct).ConfigureAwait(false);
 
         // ComfyUI may return a different name than requested if it declined to overwrite.
         return string.IsNullOrEmpty(uploaded.Subfolder)

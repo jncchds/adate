@@ -18,6 +18,8 @@ public class ContentAddressTests
         PackFingerprint: "packfingerprint",
         AnchorImageHash: "anchorhash",
         AnchorWeight: 0.85,
+        PoseImageHash: "poseskeletonhash",
+        PoseStrength: 0.9,
         Ceiling: Ceiling.PG13);
 
     [Fact]
@@ -47,6 +49,8 @@ public class ContentAddressTests
         { "anchor", Baseline() with { AnchorImageHash = "different" } },
         { "anchor weight", Baseline() with { AnchorWeight = 0.9 } },
         { "ceiling", Baseline() with { Ceiling = Ceiling.Suggestive } },
+        { "pose image", Baseline() with { PoseImageHash = "a different skeleton" } },
+        { "pose strength", Baseline() with { PoseStrength = 0.4 } },
     };
 
     /// <summary>

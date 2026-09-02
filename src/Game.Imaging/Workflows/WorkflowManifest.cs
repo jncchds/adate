@@ -43,6 +43,11 @@ public static class WorkflowInputs
     public const string Anchor = "anchor";
 
     public const string AnchorWeight = "anchorWeight";
+
+    /// <summary>Filename of the uploaded ControlNet pose skeleton.</summary>
+    public const string PoseImage = "poseImage";
+
+    public const string PoseStrength = "poseStrength";
     public const string Steps = "steps";
     public const string Cfg = "cfg";
     public const string SamplerName = "samplerName";

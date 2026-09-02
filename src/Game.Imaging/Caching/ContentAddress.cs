@@ -36,7 +36,7 @@ public static class ContentAddress
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowFingerprint);
 
         var sb = new StringBuilder();
-        Append(sb, "v2");
+        Append(sb, "v3");
         Append(sb, req.WorkflowId);
         Append(sb, workflowFingerprint);
         Append(sb, req.PackFingerprint);
@@ -47,6 +47,8 @@ public static class ContentAddress
         Append(sb, req.Height.ToString(CultureInfo.InvariantCulture));
         Append(sb, req.AnchorImageHash ?? string.Empty);
         Append(sb, req.AnchorWeight?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty);
+        Append(sb, req.PoseImageHash ?? string.Empty);
+        Append(sb, req.PoseStrength?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty);
         Append(sb, ((int)req.Ceiling).ToString(CultureInfo.InvariantCulture));
 
         return Hash(sb.ToString());

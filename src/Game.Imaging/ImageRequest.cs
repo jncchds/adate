@@ -14,6 +14,13 @@ namespace Game.Imaging;
 /// or sampler produces a different image, and without this the cache would serve the
 /// wrong one.
 /// </param>
+/// <param name="PoseImageHash">
+/// Content hash of the ControlNet pose skeleton, or null. Spike 0 showed the prompt
+/// cannot hold pose and framing steady: with seed and anchor fixed, changing only the
+/// mood tag still moved the body, and sprites whose bodies differ cannot crossfade.
+/// A skeleton is authored once per pose slot and reused by every expression in that set.
+/// </param>
+/// <param name="PoseStrength">ControlNet strength. Null leaves the workflow default.</param>
 /// <param name="AnchorImageHash">
 /// Content hash of the IP-Adapter reference image, or null. HANDOFF 4 called this
 /// <c>AnchorImagePath</c>, which assumes ComfyUI shares a filesystem with the game.
@@ -30,4 +37,6 @@ public sealed record ImageRequest(
     string PackFingerprint,
     string? AnchorImageHash,
     double? AnchorWeight,
+    string? PoseImageHash,
+    double? PoseStrength,
     Ceiling Ceiling);

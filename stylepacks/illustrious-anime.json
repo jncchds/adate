@@ -1,0 +1,72 @@
+{
+  "id": "illustrious-anime",
+  "displayName": "Illustrious XL v2.0 (anime, SDXL)",
+  "checkpoint": "Illustrious-XL-v2.0.safetensors",
+  "baseModel": "sdxl",
+  "dialect": "Booru",
+  "consistency": "IpAdapterPlus",
+  "loras": [],
+  "sampler": {
+    "samplerName": "euler_ancestral",
+    "scheduler": "normal",
+    "steps": 30,
+    "cfg": 5.5,
+    "anchorWeight": 0.45
+  },
+  "resolutions": {
+    "portrait": { "width": 832, "height": 1216 },
+    "sprite": { "width": 832, "height": 1216 },
+    "background": { "width": 1216, "height": 832 }
+  },
+  "mattingModel": "birefnet.safetensors",
+  "supportedCeilings": ["PG13"],
+  "positivePrefix": [
+    "masterpiece",
+    "best quality",
+    "very aesthetic",
+    "absurdres"
+  ],
+  "negativeBase": [
+    "lowres",
+    "worst quality",
+    "low quality",
+    "bad anatomy",
+    "bad hands",
+    "extra digits",
+    "fewer digits",
+    "jpeg artifacts",
+    "signature",
+    "watermark",
+    "username",
+    "text",
+    "blurry",
+    "multiple views",
+    "monochrome",
+    "greyscale",
+    "military uniform",
+    "tactical gear",
+    "harness",
+    "straps",
+    "gun",
+    "weapon"
+  ],
+  "negativeByCeiling": {
+    "PG13": [
+      "nsfw",
+      "nude",
+      "nipples",
+      "topless",
+      "underwear",
+      "lingerie",
+      "cleavage",
+      "revealing clothes",
+      "suggestive",
+      "loli",
+      "shota",
+      "child",
+      "toddler",
+      "baby face",
+      "young"
+    ]
+  }
+}

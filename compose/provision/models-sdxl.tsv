@@ -28,3 +28,10 @@ controlnet/controlnet-openpose-sdxl-1.0.safetensors	https://huggingface.co/xinsi
 # --- Alpha matting ----------------------------------------------------------
 # Native to ComfyUI as of PR #12747; needs the model file but no custom node.
 background_removal/birefnet.safetensors	https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors	-
+
+# --- Pose extraction --------------------------------------------------------
+# SDPose, for ComfyUI's native SDPoseKeypointExtractor. Turns a reference image into
+# a skeleton, which is how a pose slot is authored once and then reused by every
+# expression in that set. The generic checkpoint cannot do this -- the extractor
+# needs a model with a heatmap head.
+checkpoints/sdpose_wholebody_fp16.safetensors	https://huggingface.co/Comfy-Org/SDPose/resolve/main/checkpoints/sdpose_wholebody_fp16.safetensors	-

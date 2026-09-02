@@ -118,6 +118,8 @@ static async Task<int> GenerateAsync(IServiceProvider services, string[] args)
         PackFingerprint: "cli-harness",
         AnchorImageHash: ArgValue(args, "--anchor"),
         AnchorWeight: ArgValue(args, "--anchor-weight") is { } w ? double.Parse(w) : null,
+        PoseImageHash: ArgValue(args, "--pose"),
+        PoseStrength: ArgValue(args, "--pose-strength") is { } ps ? double.Parse(ps) : null,
         Ceiling: Ceiling.PG13);
 
     var started = DateTimeOffset.UtcNow;
@@ -158,6 +160,7 @@ static int Help()
         options for generate:
           --negative <text>      --seed <n>            --size <WxH>
           --anchor <hash>        --anchor-weight <d>
+          --pose <hash>          --pose-strength <d>
 
         configuration (environment, ADATE_ prefix):
           ADATE_Comfy__BaseAddress=http://gpu-box:8188

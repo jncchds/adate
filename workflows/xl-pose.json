@@ -1,0 +1,37 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "sdpose_wholebody_fp16.safetensors" }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": { "image": "example.png" }
+  },
+  "20": {
+    "class_type": "SDPoseKeypointExtractor",
+    "inputs": {
+      "model": ["1", 0],
+      "vae": ["1", 2],
+      "image": ["10", 0],
+      "batch_size": 16
+    }
+  },
+  "21": {
+    "class_type": "SDPoseDrawKeypoints",
+    "inputs": {
+      "keypoints": ["20", 0],
+      "draw_body": true,
+      "draw_hands": true,
+      "draw_face": true,
+      "draw_feet": false,
+      "draw_head": true,
+      "stick_width": 4,
+      "face_point_size": 3,
+      "score_threshold": 0.3
+    }
+  },
+  "7": {
+    "class_type": "SaveImage",
+    "inputs": { "images": ["21", 0], "filename_prefix": "adate/pose" }
+  }
+}

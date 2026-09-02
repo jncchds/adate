@@ -84,6 +84,8 @@ public sealed class CharacterStudio(
                     PackFingerprint: PackFingerprint(),
                     AnchorImageHash: null,
                     AnchorWeight: null,
+                    PoseImageHash: null,
+                    PoseStrength: null,
                     Ceiling: _options.Ceiling),
                 ct).ConfigureAwait(false);
 
@@ -141,6 +143,8 @@ public sealed class CharacterStudio(
                     PackFingerprint: PackFingerprint(),
                     AnchorImageHash: character.AnchorImageHash,
                     AnchorWeight: pack.Sampler.AnchorWeight,
+                    PoseImageHash: null,
+                    PoseStrength: null,
                     Ceiling: _options.Ceiling),
                 ct).ConfigureAwait(false);
 
@@ -184,6 +188,8 @@ public sealed class CharacterStudio(
                 PackFingerprint: PackFingerprint(),
                 AnchorImageHash: null,
                 AnchorWeight: null,
+                PoseImageHash: null,
+                PoseStrength: null,
                 Ceiling: _options.Ceiling),
             ct).ConfigureAwait(false);
 

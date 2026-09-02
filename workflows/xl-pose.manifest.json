@@ -1,0 +1,9 @@
+{
+  "id": "xl-pose",
+  "workflowFile": "xl-pose.json",
+  "inputs": {
+    "checkpoint": "1.inputs.ckpt_name",
+    "anchor": "10.inputs.image"
+  },
+  "outputNodes": ["7"]
+}
