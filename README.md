@@ -76,3 +76,9 @@ ADATE_Comfy__BaseAddress=http://gpu-box:8188 dotnet run --project src/Game.Host
 ## Departures from HANDOFF.md
 
 Four, all deliberate. Recorded in [docs/decisions.md](docs/decisions.md).
+
+## Spike 0 results
+
+Measured on hardware, not predicted: [docs/spike0-findings.md](docs/spike0-findings.md).
+The pipeline and the matting pass. Character consistency passes. Expression, pose and
+outfit control do not yet, and the recommended fix is ControlNet OpenPose.
