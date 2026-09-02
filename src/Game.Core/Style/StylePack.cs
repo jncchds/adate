@@ -171,10 +171,54 @@ public sealed record StylePack
 /// expression came back in a different shirt — which moves the silhouette and breaks the
 /// crossfade far more than any facial change does. Vague is not neutral here.
 /// </param>
+/// <param name="AgeBands">
+/// How this subject's age is expressed, as tags rather than as a number. Ordered by
+/// <see cref="AgeBand.From"/> ascending; the applicable band is the last one whose
+/// <c>From</c> does not exceed the character's age.
+/// </param>
 public sealed record SubjectProfile(
     IReadOnlyList<string> Positive,
     IReadOnlyList<string> Negative,
-    IReadOnlyList<string> Outfit);
+    IReadOnlyList<string> Outfit,
+    IReadOnlyList<AgeBand> AgeBands)
+{
+    /// <summary>The band covering <paramref name="age"/>, or a throw if the bands do not.</summary>
+    public AgeBand BandFor(int age)
+    {
+        AgeBand? found = null;
+        foreach (var band in AgeBands)
+        {
+            if (band.From <= age && (found is null || band.From > found.From))
+            {
+                found = band;
+            }
+        }
+
+        return found ?? throw new InvalidOperationException(
+            $"No age band covers age {age}. Bands start at " +
+            $"{(AgeBands.Count == 0 ? "nothing" : AgeBands.Min(b => b.From).ToString())}.");
+    }
+}
+
+/// <summary>
+/// Tags describing an age range, for ages at or above <paramref name="From"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Measured, and this replaced a mistake. The compiler used to emit "<c>{N} years old</c>",
+/// which Danbooru has no tag for: varying it from 19 to 65 moved 1.97% of the image, meaning
+/// the age anchor HANDOFF 1.9 depends on was doing nothing at all. The same contrast in
+/// booru vocabulary -- <c>mature female</c> against <c>old woman, wrinkles, elderly</c> --
+/// moves 9.79%, and 11.91% weighted. The model could always render age; the prompt could not
+/// ask for it.
+/// </para>
+/// <para>
+/// The narrower gap the content design actually needs, a young adult against a middle-aged
+/// one, scores 9.24% -- nearly as much as the extremes, so this is usable and not merely a
+/// party trick at the ends of the range.
+/// </para>
+/// </remarks>
+public sealed record AgeBand(int From, IReadOnlyList<string> Tags);
 
 public sealed record LoraSpec(string File, double ModelWeight, double ClipWeight);
 

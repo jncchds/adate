@@ -9,7 +9,7 @@
 // Writes PNGs to eval/out/<model>/<case>-<variant>.png and a manifest to
 // eval/out/<model>/results.json. Scoring is eval/score.ps1, run afterwards.
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -123,6 +123,14 @@ async function fetchImage({ filename, subfolder, type }) {
  * model in a run OOMs while nvidia-smi still reports free VRAM, because ComfyUI's estimator
  * refuses the allocation rather than evicting on its own.
  */
+const residentFile = join(here, 'out', '.resident');
+const residentModel = () => (existsSync(residentFile) ? readFileSync(residentFile, 'utf8').trim() : null);
+
+function setResidentModel(key) {
+  mkdirSync(join(here, 'out'), { recursive: true });
+  writeFileSync(residentFile, key);
+}
+
 async function freeModels() {
   await resilient('POST /free', async () => {
     const res = await fetch(`${comfy}/free`, {
@@ -138,7 +146,14 @@ for (const key of keys) {
   const model = models[key];
   if (!model) throw new Error(`unknown model '${key}'`);
 
-  await freeModels();
+  // Free only when the box is holding a different model than this one needs. Both simpler
+  // rules are wrong here: always freeing throws away a warm model and pays minutes to
+  // reload it, and never freeing OOMs on the second candidate because --highvram keeps the
+  // first resident. Which model is loaded outlives this process, so it is tracked on disk.
+  if (residentModel() !== key) {
+    await freeModels();
+    setResidentModel(key);
+  }
 
   const dialect = model.dialect;
   const shared = battery._shared[dialect];

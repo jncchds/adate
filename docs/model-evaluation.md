@@ -51,20 +51,52 @@ model would measure the dialect and not the model.
 
 Measured on an RTX 5090, ComfyUI 0.34.2 / cu130, seed 4242, 832x1216.
 
-| Model | age | negative | subject | outfit ↓ | s/image |
-|---|---|---|---|---|---|
-| Illustrious XL v2.0 | 1.97% | 24.43% | 10.71% | 11.58% | 6.1 |
-| Pony Diffusion V6 XL | 2.25% | 12.52% | 8.55% | 11.43% | 6.1 |
-| NoobAI-XL v1.1 | **4.77%** | **28.63%** | **12.32%** | **6.54%** | 6.1 |
-| FLUX.2 klein 4B | blocked | blocked | blocked | blocked | — |
-| Sana 1.6B | not run | not run | not run | not run | — |
+| Model | age | agetags | ageweight | ageadult | negative | subject | outfit ↓ | s/image |
+|---|---|---|---|---|---|---|---|---|
+| Illustrious XL v2.0 | 1.97% | 9.79% | **11.91%** | 9.24% | 24.43% | 10.71% | 11.58% | 6.1 |
+| Pony Diffusion V6 XL | 2.25% | — | — | — | 12.52% | 8.55% | 11.43% | 6.1 |
+| NoobAI-XL v1.1 | 4.77% | 9.03% | 10.83% | **9.78%** | **28.63%** | **12.32%** | **6.54%** | 6.1 |
+| FLUX.2 klein 4B | blocked | blocked | blocked | blocked | blocked | blocked | blocked | — |
+| Sana 1.6B | not run | not run | not run | not run | not run | not run | not run | — |
 
-**No model passes `age`.** 4.77% is the best of three and it is still, by eye, the same young
-woman at 19 and at 65. The criterion that motivated this evaluation is failed by every
-candidate that ran, which makes it a property of booru-tag anime checkpoints rather than a
-reason to prefer one. An adults-only tier cannot lean on the age tag on any of them.
+**The `age` case was measuring the wrong thing.** See the next section: the number in the
+prompt was never booru vocabulary, and asking in tags instead moves the score from 1.97% to
+11.91% on the same checkpoint. The row is kept because it is the honest record of what
+"`{N} years old`" achieves, which is nothing.
 
-### Read by eye
+**No model passes `age` as originally phrased.** 4.77% is the best of three and is still, by
+eye, the same young woman at 19 and at 65. Every candidate that ran failed it identically,
+which was the first clue that the phrasing rather than the checkpoint was at fault.
+
+## The age tag was our bug, not the model’s
+
+`age` contrasts "`19 years old`" with "`65 years old`". Danbooru has no such tag. The three
+cases added afterwards ask for the same contrast in vocabulary the models were trained on:
+
+| Case | Phrasing | Illustrious | NoobAI |
+|---|---|---|---|
+| `age` | `19 years old` vs `65 years old` | 1.97% | 4.77% |
+| `agetags` | `mature female` vs `old woman, wrinkles, elderly` | 9.79% | 9.03% |
+| `ageweight` | the same, weighted 1.3-1.5 | **11.91%** | 10.83% |
+| `ageadult` | `young adult` vs `middle-aged` | 9.24% | 9.78% |
+
+Six times the effect from changing the words alone, on the same checkpoint and the same
+seed. By eye it is not subtle: `agetags-b` is a genuinely elderly woman with a lined face,
+and the model greys her hair unprompted even though hair colour is held brown in both
+variants.
+
+`ageadult` matters more than the extremes. A young adult against a middle-aged one is the
+narrow gap the content design actually depends on, and it scores 9.24% -- nearly as much as
+20-versus-80. So this is usable, not a trick at the ends of the range.
+
+**This reverses the earlier conclusion.** The checkpoints can render age. Our prompt could
+not ask for it, because `BooruPromptCompiler` emitted a number where the training data has
+tags. The fix was in the compiler, and each pack subject now carries an `ageBands` block.
+
+It also means `age` was never a reason to prefer one checkpoint over another, and the
+evaluation is decided on the other criteria.
+
+## Read by eye
 
 **NoobAI wins on the numbers and loses on its prior.** Best negative bite, best subject
 separation, and much the best outfit stability at 6.54% -- the body barely moves between

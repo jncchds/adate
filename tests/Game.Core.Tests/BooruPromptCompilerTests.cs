@@ -59,10 +59,30 @@ public class BooruPromptCompilerTests
         Assert.True(adult < height, "the adult anchor must precede the height tag");
     }
 
-    [Fact]
-    public void Explicit_age_reaches_the_prompt()
+    /// <summary>
+    /// Age reaches the prompt as vocabulary, not as a number. Measured: "{N} years old" is
+    /// not booru vocabulary and moved 1.97% of the image between 19 and 65, where the tag
+    /// form moved 9.79%. A number in the prompt was never an age anchor.
+    /// </summary>
+    [Theory]
+    [InlineData(17, "young adult")]
+    [InlineData(24, "(mature female:1.3)")]
+    [InlineData(70, "(old woman:1.4)")]
+    public void Age_reaches_the_prompt_as_tags(int age, string expected)
     {
-        Assert.Contains("24 years old", Positive(RenderTarget.Sprite), StringComparison.Ordinal);
+        var prompt = Positive(RenderTarget.Sprite, TestContent.Appearance() with { Age = age });
+
+        Assert.Contains(expected, prompt.Split(", "), StringComparer.Ordinal);
+        Assert.DoesNotContain($"{age} years old", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Age_bands_are_subject_specific()
+    {
+        var prompt = Positive(RenderTarget.Sprite, TestContent.Appearance("male") with { Age = 70 });
+
+        Assert.Contains("(old man:1.4)", prompt.Split(", "), StringComparer.Ordinal);
+        Assert.DoesNotContain("old woman", prompt, StringComparison.Ordinal);
     }
 
     [Fact]

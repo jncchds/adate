@@ -64,8 +64,12 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         // 2. Subject, and 3. the age anchor -- before any body descriptor, deliberately.
         //    Both come from the pack: the tokens that read as an adult man differ from the
         //    ones that read as an adult woman, and both differ per checkpoint.
-        tags.AddRange(pack.SubjectFor(appearance.Subject).Positive);
-        tags.Add($"{appearance.Age.ToString(CultureInfo.InvariantCulture)} years old");
+        var subject = pack.SubjectFor(appearance.Subject);
+        tags.AddRange(subject.Positive);
+
+        // Tags, not a number. "{N} years old" is not booru vocabulary and measured as inert:
+        // 19 and 65 rendered the same young woman. See AgeBand.
+        tags.AddRange(subject.BandFor(appearance.Age).Tags);
 
         // 4. Identity. Most stable attributes first; hair colour leads because HANDOFF 2
         //    names it as the first thing to drift across sprites.

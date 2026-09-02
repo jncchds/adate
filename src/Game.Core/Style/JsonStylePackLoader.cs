@@ -81,6 +81,23 @@ public sealed class JsonStylePackLoader : IStylePackLoader
 
         foreach (var (subject, profile) in pack.Subjects)
         {
+            if (profile.AgeBands.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Subject '{subject}' in style pack '{packId}' declares no age bands, so " +
+                    "no prompt for it could express an age at all.");
+            }
+
+            var lowest = profile.AgeBands.Min(b => b.From);
+            if (lowest > Characters.CharacterAppearance.MinimumAge)
+            {
+                throw new InvalidOperationException(
+                    $"Subject '{subject}' in style pack '{packId}' has no age band below " +
+                    $"{lowest}, but a character may be as young as " +
+                    $"{Characters.CharacterAppearance.MinimumAge}. A character with no band " +
+                    "would fail at render time rather than at load time.");
+            }
+
             if (profile.Outfit.Count == 0)
             {
                 throw new InvalidOperationException(

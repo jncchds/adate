@@ -47,8 +47,16 @@ internal static class TestContent
         AlwaysNegative = ["loli", "shota", "child"],
         Subjects = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase)
         {
-            ["female"] = new(["1girl", "solo", "adult", "mature female"], ["1boy"], ["white blouse", "pleated skirt"]),
-            ["male"] = new(["1boy", "solo", "adult", "male focus", "mature male"], ["1girl", "feminine"], ["white dress shirt", "black trousers"]),
+            ["female"] = new(
+                ["1girl", "solo", "adult", "mature female"],
+                ["1boy"],
+                ["white blouse", "pleated skirt"],
+                [new AgeBand(16, ["young adult"]), new AgeBand(18, ["(mature female:1.3)"]), new AgeBand(60, ["(old woman:1.4)", "wrinkles"])]),
+            ["male"] = new(
+                ["1boy", "solo", "adult", "male focus", "mature male"],
+                ["1girl", "feminine"],
+                ["white dress shirt", "black trousers"],
+                [new AgeBand(16, ["young adult"]), new AgeBand(18, ["(mature male:1.3)"]), new AgeBand(60, ["(old man:1.4)", "wrinkles"])]),
         },
         Expressions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {

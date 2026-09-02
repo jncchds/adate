@@ -207,3 +207,24 @@ matters most.
 This is prompt-level mitigation, not a guarantee. The checkpoint is Danbooru-trained and will
 comply with whatever survives the negatives, so the structural clamp above is what the design
 actually rests on.
+
+## Age is tags, not a number
+
+`BooruPromptCompiler` emitted `{N} years old`. Danbooru has no such tag, and measured, it did
+nothing: 19 and 65 rendered the same young woman, 1.97% of pixels apart. The same contrast in
+booru vocabulary — `mature female` against `old woman, wrinkles, elderly` — moves 9.79%, and
+11.91% weighted. Six times the effect from changing the words.
+
+So the HANDOFF 1.9 age anchor was real in intent and inert in practice, and every conclusion
+drawn from it needed revisiting. `SubjectProfile` now carries `ageBands`, ordered tag sets
+keyed by a minimum age, because the right vocabulary differs per subject (`old woman` against
+`old man`) and per checkpoint. The loader refuses a pack whose bands do not reach down to the
+absolute floor, so a character with no band fails at load rather than at render.
+
+The 16 band deliberately emits `young adult` rather than any juvenile vocabulary. Pushing a
+generator toward juvenile features is exactly what this project should not do, the content
+clamp already holds those characters at PG13, and the narrative carries the age. A 16-year-old
+rendering as a young adult is the safe direction to be wrong in.
+
+This also retires `age` as a reason to prefer one checkpoint over another: all three scored
+equally badly on the numeric form and comparably well on the tag form.

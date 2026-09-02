@@ -1,6 +1,5 @@
 {
   "_comment": "The battery. Each case is a pair of renders identical except for the named variable, so the score is a mean absolute pixel difference attributable to that variable alone. Booru and natural phrasings say the same thing; sending booru tags to a natural-language model would measure the dialect rather than the model.",
-
   "_shared": {
     "seed": 4242,
     "booru": {
@@ -12,7 +11,6 @@
       "negative": "low quality, bad anatomy, watermark, text, blur"
     }
   },
-
   "cases": [
     {
       "id": "age",
@@ -91,6 +89,54 @@
         "a": {
           "booru": "1girl, solo, adult, 24 years old, blonde hair, twin braids, blue eyes, freckles, eyepatch, portrait, simple background",
           "natural": "A 24 year old woman with blonde twin braids, blue eyes, freckles across her nose, and an eyepatch over one eye, head and shoulders, plain background."
+        }
+      }
+    },
+    {
+      "id": "agetags",
+      "question": "Does booru age VOCABULARY change the image, where a numeric age does not?",
+      "why": "Danbooru has no `N years old` tag. It has `mature female`, `old woman`, `wrinkles`. The `age` case may therefore be measuring the phrasing our compiler emits rather than anything about the model, and the fix would then be in BooruPromptCompiler rather than in a checkpoint. Hair colour is held constant across both variants: letting it go grey would let a hair change masquerade as an aged face, and the face is the thing in question.",
+      "scoreMeans": "higher is better; compare directly against the `age` score for the same model",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, mature female, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A woman in her twenties with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1girl, solo, old woman, wrinkles, elderly, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "An elderly, deeply wrinkled woman with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        }
+      }
+    },
+    {
+      "id": "ageweight",
+      "question": "Does weighting the age vocabulary change it further?",
+      "why": "If vocabulary works but weakly, the compiler can emphasise it. If weighting is what makes the difference, that is a cheap fix. If neither moves the image, the checkpoint genuinely cannot render age. Hair colour is held constant across both variants: letting it go grey would let a hair change masquerade as an aged face, and the face is the thing in question.",
+      "scoreMeans": "higher is better; compare against `agetags`",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, (mature female:1.4), (adult:1.3), brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A woman clearly in her twenties, youthful adult features, with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1girl, solo, (old woman:1.5), (wrinkles:1.4), (elderly:1.3), brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A clearly elderly woman with a deeply wrinkled face, with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        }
+      }
+    },
+    {
+      "id": "ageadult",
+      "question": "Can the model separate a young adult from a middle-aged one?",
+      "why": "The extremes are the easy case. What the content design actually needs is a character reading as an adult rather than a teenager, and that is a much narrower gap than 20 to 80.",
+      "scoreMeans": "higher is better; this is the gap the game actually depends on",
+      "variants": {
+        "a": {
+          "booru": "1girl, solo, (mature female:1.3), young adult, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A woman in her early twenties with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
+        },
+        "b": {
+          "booru": "1girl, solo, (mature female:1.3), (milf:1.2), middle-aged, brown hair, shoulder length hair, blue eyes, fair skin, white blouse, standing, cowboy shot, simple background",
+          "natural": "A woman in her mid forties with shoulder length brown hair and blue eyes, fair skin, wearing a white blouse, standing, waist up, plain background."
         }
       }
     }
