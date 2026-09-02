@@ -1,0 +1,19 @@
+{
+  "id": "sprite",
+  "workflowFile": "sprite.json",
+  "inputs": {
+    "positive": "2.inputs.text",
+    "negative": "3.inputs.text",
+    "seed": "5.inputs.seed",
+    "width": "4.inputs.width",
+    "height": "4.inputs.height",
+    "checkpoint": "1.inputs.ckpt_name",
+    "steps": "5.inputs.steps",
+    "cfg": "5.inputs.cfg",
+    "samplerName": "5.inputs.sampler_name",
+    "scheduler": "5.inputs.scheduler",
+    "anchor": "10.inputs.image",
+    "anchorWeight": "13.inputs.weight"
+  },
+  "outputNodes": ["7"]
+}
