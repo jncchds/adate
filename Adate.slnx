@@ -8,6 +8,8 @@
     <Project Path="src/Game.Llm/Game.Llm.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Game.Core.Tests/Game.Core.Tests.csproj" />
+    <Project Path="tests/Game.Data.Tests/Game.Data.Tests.csproj" />
     <Project Path="tests/Game.Imaging.Tests/Game.Imaging.Tests.csproj" />
   </Folder>
 </Solution>

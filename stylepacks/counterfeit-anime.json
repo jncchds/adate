@@ -1,0 +1,66 @@
+{
+  "id": "counterfeit-anime",
+  "displayName": "Counterfeit V2.5 (anime, SD1.5)",
+  "checkpoint": "Counterfeit-V2.5_fp16.safetensors",
+  "baseModel": "sd15",
+  "dialect": "Booru",
+  "consistency": "IpAdapterPlus",
+  "loras": [],
+  "sampler": {
+    "samplerName": "dpmpp_2m",
+    "scheduler": "karras",
+    "steps": 28,
+    "cfg": 7.0,
+    "anchorWeight": 0.75
+  },
+  "resolutions": {
+    "portrait": { "width": 512, "height": 768 },
+    "sprite": { "width": 640, "height": 960 },
+    "background": { "width": 768, "height": 512 }
+  },
+  "mattingModel": "birefnet.safetensors",
+  "supportedCeilings": ["PG13"],
+  "positivePrefix": [
+    "masterpiece",
+    "best quality",
+    "highly detailed"
+  ],
+  "negativeBase": [
+    "lowres",
+    "worst quality",
+    "low quality",
+    "bad anatomy",
+    "bad hands",
+    "extra digits",
+    "fewer digits",
+    "jpeg artifacts",
+    "signature",
+    "watermark",
+    "username",
+    "text",
+    "blurry",
+    "multiple views",
+    "monochrome",
+    "greyscale"
+  ],
+  "negativeByCeiling": {
+    "PG13": [
+      "nsfw",
+      "nude",
+      "nipples",
+      "topless",
+      "bottomless",
+      "underwear",
+      "lingerie",
+      "cleavage",
+      "revealing clothes",
+      "suggestive",
+      "loli",
+      "shota",
+      "child",
+      "toddler",
+      "baby face",
+      "young"
+    ]
+  }
+}

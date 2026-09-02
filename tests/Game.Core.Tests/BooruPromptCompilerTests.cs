@@ -1,0 +1,215 @@
+using Game.Core.Characters;
+using Game.Core.Scenes;
+using Game.Core.Style;
+
+namespace Game.Core.Tests;
+
+public class BooruPromptCompilerTests
+{
+    private static BooruPromptCompiler Compiler() => new(TestContent.Locations());
+
+    private static string Positive(RenderTarget target, CharacterAppearance? appearance = null) =>
+        Compiler().CompilePositive(
+            appearance ?? TestContent.Appearance(),
+            TestContent.Intent(),
+            TestContent.Pack(),
+            target);
+
+    /// <summary>
+    /// The prompt string is an input to the content-addressed cache key, so an unstable token
+    /// order would silently invalidate every cached image (HANDOFF 1.7, 4).
+    /// </summary>
+    [Theory]
+    [InlineData(RenderTarget.Portrait)]
+    [InlineData(RenderTarget.Sprite)]
+    [InlineData(RenderTarget.Background)]
+    public void Compilation_is_deterministic(RenderTarget target)
+    {
+        var first = Positive(target);
+
+        for (var i = 0; i < 20; i++)
+        {
+            Assert.Equal(first, Positive(target));
+        }
+    }
+
+    [Fact]
+    public void Pack_prefix_leads_the_prompt()
+    {
+        Assert.StartsWith("masterpiece, best quality,", Positive(RenderTarget.Sprite), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// HANDOFF 1.9: tag-based checkpoints associate "slim", "petite" and "youthful" with
+    /// juvenile features. An age anchor placed after a body descriptor is too late to counter
+    /// them, so its position matters as much as its presence.
+    /// </summary>
+    [Fact]
+    public void Age_anchor_precedes_every_body_descriptor()
+    {
+        var tags = Positive(RenderTarget.Sprite).Split(", ");
+
+        var adult = Array.IndexOf(tags, "adult");
+        var build = Array.IndexOf(tags, "slim");
+        var height = Array.IndexOf(tags, "tall");
+
+        Assert.True(adult >= 0, "the prompt carries no adult anchor");
+        Assert.True(adult < build, "the adult anchor must precede the build tag");
+        Assert.True(adult < height, "the adult anchor must precede the height tag");
+    }
+
+    [Fact]
+    public void Explicit_age_reaches_the_prompt()
+    {
+        Assert.Contains("24 years old", Positive(RenderTarget.Sprite), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hair_colour_leads_the_identity_block()
+    {
+        var tags = Positive(RenderTarget.Sprite).Split(", ");
+
+        Assert.True(
+            Array.IndexOf(tags, "red hair") < Array.IndexOf(tags, "green eyes"),
+            "hair colour drifts first, so it leads the identity block");
+    }
+
+    /// <summary>
+    /// A sprite is matted to alpha and composited over a separately generated background.
+    /// Scenery generated here survives matting as a fringe, which HANDOFF 2 calls the fastest
+    /// way to destroy the composite illusion.
+    /// </summary>
+    [Fact]
+    public void Sprite_asks_for_no_background()
+    {
+        var prompt = Positive(RenderTarget.Sprite);
+
+        Assert.Contains("simple background", prompt, StringComparison.Ordinal);
+        Assert.Contains("transparent background", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("cafe interior", prompt, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Backgrounds are generated once per location and reused for the life of the save, so a
+    /// stray figure in one is permanent.
+    /// </summary>
+    [Fact]
+    public void Background_carries_the_location_and_no_character()
+    {
+        var prompt = Positive(RenderTarget.Background);
+
+        Assert.Contains("cafe interior", prompt, StringComparison.Ordinal);
+        Assert.Contains("golden hour", prompt, StringComparison.Ordinal);
+        Assert.Contains("no humans", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("red hair", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("1girl", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Background_does_not_require_an_appearance()
+    {
+        var prompt = Compiler().CompilePositive(
+            appearance: null,
+            TestContent.Intent(),
+            TestContent.Pack(),
+            RenderTarget.Background);
+
+        Assert.Contains("cafe interior", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Character_targets_require_an_appearance()
+    {
+        Assert.Throws<ArgumentNullException>(() => Compiler().CompilePositive(
+            appearance: null,
+            TestContent.Intent(),
+            TestContent.Pack(),
+            RenderTarget.Sprite));
+    }
+
+    /// <summary>
+    /// A blank attribute must be dropped, not emitted. A stray empty tag is not harmless in a
+    /// booru prompt: it shifts the weighting of everything after it.
+    /// </summary>
+    [Fact]
+    public void Blank_attributes_produce_no_empty_tags()
+    {
+        var prompt = Positive(
+            RenderTarget.Sprite,
+            TestContent.Appearance() with { DistinguishingFeature = "   " });
+
+        Assert.DoesNotContain(", ,", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("freckles", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Duplicate_tags_are_collapsed_preserving_first_position()
+    {
+        var prompt = Positive(
+            RenderTarget.Sprite,
+            TestContent.Appearance() with { Build = "masterpiece" });
+
+        Assert.Equal(1, prompt.Split(", ").Count(t => t == "masterpiece"));
+        Assert.StartsWith("masterpiece,", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Underage_appearance_is_rejected_before_a_prompt_exists()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Positive(RenderTarget.Sprite, TestContent.Appearance() with { Age = 17 }));
+    }
+
+    [Theory]
+    [InlineData(Framing.Portrait, "portrait")]
+    [InlineData(Framing.Bust, "upper body")]
+    [InlineData(Framing.HalfBody, "cowboy shot")]
+    [InlineData(Framing.FullBody, "full body")]
+    public void Framing_maps_to_its_booru_tag(Framing framing, string expected)
+    {
+        var prompt = Compiler().CompilePositive(
+            TestContent.Appearance(),
+            TestContent.Intent() with { Framing = framing },
+            TestContent.Pack(),
+            RenderTarget.Sprite);
+
+        Assert.Contains(expected, prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void Negative_combines_pack_base_and_ceiling_tags()
+    {
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite);
+
+        Assert.Contains("lowres", negative, StringComparison.Ordinal);
+        Assert.Contains("nsfw", negative, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Sprite_negative_suppresses_scenery_that_would_survive_matting()
+    {
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Sprite);
+
+        Assert.Contains("detailed background", negative, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Background_negative_suppresses_people()
+    {
+        var negative = Compiler().CompileNegative(TestContent.Pack(), Ceiling.PG13, RenderTarget.Background);
+
+        Assert.Contains("1girl", negative, StringComparison.Ordinal);
+        Assert.Contains("person", negative, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// HANDOFF 1.8: a pack that cannot render a ceiling must refuse it, rather than quietly
+    /// generating at whatever it does support.
+    /// </summary>
+    [Fact]
+    public void Unsupported_ceiling_is_refused()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            Compiler().CompileNegative(TestContent.Pack(), Ceiling.Explicit, RenderTarget.Sprite));
+    }
+}
