@@ -83,8 +83,8 @@ public sealed class CharacterStudio(
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var intent = PortraitIntent();
 
-        var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Portrait);
         var ceiling = CeilingFor(character, pack);
+        var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Portrait, ceiling);
         var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Portrait, character.Appearance.Subject);
 
         var results = new List<Candidate>(_options.CandidateCount);
@@ -163,7 +163,7 @@ public sealed class CharacterStudio(
         foreach (var expression in Expressions)
         {
             var intent = SpriteIntent(pack, character.Appearance.Subject, expression);
-            var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Sprite);
+            var positive = compiler.CompilePositive(character.Appearance, intent, pack, RenderTarget.Sprite, ceiling);
 
             // Under SeedAndTags all six share the character's approved seed: that shared seed
             // is the identity, so varying it per slot would hand back six related strangers.
@@ -223,7 +223,7 @@ public sealed class CharacterStudio(
         var image = await images.GenerateAsync(
             new ImageRequest(
                 WorkflowId: pack.Workflows.Background,
-                Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background),
+                Positive: compiler.CompilePositive(null, intent, pack, RenderTarget.Background, backgroundCeiling),
                 // A background has no subject, so no age clamp applies -- only the game
                 // setting and the pack.
                 Negative: compiler.CompileNegative(pack, backgroundCeiling, RenderTarget.Background, subject: null),

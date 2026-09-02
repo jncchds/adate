@@ -184,34 +184,24 @@
       "nude",
       "nipples",
       "topless",
-      "underwear",
-      "lingerie",
-      "cleavage",
-      "revealing clothes",
-      "suggestive",
       "loli",
       "shota",
       "child",
       "toddler",
-      "bare pectorals",
-      "open shirt",
-      "shirtless",
-      "exposed chest"
+      "bottomless",
+      "areolae"
     ],
     "Suggestive": [
       "nude",
+      "naked",
       "nipples",
       "topless",
-      "underwear",
-      "lingerie",
+      "bottomless",
+      "areolae",
       "loli",
       "shota",
       "child",
       "toddler",
-      "bare pectorals",
-      "open shirt",
-      "shirtless",
-      "exposed chest",
       "young",
       "baby face",
       "childlike",
@@ -220,12 +210,59 @@
       "school uniform"
     ],
     "Explicit": [
+      "loli",
+      "shota",
+      "child",
+      "toddler",
       "young",
       "baby face",
       "childlike",
       "petite",
       "flat chest",
-      "school uniform"
+      "school uniform",
+      "(child:1.4)"
     ]
-  }
+  },
+  "restrictedPositive": [
+    {
+      "minCeiling": "Suggestive",
+      "terms": [
+        "lingerie",
+        "panties",
+        "bra only",
+        "in underwear",
+        "underwear only",
+        "wet t-shirt",
+        "wet shirt",
+        "see-through",
+        "seductive pose",
+        "spread legs",
+        "suggestive pose",
+        "undressing"
+      ]
+    },
+    {
+      "minCeiling": "Explicit",
+      "terms": [
+        "nude",
+        "naked",
+        "topless",
+        "bottomless",
+        "nipples",
+        "areolae",
+        "bare breasts",
+        "exposed breasts",
+        "no panties",
+        "no bra",
+        "genital",
+        "pussy",
+        "penis",
+        "vagina",
+        "sex",
+        "penetration",
+        "orgasm",
+        "cum"
+      ]
+    }
+  ]
 }

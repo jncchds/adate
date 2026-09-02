@@ -181,6 +181,59 @@ The maturity anchor moved out of `subjects[].positive` and into the bands. Carry
 both would put it in the prompt twice at two different weights, and the heavier one would
 silently win.
 
+## A ceiling made of negatives is not a ceiling
+
+The two cases added to answer "can NoobAI serve the Explicit tier" answered a more
+important question instead.
+
+`ceilinggate` renders `swimsuit, beach` twice: once with the full PG13 negative list of the
+time — `nsfw, nude, cleavage, revealing clothes, suggestive, underwear, lingerie` — and once
+with those removed. Both checkpoints rendered a revealing bikini either way.
+
+| Model | ceilinggate | agesuggestive | (ageadult, at PG13) |
+|---|---|---|---|
+| Illustrious XL v2.0 | 6.36% | 9.59% | 9.24% |
+| NoobAI-XL v1.1 | 4.80% | 11.46% | 9.78% |
+
+**The positive prompt wins.** For comparison the `negative` case, which removes a cafe from
+the background, scores 24-29% on the same models. Negatives work on scenery and do not work
+against a positive asking for the opposite about the subject.
+
+Scene intent is written by the LLM. So a ceiling enforced by subtraction was never going to
+hold: by the time an unsuitable outfit is in the positive prompt, it is too late. Packs now
+carry `restrictedPositive`, and `BooruPromptCompiler` drops restricted terms out of the
+three LLM-written fields — outfit, pose, expression — before they reach the prompt. Dropped
+silently, per term: one unusable outfit costs the scene its outfit, not the player their
+turn.
+
+### Where the line actually sits
+
+The first draft restricted `swimsuit`, `bikini`, `cleavage` and `revealing clothes`, which
+was wrong. Ordinary swimwear and short or tight clothing are not the thing a content ceiling
+is for. **The line is whether private parts are covered, not how revealing the clothing is.**
+
+| Tier | What it gates |
+|---|---|
+| PG13 | covered. Swimwear, crop tops, short skirts all render. |
+| Suggestive | underwear worn as outerwear, see-through, deliberately sexual posing |
+| Explicit | uncovered, or a sex act |
+
+The PG13 negative list was over-broad in the same way and was cut to the coverage terms plus
+the minor-safety set. The male-coded additions — `open shirt`, `bare pectorals`, `shirtless`
+— went with them: by the coverage rule a bare male chest is no more restricted than a
+bikini, and keeping them would have applied the rule unequally.
+
+Verified on the box at PG13 with the current lists: a bikini at the beach and a crop top and
+miniskirt both render, clothed and covered.
+
+### One thing that did not break
+
+`agesuggestive` asks whether the age bands still separate once the ceiling is raised — the
+bands were tuned on a fully clothed PG13 prompt, and if a raised ceiling washed the age
+signal out, the adults-only tier would lose the mechanism that makes an adult read as an
+adult. It holds: 9.59% against 9.24% on Illustrious, 11.46% against 9.78% on NoobAI. If
+anything the signal is slightly stronger.
+
 ## Licences, which are not a footnote
 
 | Model | Licence | Commercial use |

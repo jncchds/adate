@@ -14,7 +14,8 @@ public class BooruPromptCompilerTests
             appearance ?? TestContent.Appearance(),
             TestContent.Intent(),
             TestContent.Pack(),
-            target);
+            target,
+            Ceiling.PG13);
 
     /// <summary>
     /// The prompt string is an input to the content-addressed cache key, so an unstable token
@@ -133,7 +134,7 @@ public class BooruPromptCompilerTests
             appearance: null,
             TestContent.Intent(),
             TestContent.Pack(),
-            RenderTarget.Background);
+            RenderTarget.Background, Ceiling.PG13);
 
         Assert.Contains("cafe interior", prompt, StringComparison.Ordinal);
     }
@@ -145,7 +146,8 @@ public class BooruPromptCompilerTests
             appearance: null,
             TestContent.Intent(),
             TestContent.Pack(),
-            RenderTarget.Sprite));
+            RenderTarget.Sprite,
+            Ceiling.PG13));
     }
 
     /// <summary>
@@ -198,7 +200,7 @@ public class BooruPromptCompilerTests
             TestContent.Appearance(),
             TestContent.Intent() with { Framing = framing },
             TestContent.Pack(),
-            RenderTarget.Sprite);
+            RenderTarget.Sprite, Ceiling.PG13);
 
         Assert.Contains(expected, prompt.Split(", "), StringComparer.Ordinal);
     }
@@ -309,6 +311,75 @@ public class BooruPromptCompilerTests
         {
             Assert.Contains(term, negative.Split(", "), StringComparer.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// A ceiling has to refuse a term on the way in, not subtract it afterwards. Measured on
+    /// both Illustrious and NoobAI: a positive asking for something the negative list forbids
+    /// wins, moving only 4.8-6.4% against the same prompt with those negatives removed. So a
+    /// ceiling made of negatives is not a ceiling.
+    /// </summary>
+    [Fact]
+    public void An_uncovering_term_never_reaches_the_prompt_below_its_ceiling()
+    {
+        var intent = TestContent.Intent() with { Outfit = "nude, sun hat" };
+
+        var prompt = Compiler().CompilePositive(
+            TestContent.Appearance(), intent, TestContent.Pack(), RenderTarget.Sprite, Ceiling.Suggestive);
+
+        Assert.DoesNotContain("nude", prompt, StringComparison.OrdinalIgnoreCase);
+
+        // One refused term costs the scene that term, not the whole outfit.
+        Assert.Contains("sun hat", prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The line is coverage, not revealingness. Swimwear is ordinary clothing and must survive
+    /// PG13: an earlier draft restricted it and was wrong.
+    /// </summary>
+    [Theory]
+    [InlineData("swimsuit")]
+    [InlineData("bikini")]
+    [InlineData("short skirt")]
+    public void Ordinary_revealing_clothing_survives_pg13(string outfit)
+    {
+        var prompt = Compiler().CompilePositive(
+            TestContent.Appearance(),
+            TestContent.Intent() with { Outfit = outfit },
+            TestContent.Pack(),
+            RenderTarget.Sprite,
+            Ceiling.PG13);
+
+        Assert.Contains(outfit, prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void A_restricted_term_is_permitted_at_its_own_ceiling()
+    {
+        var prompt = Compiler().CompilePositive(
+            TestContent.Appearance(),
+            TestContent.Intent() with { Outfit = "lingerie" },
+            TestContent.Pack(),
+            RenderTarget.Sprite,
+            Ceiling.Suggestive);
+
+        Assert.Contains("lingerie", prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    /// <summary>Compound tags are the obvious way past a list of exact terms.</summary>
+    [Theory]
+    [InlineData("see-through blouse")]
+    [InlineData("partially nude")]
+    public void Restriction_matches_compound_tags(string outfit)
+    {
+        var prompt = Compiler().CompilePositive(
+            TestContent.Appearance(),
+            TestContent.Intent() with { Outfit = outfit },
+            TestContent.Pack(),
+            RenderTarget.Sprite,
+            Ceiling.PG13);
+
+        Assert.DoesNotContain(outfit, prompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -92,6 +92,51 @@ public sealed record StylePack
     public IReadOnlyDictionary<string, string> Expressions { get; init; }
         = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Terms that may not enter the <em>positive</em> prompt below a stated ceiling.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured, and this exists because the obvious design does not work. The ceiling used to
+    /// be enforced entirely by <see cref="NegativeByCeiling"/>. Asking for
+    /// <c>swimsuit, beach</c> with the full PG13 negative list -- <c>nsfw, nude, cleavage,
+    /// revealing clothes, suggestive, underwear, lingerie</c> -- rendered a revealing bikini
+    /// on both Illustrious and NoobAI, moving 6.4% and 4.8% respectively against the same
+    /// prompt with those negatives removed. The positive prompt wins.
+    /// </para>
+    /// <para>
+    /// So a ceiling cannot be a subtraction. Scene intent is written by the LLM, and a model
+    /// asked for an outfit it should not have been asked for has already lost: the term has to
+    /// be refused on the way in.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<RestrictedTerms> RestrictedPositive { get; init; } = [];
+
+    /// <summary>
+    /// Whether <paramref name="tag"/> may appear in a positive prompt at <paramref name="ceiling"/>.
+    /// </summary>
+    public bool PermitsPositive(string tag, Ceiling ceiling)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return true;
+
+        foreach (var rule in RestrictedPositive)
+        {
+            if (ceiling >= rule.MinCeiling) continue;
+
+            foreach (var term in rule.Terms)
+            {
+                // Substring rather than equality: "school swimsuit" and "swimsuit" are the
+                // same problem, and a rule listing every compound would miss the next one.
+                if (tag.Contains(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Tags for <paramref name="slot"/>, or a throw naming what the pack does offer.</summary>
     public string ExpressionFor(string slot)
     {
@@ -219,6 +264,14 @@ public sealed record SubjectProfile(
 /// </para>
 /// </remarks>
 public sealed record AgeBand(int From, IReadOnlyList<string> Tags);
+
+/// <param name="MinCeiling">The lowest ceiling at which these terms are permitted.</param>
+/// <param name="Terms">
+/// Matched as case-insensitive substrings of a single tag, so "swimsuit" also catches
+/// "school swimsuit". Deliberately blunt: the cost of over-refusing an outfit is a duller
+/// image, and the cost of under-refusing is a ceiling that does not hold.
+/// </param>
+public sealed record RestrictedTerms(Ceiling MinCeiling, IReadOnlyList<string> Terms);
 
 public sealed record LoraSpec(string File, double ModelWeight, double ClipWeight);
 

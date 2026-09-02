@@ -41,7 +41,7 @@ internal static class TestContent
             new Size(640, 960),
             new Size(768, 512)),
         MattingModel = "birefnet.safetensors",
-        SupportedCeilings = [Ceiling.PG13],
+        SupportedCeilings = [Ceiling.PG13, Ceiling.Suggestive],
         PositivePrefix = ["masterpiece", "best quality"],
         NegativeBase = ["lowres", "worst quality"],
         AlwaysNegative = ["loli", "shota", "child"],
@@ -63,6 +63,11 @@ internal static class TestContent
             ["neutral"] = "neutral expression",
             ["smile"] = "(smile:1.2), happy",
         },
+        RestrictedPositive =
+        [
+            new RestrictedTerms(Ceiling.Suggestive, ["lingerie", "see-through"]),
+            new RestrictedTerms(Ceiling.Explicit, ["nude", "topless", "nipples"]),
+        ],
         NegativeByCeiling = new Dictionary<string, IReadOnlyList<string>>
         {
             ["PG13"] = ["nsfw", "nude"],

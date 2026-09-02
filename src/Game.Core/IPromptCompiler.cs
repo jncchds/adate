@@ -25,11 +25,18 @@ public interface IPromptCompiler
 {
     PromptDialect Dialect { get; }
 
+    /// <param name="ceiling">
+    /// The effective ceiling from <see cref="Content.ContentPolicy"/>. Terms the pack
+    /// restricts above it are dropped from the LLM-written parts of the intent. Measured: a
+    /// ceiling enforced only by negative prompts does not hold, because a positive asking for
+    /// the opposite wins.
+    /// </param>
     string CompilePositive(
         CharacterAppearance? appearance,
         SceneIntent intent,
         StylePack pack,
-        RenderTarget target);
+        RenderTarget target,
+        Ceiling ceiling);
 
     /// <param name="subject">
     /// The character's subject key, required for every target except

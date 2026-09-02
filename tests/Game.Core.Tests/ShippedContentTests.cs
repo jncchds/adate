@@ -98,7 +98,7 @@ public class ShippedContentTests
             foreach (var time in Enum.GetValues<TimeOfDay>())
             {
                 var intent = new SceneIntent(location.Id, time, "sweater", "standing", "smile", Framing.Bust);
-                var prompt = compiler.CompilePositive(appearance: null, intent, pack, RenderTarget.Background);
+                var prompt = compiler.CompilePositive(appearance: null, intent, pack, RenderTarget.Background, Ceiling.PG13);
 
                 Assert.Contains("no humans", prompt, StringComparison.Ordinal);
 

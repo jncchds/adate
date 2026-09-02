@@ -228,3 +228,27 @@ rendering as a young adult is the safe direction to be wrong in.
 
 This also retires `age` as a reason to prefer one checkpoint over another: all three scored
 equally badly on the numeric form and comparably well on the tag form.
+
+## The content ceiling gates the positive prompt, not just the negative
+
+Measured on Illustrious and NoobAI: `swimsuit, beach` with `nsfw, nude, cleavage, revealing
+clothes, suggestive, underwear, lingerie` in the negative rendered a revealing bikini anyway,
+moving 6.4% and 4.8% against the same prompt with those negatives removed. The same models
+remove a cafe from a background at 24-29% when asked, so negatives are not weak in general —
+they lose specifically to a positive asking for the opposite about the subject.
+
+Scene intent is written by the LLM, so subtraction was always the wrong shape: by the time
+the term is in the positive prompt it has already won. Packs carry `restrictedPositive` and
+the compiler drops restricted terms out of outfit, pose and expression — the only three
+fields the LLM writes — before the prompt is assembled. Everything else in that prompt is
+authored content or a player-declared attribute and is not filtered.
+
+Terms are dropped silently and individually rather than throwing. An LLM proposing one
+unusable outfit should cost the scene that outfit, not fail the turn.
+
+**The line is coverage, not revealingness.** An earlier draft restricted `swimsuit`,
+`bikini` and `cleavage` and was wrong: ordinary swimwear is not what a ceiling is for. PG13
+permits anything covered; Suggestive adds underwear-as-outerwear and sexual posing; Explicit
+is uncovered or a sex act. The over-broad male terms — `open shirt`, `bare pectorals`,
+`shirtless` — were dropped for the same reason, since keeping them while permitting a bikini
+would apply the rule unequally.
