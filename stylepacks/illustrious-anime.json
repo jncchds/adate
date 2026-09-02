@@ -4,22 +4,33 @@
   "checkpoint": "Illustrious-XL-v2.0.safetensors",
   "baseModel": "sdxl",
   "dialect": "Booru",
-  "consistency": "IpAdapterPlus",
+  "consistency": "SeedAndTags",
   "loras": [],
   "sampler": {
     "samplerName": "euler_ancestral",
     "scheduler": "normal",
     "steps": 30,
     "cfg": 5.5,
-    "anchorWeight": 0.45
+    "anchorWeight": 0
   },
   "resolutions": {
-    "portrait": { "width": 832, "height": 1216 },
-    "sprite": { "width": 832, "height": 1216 },
-    "background": { "width": 1216, "height": 832 }
+    "portrait": {
+      "width": 832,
+      "height": 1216
+    },
+    "sprite": {
+      "width": 832,
+      "height": 1216
+    },
+    "background": {
+      "width": 1216,
+      "height": 832
+    }
   },
   "mattingModel": "birefnet.safetensors",
-  "supportedCeilings": ["PG13"],
+  "supportedCeilings": [
+    "PG13"
+  ],
   "positivePrefix": [
     "masterpiece",
     "best quality",

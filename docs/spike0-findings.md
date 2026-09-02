@@ -1,112 +1,113 @@
 # Spike 0 findings
 
-Measured on an RTX 5090, ComfyUI 0.34.2 / cu130, Counterfeit V2.5 fp16, SD1.5.
-Every comparison below holds seed, anchor and prompt fixed except the named variable.
+Measured on an RTX 5090, ComfyUI 0.34.2 / cu130. Every comparison holds seed, prompt and
+inputs fixed except the named variable.
+
+**Conclusion: the consistency strategy the handoff planned around is the wrong one, and the
+baseline it dismissed is the right one.**
 
 ---
 
-## Passed
+## The pipeline that works
 
-**The pipeline works end to end.** Queue, websocket, history, upload, view, matting,
-compositing. Warm timings: portrait 3.5–4.4 s at 512×768, background 4.0 s at 768×512.
-Cold start ~100 s for the first image of a session. Four candidates land near 16 s against
-the HANDOFF §2 budget of 60 s.
+| Concern | Mechanism | Cost |
+|---|---|---|
+| Identity | Appearance tags + a fixed per-character seed | free |
+| Expression | Weighted mood tags, e.g. `(laughing:1.2), open mouth, closed eyes` | free |
+| Pose and framing | ControlNet OpenPose, one authored skeleton per pose slot | ~1 s |
+| Transparency | BiRefNet in-graph, native to ComfyUI | ~1 s |
+| **Total** | Illustrious XL v2.0 @ 832×1216, 30 steps | **~9 s per sprite** |
 
-**Alpha matting is clean.** PNG colour type 6, ~66% transparent, 1.9% partial-alpha edge
-feathering, individual hair strands survive. This was the criterion HANDOFF §2 warns
-destroys the illusion fastest, and it is not a problem.
-
-**Identity holds.** At anchor weight 0.75 the character reads unambiguously as one person
-across six expressions. Consistency was never the thing that failed.
+No IP-Adapter. Nothing is patched into the UNet, which is why outfit, pose and expression all
+stay controllable.
 
 ---
 
-## Failed
+## How that was reached
 
-### 1. Expressions do not differentiate at identity-preserving weights
+### Character consistency was never the problem
 
-At weight 0.75, six different mood tags produced six near-identical faces. The adapter pins
-the face, not just the hair and palette.
+HANDOFF §2 expected identity drift to be the risk, with IP-Adapter Plus as the answer and a
+per-character LoRA as the fallback. Measured, identity holds fine from tags and a fixed seed
+alone: six expressions from one seed read as one person, and four different seeds against the
+same tags read as four different people. That second result is what makes the handoff's
+four-candidate pick meaningful — **the anchor is a seed, not an image**, which the schema
+already anticipated with `character.anchor_seed`.
 
-**Fixed.** Weight 0.45 plus emphasis on the mood tag — `(laughing:1.4), open mouth, closed
-eyes` rather than `laughing` — yields six clearly distinct expressions with identity intact.
-Emphasis and weight are both required; neither alone is enough.
+### IP-Adapter actively damages the art
 
-### 2. Composition drifts between expressions
+The decisive test was an ablation at one seed:
 
-With seed, anchor and every other tag held fixed, changing only the mood tag still moves the
-pose and the framing — one expression came back with an arm raised.
+| Configuration | Result |
+|---|---|
+| Tags only | correct dark red hair, black skirt, clean shading |
+| + ControlNet only | **identical quality**, plus a clean alpha matte |
+| + IP-Adapter only | oversaturated magenta, flat posterised shading, hair no longer red |
+| + both | same damage |
 
-This matters more than it looks. The scene viewer crossfades between cached sprites on an
-expression change, which only reads as one character emoting if the body underneath does not
-move. Sprites that differ in pose crossfade as two different drawings.
+ControlNet is harmless. IP-Adapter Plus SDXL is what breaks Illustrious. Cause not
+established — a CLIP-vision mismatch is the usual suspect for exactly this colour shift — but
+it does not matter, because identity does not need it.
 
-**Not yet fixed.** See recommendation below.
+This also retires the earlier finding that IP-Adapter locked the outfit at every weight that
+preserved identity. It was a real observation about a component we no longer use.
 
-### 3. Outfit is not controllable
+### Illustrious fixed what prompt tuning could not
 
-Four different outfit tags produce the same tactical-anime clothing. Two independent causes,
-and fixing either alone does nothing:
+Counterfeit V2.5 ignored outfit tags (everything came out tactical/military), ignored framing
+tags, and never rendered a declared attribute like freckles. Illustrious honoured all three on
+the first try with no prompt tricks. Three of the four recorded Spike 0 failures were the
+checkpoint, not the technique.
 
-- **Checkpoint bias.** Counterfeit V2.5 renders this prompt shape as tactical/military
-  regardless. Visible in the very first portrait, generated before any IP-Adapter existed.
-  Needs `military uniform, tactical gear, harness, straps` and similar in the negative.
-- **Adapter lock.** IP-Adapter Plus is a full-image reference and carries the anchor's
-  clothing. Only releases near weight 0.05, where identity is gone.
+### The 148 s sprite was a disk problem, not a compute one
 
-The requested summer dress appears only with both the anti-bias negatives *and* a weight low
-enough to abandon identity.
+ComfyUI evicted the ControlNet and IP-Adapter after every generation and re-read them from a
+spinning disk on the next. The overhead tracked adapter size almost exactly linearly at
+~24 s/GB, and repeat runs never got faster. `--highvram` on the 24 GB profile stops the
+eviction: cold start is ~270 s while ~13 GB is read off the disk, and every run after that is
+~9 s.
 
-### 4. Framing tags are weak
-
-`upper body`, `portrait`, `close-up` and `face focus` all produced half- and full-body
-results. Prompt-level framing control is unreliable on this checkpoint.
+Do not set `--highvram` on the 12 GB profile; there, keeping everything resident is an
+out-of-memory error rather than an optimisation.
 
 ---
 
 ## Ruled out
 
-**IP-Adapter Plus Face** (`ip-adapter-plus-face_sd15`). The hypothesis was that a
-face-trained adapter would carry identity without the reference's clothing. It is worse on
-every axis: muddier output, more distant framing, unreadable faces, and the outfit stays
-locked. It is CLIP-based and so nominally anime-safe, but it degrades this checkpoint badly.
-
-**Cropping the anchor to head and shoulders.** No effect on the outfit lock. The adapter
-transfers more than what is literally in frame.
-
-**Lowering the adapter weight alone.** Trades identity for control on a single axis with no
-setting that gives both.
+- **IP-Adapter Plus Face** (`ip-adapter-plus-face_sd15`). Worse on every axis on anime:
+  muddier, more distant, unreadable faces, outfit still locked.
+- **Cropping the anchor to head and shoulders.** No effect on the outfit lock; the adapter
+  transfers more than what is literally in frame.
+- **Lowering adapter weight.** Buys one axis of control at the cost of identity, with no
+  setting that gives both.
+- **`comfyui_controlnet_aux`.** Failed to install, and turned out to be unnecessary: ComfyUI
+  ships `SDPoseKeypointExtractor` and `SDPoseDrawKeypoints` natively. SDPose needs its own
+  checkpoint with a heatmap head.
 
 ---
 
-## Recommendation
+## Consequences for the design
 
-Three of the four failures share one root cause: the prompt is the only lever for
-composition, and it is a weak one. The fix is to stop asking the prompt to control pose and
-framing at all.
+**A style pack is now a much smaller thing.** With no adapter, a pack is a checkpoint, a
+sampler configuration, a prompt vocabulary and a matting model. `ConsistencyStrategy` for the
+Illustrious pack is `SeedAndTags`.
 
-**Add ControlNet OpenPose**, with a fixed skeleton per pose slot:
+**Pose slots are authored content.** A skeleton is extracted once per pose and checked in,
+then reused by every expression in that set. That is what lets the scene viewer crossfade
+between expressions without the body moving underneath.
 
-| Concern | Controlled by |
-|---|---|
-| Identity | IP-Adapter Plus at ~0.45 against the approved anchor |
-| Expression | Weighted mood tags |
-| Pose and framing | ControlNet OpenPose skeleton, fixed per pose slot |
-| Outfit | Outfit tags, with the checkpoint's bias negated |
+**`AnchorImageHash` is no longer needed by this pack**, though it stays on `ImageRequest` for
+the SD1.5 pack and for any future strategy that does reference an image.
 
-A fixed skeleton makes every expression in a set land on the same body in the same frame,
-which is exactly what the crossfade needs, and it removes the load the prompt currently
-fails to carry. It also lets framing become a real setting rather than a hopeful tag.
+---
 
-This is the standard approach for visual-novel sprite sets, and SD1.5 has by far the most
-mature ControlNet ecosystem — which was already part of why SD1.5 was chosen over SDXL.
+## Still open
 
-**Status: untested.** It needs `control_v11p_sd15_openpose`, a ControlNet node in the sprite
-graph, and a set of reference skeletons. Everything above it in this document is measured.
-
-### If that fails
-
-The HANDOFF §2 fallback ladder ends at per-character LoRA trained from approved sprites.
-That moves identity into the model weights and frees the prompt entirely, which would solve
-the outfit problem as well. It is materially more work per character — a training step
-between character creation and first play — and is a design decision, not a tuning one.
+- The six-expression set has not been rendered through the final pipeline and judged as a
+  crossfade. That is the remaining Spike 0 acceptance test.
+- `StudioOptions.StylePackId` still points at `counterfeit-anime`; the Blazor app has never
+  been run against Illustrious.
+- `CharacterStudio` still passes an anchor image hash for sprites. Under `SeedAndTags` it
+  should pass the character's stored `anchor_seed` and a pose skeleton instead.
+- Peak VRAM under `--highvram` is unmeasured. Sampling `system_stats` proved too coarse;
+  `nvidia-smi` on the box is the way to get a real number.

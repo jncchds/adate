@@ -6,7 +6,12 @@ namespace Game.Core.Style;
 /// </summary>
 public enum ConsistencyStrategy
 {
-    /// <summary>Prompt tokens and a fixed seed only. Baseline; expected to be insufficient.</summary>
+    /// <summary>
+    /// Prompt tokens and a fixed seed only. Written off in the HANDOFF 2 ladder as the
+    /// baseline that would not survive, and measured on Illustrious XL as the strategy that
+    /// actually works: identity holds across expressions, and leaving the model unpatched
+    /// keeps outfit, pose and framing controllable, which every adapter tested took away.
+    /// </summary>
     SeedAndTags = 0,
 
     /// <summary>

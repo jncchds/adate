@@ -12,10 +12,10 @@
     "cfg": "5.inputs.cfg",
     "samplerName": "5.inputs.sampler_name",
     "scheduler": "5.inputs.scheduler",
-    "anchor": "10.inputs.image",
-    "anchorWeight": "13.inputs.weight",
     "poseImage": "30.inputs.image",
     "poseStrength": "32.inputs.strength"
   },
-  "outputNodes": ["7"]
+  "outputNodes": [
+    "7"
+  ]
 }

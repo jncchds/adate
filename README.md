@@ -80,5 +80,6 @@ Four, all deliberate. Recorded in [docs/decisions.md](docs/decisions.md).
 ## Spike 0 results
 
 Measured on hardware, not predicted: [docs/spike0-findings.md](docs/spike0-findings.md).
-The pipeline and the matting pass. Character consistency passes. Expression, pose and
-outfit control do not yet, and the recommended fix is ControlNet OpenPose.
+The pipeline, the matting and character consistency all pass. IP-Adapter turned out to be
+unnecessary and actively harmful; identity comes from tags plus a fixed seed, pose from a
+ControlNet skeleton. About 9s per sprite.
