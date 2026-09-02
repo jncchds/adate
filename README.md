@@ -63,15 +63,15 @@ ADATE_Comfy__BaseAddress=http://gpu-box:8188 dotnet run --project src/Game.Host
 | | |
 |---|---|
 | Solution, project layout, dependency directions | done |
-| ComfyUI client (queue, websocket, history, view, upload, free) | written, **not yet run against a real server** |
+| ComfyUI client (queue, websocket, history, view, upload, free) | validated against a real server |
 | Content-addressed image cache | done |
 | Booru prompt compiler + style pack loader | done |
 | SQLite schema, migrations, repositories | done |
 | Blazor form, candidate grid, composite viewer | done |
-| **The three ComfyUI workflow graphs** | **blocked** — see [workflows/README.md](workflows/README.md) |
+| The three ComfyUI workflow graphs | written and validated on hardware |
 | Anything LLM | not started, by design |
 
-75 tests. The protocol tests matter most: that code has not yet met a real ComfyUI server.
+76 tests, and the client has now been exercised against real hardware.
 
 ## Departures from HANDOFF.md
 
