@@ -33,8 +33,40 @@ public static class MeasureRunner
             "run" => await PlaythroughAsync(services, args),
             "judge" => await JudgeAsync(services),
             "retrieval" => await RetrievalAsync(services),
+            "pictures" => await PicturesAsync(services, args),
             _ => Usage(),
         };
+    }
+
+    /// <summary>
+    /// Renders what the picture cards show for a save, without playing to a slot that offers them:
+    /// the shared backdrop and every cast member's portrait sprite. Prints each image's path.
+    /// </summary>
+    private static async Task<int> PicturesAsync(IServiceProvider services, string[] args)
+    {
+        var saves = services.GetRequiredService<SaveRepository>();
+        var studio = services.GetRequiredService<CharacterStudio>();
+        var world = services.GetRequiredService<WorldService>();
+        var characters = services.GetRequiredService<CharacterRepository>();
+        var castContent = services.GetRequiredService<CastContent>();
+
+        var saveArg = Arg(args, "--save") ?? throw new InvalidOperationException("pictures needs --save <id>.");
+        var saveId = (await saves.ListAsync()).FirstOrDefault(s => s.Id.Value.ToString() == saveArg)?.Id
+            ?? throw new InvalidOperationException($"No save '{saveArg}'.");
+
+        Console.WriteLine($"backdrop {await studio.GenerateBackdropAsync()}");
+
+        // Keys as invites use them: main_li, or a variant's route id without its reference prefix.
+        var play = await world.GetPlayStateAsync(saveId);
+        foreach (var (reference, name) in play.People)
+        {
+            var key = reference.StartsWith(Game.Core.Encounters.JsonEncounterCatalog.VariantPrefix, StringComparison.Ordinal)
+                ? reference[Game.Core.Encounters.JsonEncounterCatalog.VariantPrefix.Length..]
+                : reference;
+            Console.WriteLine($"{key} ({name}) {await world.PortraitAsync(saveId, key) ?? "(not in the cast)"}");
+        }
+
+        return 0;
     }
 
     private static int Usage()
@@ -44,6 +76,7 @@ public static class MeasureRunner
               run [--setting big-city] [--opening <id>]   scripted playthrough, fallback rate and latency
               judge                                      judge accuracy on planted contradictions
               retrieval                                  hit@3 with embeddings against recency alone
+              pictures --save <id>                       render the backdrop and cast portraits the cards use
             """);
         return 2;
     }

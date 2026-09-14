@@ -49,8 +49,17 @@ public static partial class Narration
         ArgumentNullException.ThrowIfNull(text);
 
         var narration = Dialogue().Replace(text, " ");
-        return [.. PlayerAction().Matches(narration).Select(m => m.Value.Trim())];
+        return
+        [
+            .. PlayerAction().Matches(narration)
+                .Where(m => !Conditional().IsMatch(narration[..m.Index]))
+                .Select(m => m.Value.Trim()),
+        ];
     }
+
+    // "if you want", "whether you stay": a condition or an offer, not something the player did.
+    [GeneratedRegex(@"\b(if|whether|when|unless|until|once|before|case)\s+$", RegexOptions.IgnoreCase)]
+    private static partial Regex Conditional();
 
     // Straight and curly double quotes. Single quotes double as apostrophes, so they are left alone.
     [GeneratedRegex("\"[^\"]*\"|“[^”]*”")]

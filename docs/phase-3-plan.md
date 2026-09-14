@@ -106,6 +106,13 @@ Each step ends in something that runs and is committed.
    commitment ask is the ending offer framed as the most attached person on offer asking; a
    separate authored ask scene was judged not worth another turn type.*
 7. **Fixes and tuning:** gender, places, promises, tuning measure, live play in the other settings.
+   *Measured (the step-5 run, resumed from day 25 on the step-6/7 build to the ending offer): over
+   days 1-28, 171 scenes, 161 written, 10 fallbacks (5.8%, above the 5% target), first try 120,
+   median 4.6 s. The late days' rejections: unfinished text 5 (the new check doing its job), the
+   judge on ambient lines at an event place outside its hours 4, choices tagged helps/hinders on
+   more than one or with no tags 4, player actions 7 (one a false positive, "in case you want",
+   now allowed as a condition). Nobody reached dating under the first-option policy, so the ending
+   offered only leaving alone; the varied policy is still to run.*
    *Built so far: the player's pronouns reach the packet; place names equal up to case, punctuation
    or a leading "the" are refused as known; scenes may not give the player possessions; the cast
    page's note is current; `measure run --policy varied` rotates through replies and choices.
