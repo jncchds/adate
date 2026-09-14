@@ -103,6 +103,18 @@ public class StageLayoutTests
     }
 
     [Fact]
+    public void A_figure_that_fits_whole_stands_on_the_bottom_edge()
+    {
+        // A tablet at 4:3: the person's column is narrow for its height.
+        var regions = StageLayout.Split(new Size(1024, 768), tall: false);
+        var frame = SpriteFrame.Frame(regions.Figure.Size);
+
+        Assert.True(frame.Height < regions.Figure.Height / SpriteFrame.VisibleShare, "The column limits the figure by width.");
+        Assert.Equal(regions.Figure.Height, frame.Top + (frame.Height * (1 - SpriteFrame.FootCrop)), 3);
+        Assert.True(frame.Top > 0, "No headroom is cropped when the figure stands at the bottom.");
+    }
+
+    [Fact]
     public void A_narrow_column_crops_the_arms_before_shrinking_the_face_further()
     {
         var frame = SpriteFrame.Frame(new Size(116, 160));

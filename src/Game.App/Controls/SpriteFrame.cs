@@ -21,7 +21,15 @@ public sealed class SpriteFrame : Panel
     /// <summary>How far past the area's sides the figure may reach, so arms are cut before the face shrinks.</summary>
     public const double WidthAllowance = 1.15;
 
+    /// <summary>Margin below the feet, as a share of the sprite's height, cropped away when the whole figure fits.</summary>
+    public const double FootCrop = 0.03;
+
     /// <summary>Where the sprite goes in an area of <paramref name="area"/>; it may overhang and is clipped.</summary>
+    /// <remarks>
+    /// Normally the head is at the top and the legs run off the bottom. In a column narrow for its height
+    /// (a tablet at 4:3) the whole figure fits with room to spare; it then stands on the bottom edge
+    /// rather than floating at the top.
+    /// </remarks>
     public static Rect Frame(Size area)
     {
         var height = area.Height / VisibleShare;
@@ -34,7 +42,8 @@ public sealed class SpriteFrame : Panel
             height = width / SpriteAspect;
         }
 
-        return new Rect((area.Width - width) / 2, -height * TopCrop, width, height);
+        var top = Math.Max(-height * TopCrop, area.Height - (height * (1 - FootCrop)));
+        return new Rect((area.Width - width) / 2, top, width, height);
     }
 
     public SpriteFrame() => ClipToBounds = true;

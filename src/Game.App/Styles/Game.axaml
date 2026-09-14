@@ -106,6 +106,12 @@
         <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
+    <!-- In landscape the person stands at the left, so the place's name moves out of their way. -->
+    <Style Selector="ctl|StageLayout:not(:stacked) Border.caption">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="CornerRadius" Value="0,0,0,8" />
+    </Style>
+
     <Style Selector="Border.popup">
         <Setter Property="Background" Value="#3A2F55" />
         <Setter Property="CornerRadius" Value="8" />
