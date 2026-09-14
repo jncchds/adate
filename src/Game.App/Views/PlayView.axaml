@@ -20,7 +20,7 @@
                         <ctl:SpriteFrame>
                             <Image Source="{Binding Portrait}" />
                         </ctl:SpriteFrame>
-                        <Arc Classes="spinner small" IsVisible="{Binding IsWaiting}" />
+                        <ctl:Spinner Classes="spinner small" IsVisible="{Binding IsWaiting}" />
                     </Panel>
                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
                 </StackPanel>
@@ -46,7 +46,7 @@
             </ctl:SpriteFrame>
             <Border Classes="loading" IsVisible="{Binding IsStageLoading}">
                 <StackPanel Spacing="10">
-                    <Arc Classes="spinner" />
+                    <ctl:Spinner Classes="spinner" />
                     <TextBlock Classes="lede" Text="{Binding StageLoadingText}" TextAlignment="Center" MaxWidth="240" />
                 </StackPanel>
             </Border>
@@ -66,7 +66,7 @@
                 <ScrollViewer Grid.Row="1" x:Name="Side">
                     <StackPanel Classes="side">
                         <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsLoading}">
-                            <Arc Classes="spinner small" />
+                            <ctl:Spinner Classes="spinner small" />
                             <TextBlock Classes="lede" Text="Loading the save…" VerticalAlignment="Center" />
                         </StackPanel>
 
@@ -112,7 +112,7 @@
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsWriting}">
-                                <Arc Classes="spinner small" />
+                                <ctl:Spinner Classes="spinner small" />
                                 <TextBlock Classes="lede" Text="{Binding WritingText}" VerticalAlignment="Center" />
                             </StackPanel>
 
@@ -156,7 +156,7 @@
                                                 <Panel Height="90" ClipToBounds="True">
                                                     <Border Classes="wait" />
                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                                                    <Arc Classes="spinner small"
+                                                    <ctl:Spinner Classes="spinner small"
                                                          IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}" />
                                                 </Panel>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />

@@ -173,7 +173,7 @@
     </Style>
 
     <!-- A turning arc wherever a picture or words are on their way. -->
-    <Style Selector="Arc.spinner">
+    <Style Selector="ctl|Spinner">
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="36" />
         <Setter Property="StartAngle" Value="0" />
@@ -186,16 +186,16 @@
         <Style.Animations>
             <Animation Duration="0:0:1" IterationCount="Infinite">
                 <KeyFrame Cue="0%">
-                    <Setter Property="RenderTransform" Value="rotate(0deg)" />
+                    <Setter Property="RotateTransform.Angle" Value="0" />
                 </KeyFrame>
                 <KeyFrame Cue="100%">
-                    <Setter Property="RenderTransform" Value="rotate(360deg)" />
+                    <Setter Property="RotateTransform.Angle" Value="360" />
                 </KeyFrame>
             </Animation>
         </Style.Animations>
     </Style>
 
-    <Style Selector="Arc.spinner.small">
+    <Style Selector="ctl|Spinner.small">
         <Setter Property="Width" Value="20" />
         <Setter Property="Height" Value="20" />
         <Setter Property="StrokeThickness" Value="2.5" />

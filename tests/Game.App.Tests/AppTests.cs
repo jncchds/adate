@@ -64,6 +64,23 @@ public sealed class AppTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Every_view_shows_in_a_window_with_its_styles_and_animations()
+    {
+        // Constructing a view does not apply styles; showing it does, and a style animation that cannot
+        // run throws only then (the first spinner animated a whole render transform and crashed the app).
+        Avalonia.Controls.Control[] views =
+            [new StartingView(), new HomeView(), new NewGameView(), new CandidatesView(), new OpeningView(), new PlayView(), new SettingsView()];
+
+        foreach (var view in views)
+        {
+            var window = new Avalonia.Controls.Window { Content = view };
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void The_window_shows_the_starting_page_before_the_game_is_up()
     {
         var window = new MainWindow { DataContext = new MainViewModel(Paths) };

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Game.App.ViewModels"
+             xmlns:ctl="using:Game.App.Controls"
              x:Class="Game.App.Views.CandidatesView"
              x:DataType="vm:CandidatesViewModel">
     <ScrollViewer>
@@ -33,7 +34,7 @@
                                 <Panel Height="240">
                                     <Border Classes="wait" />
                                     <Image Source="{Binding Picture}" Stretch="UniformToFill" />
-                                    <Arc Classes="spinner small"
+                                    <ctl:Spinner Classes="spinner small"
                                          IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNull}}" />
                                 </Panel>
                                 <TextBlock Classes="small" Text="{Binding Description}" />
