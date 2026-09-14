@@ -125,7 +125,8 @@ internal static class TestContent
             new Dictionary<string, string>
             {
                 ["Evening"] = "Golden sunset light and warm lamplight",
-            });
+            },
+            [new PlaceDetail("window-seat", ["window seat"], "a sunny window seat")]);
 
         /// <summary>A location written only for booru packs: tags, no description.</summary>
         private static readonly LocationDefinition Bare = new(

@@ -127,6 +127,18 @@ public class BooruPromptCompilerTests
     }
 
     [Fact]
+    public void Background_carries_the_places_detail_tags()
+    {
+        var prompt = Compiler().CompilePositive(
+            appearance: null,
+            TestContent.Approved(TestContent.Intent() with { LocationDetails = ["window-seat"] }),
+            TestContent.Pack(),
+            RenderTarget.Background);
+
+        Assert.Contains("window seat", prompt.Split(", "), StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void Background_does_not_require_an_appearance()
     {
         var prompt = Compiler().CompilePositive(

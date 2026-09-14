@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Game.Core.Cast;
 using Game.Core.Characters;
 using Game.Core.Saves;
 using Microsoft.Data.Sqlite;
@@ -98,6 +99,130 @@ public sealed class CharacterRepository(Database database)
                   $"'{appearance.Subject}'. An approved portrait may change how a character looks, " +
                   "never their age or subject.");
         }
+    }
+
+    /// <summary>
+    /// Stores a cast built from <paramref name="main"/>: the main LI's temper, want and aesthetic, and
+    /// one character per variant. Once stored, a cast is never rebuilt or added to, so calling this
+    /// again is a no-op. The schema checks every variant against the main LI (migration 003).
+    /// </summary>
+    public async Task SaveCastAsync(
+        CharacterRecord main,
+        CastMember lead,
+        IReadOnlyList<CastMember> variants,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(main);
+        ArgumentNullException.ThrowIfNull(lead);
+        ArgumentNullException.ThrowIfNull(variants);
+
+        if (!lead.IsMain)
+        {
+            throw new ArgumentException("The lead of a cast is the main LI.", nameof(lead));
+        }
+
+        foreach (var variant in variants)
+        {
+            if (variant.IsMain)
+            {
+                throw new ArgumentException("A variant must name the contrast profile it was built from.", nameof(variants));
+            }
+
+            variant.Appearance.Validate();
+        }
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = """
+                UPDATE character SET temper_json = $temper, want_id = $want, aesthetic = $aesthetic
+                WHERE id = $id AND variant_of IS NULL AND temper_json IS NULL;
+                """;
+            update.Parameters.AddWithValue("$id", main.Id.ToString());
+            update.Parameters.AddWithValue("$temper", JsonSerializer.Serialize(lead.Temper, Json));
+            update.Parameters.AddWithValue("$want", lead.WantId);
+            update.Parameters.AddWithValue("$aesthetic", lead.Aesthetic);
+            await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        long existing;
+        await using (var count = connection.CreateCommand())
+        {
+            count.Transaction = transaction;
+            count.CommandText = "SELECT COUNT(*) FROM character WHERE variant_of = $id;";
+            count.Parameters.AddWithValue("$id", main.Id.ToString());
+            existing = (long)(await count.ExecuteScalarAsync(ct).ConfigureAwait(false))!;
+        }
+
+        if (existing == 0)
+        {
+            foreach (var variant in variants)
+            {
+                await using var insert = connection.CreateCommand();
+                insert.Transaction = transaction;
+                insert.CommandText = """
+                    INSERT INTO character
+                        (id, save_id, age, appearance_json, anchor_seed, role, variant_of,
+                         profile_id, variation_json, temper_json, want_id, aesthetic)
+                    VALUES
+                        ($id, $save, $age, $appearance, $seed, 'variant', $main,
+                         $profile, $variation, $temper, $want, $aesthetic);
+                    """;
+
+                insert.Parameters.AddWithValue("$id", Guid.CreateVersion7().ToString());
+                insert.Parameters.AddWithValue("$save", main.SaveId.ToString());
+                insert.Parameters.AddWithValue("$age", variant.Appearance.Age);
+                insert.Parameters.AddWithValue("$appearance", JsonSerializer.Serialize(variant.Appearance, Json));
+                insert.Parameters.AddWithValue("$seed", variant.Seed);
+                insert.Parameters.AddWithValue("$main", main.Id.ToString());
+                insert.Parameters.AddWithValue("$profile", variant.ProfileId);
+                insert.Parameters.AddWithValue("$variation", JsonSerializer.Serialize(variant.LookChanges, Json));
+                insert.Parameters.AddWithValue("$temper", JsonSerializer.Serialize(variant.Temper, Json));
+                insert.Parameters.AddWithValue("$want", variant.WantId);
+                insert.Parameters.AddWithValue("$aesthetic", variant.Aesthetic);
+
+                await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+        }
+
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The stored cast, main LI first then variants in the order stored, or null if none is stored.</summary>
+    public async Task<IReadOnlyList<CastMember>?> GetCastAsync(Guid mainId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT appearance_json, anchor_seed, profile_id, variation_json, temper_json, want_id, aesthetic
+            FROM character
+            WHERE (id = $id AND variant_of IS NULL AND temper_json IS NOT NULL) OR variant_of = $id
+            ORDER BY variant_of IS NOT NULL, rowid;
+            """;
+
+        // rowid, not id: version-7 Guids created in the same millisecond carry random bits there,
+        // so ordering by id swapped Bolder and Other life on some runs.
+        command.Parameters.AddWithValue("$id", mainId.ToString());
+
+        var members = new List<CastMember>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            members.Add(new CastMember(
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                JsonSerializer.Deserialize<CharacterAppearance>(reader.GetString(0), Json)!,
+                reader.IsDBNull(6) ? "" : reader.GetString(6),
+                JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(4), Json)!,
+                reader.GetString(5),
+                reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
+                reader.IsDBNull(3) ? [] : JsonSerializer.Deserialize<List<CastChange>>(reader.GetString(3), Json)!));
+        }
+
+        return members.Count > 0 && members[0].IsMain ? members : null;
     }
 
     public async Task<CharacterRecord?> GetAsync(Guid id, CancellationToken ct = default)

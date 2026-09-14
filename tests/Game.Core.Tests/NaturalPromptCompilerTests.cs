@@ -193,6 +193,23 @@ public class NaturalPromptCompilerTests
         Assert.DoesNotContain("woman", prompt, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Background_describes_the_places_details()
+    {
+        var prompt = Positive(RenderTarget.Background, intent: TestContent.Intent() with { LocationDetails = ["window-seat"] });
+
+        Assert.Contains("With a sunny window seat.", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_detail_the_place_type_does_not_offer_is_refused_by_name()
+    {
+        var ex = Assert.Throws<KeyNotFoundException>(() =>
+            Positive(RenderTarget.Background, intent: TestContent.Intent() with { LocationDetails = ["hot-tub"] }));
+
+        Assert.Contains("hot-tub", ex.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Booru tags read as prose would be a quietly worse background, cached for the life of the
     /// save. A location written only for booru packs is refused instead.

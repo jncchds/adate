@@ -1,0 +1,320 @@
+{
+  "defaults": {
+    "indoor": {
+      "timeTags": {
+        "Morning": ["morning light", "soft shadows"],
+        "Midday": ["bright daylight", "clear window light"],
+        "Afternoon": ["afternoon light", "long shadows"],
+        "Evening": ["warm lamplight", "sunset through window"],
+        "Night": ["night", "indoor lighting", "dark window"]
+      },
+      "timeDescriptions": {
+        "Morning": "Soft morning light comes in through the windows and casts gentle shadows",
+        "Midday": "Bright, clear daylight fills the room",
+        "Afternoon": "Warm afternoon light slants in and casts long shadows",
+        "Evening": "Warm lamps are lit and the sunset glows through the windows",
+        "Night": "It is night, the room is lit by warm lamps and the windows are dark"
+      }
+    },
+    "outdoor": {
+      "timeTags": {
+        "Morning": ["morning", "soft light", "light mist"],
+        "Midday": ["blue sky", "bright sunlight", "clouds"],
+        "Afternoon": ["afternoon sun", "long shadows"],
+        "Evening": ["sunset", "orange sky", "golden hour"],
+        "Night": ["night", "moonlight", "starry sky"]
+      },
+      "timeDescriptions": {
+        "Morning": "Early morning with soft light and a little mist in the air",
+        "Midday": "Midday under a blue sky with bright sunlight and a few white clouds",
+        "Afternoon": "Afternoon sun with long shadows",
+        "Evening": "Sunset with an orange sky and golden light",
+        "Night": "Night time under moonlight and a starry sky"
+      }
+    }
+  },
+  "types": [
+    {
+      "id": "cafe",
+      "displayName": "Cafe",
+      "kind": "indoor",
+      "tags": ["cafe interior", "wooden tables", "coffee cups", "large windows", "potted plants", "warm interior"],
+      "description": "The interior of a cozy corner cafe with wooden tables, coffee cups on the counter, large windows and potted plants",
+      "timeTags": {
+        "Morning": ["morning light", "sunbeam", "soft shadows"],
+        "Evening": ["golden hour", "warm lamplight", "sunset through window"],
+        "Night": ["night", "indoor lighting", "dark window", "city lights outside"]
+      },
+      "timeDescriptions": {
+        "Morning": "Soft morning sunlight streams through the windows and casts gentle shadows",
+        "Evening": "Golden sunset light glows through the windows alongside warm lamplight",
+        "Night": "It is night, the room is lit by warm indoor lamps and city lights glow beyond the dark windows"
+      },
+      "details": [
+        { "id": "window-seats", "tags": ["window seat"], "phrase": "cozy window seats looking onto the street" },
+        { "id": "chalkboard-menu", "tags": ["chalkboard menu"], "phrase": "a hand-drawn chalkboard menu behind the counter" },
+        { "id": "brick-wall", "tags": ["brick wall"], "phrase": "an exposed red brick wall" }
+      ]
+    },
+    {
+      "id": "park",
+      "displayName": "Park",
+      "kind": "outdoor",
+      "tags": ["park", "riverbank", "trees", "grass", "footpath", "park bench", "outdoors"],
+      "description": "A riverside park outdoors with trees, green grass, a footpath along the riverbank and a park bench",
+      "timeTags": {
+        "Morning": ["morning mist", "dew", "soft light"],
+        "Night": ["night", "streetlights", "moonlight", "starry sky"]
+      },
+      "timeDescriptions": {
+        "Morning": "Early morning with light mist over the river, dew on the grass and soft light",
+        "Night": "Night time lit by streetlights and moonlight under a starry sky"
+      },
+      "details": [
+        { "id": "fountain", "tags": ["fountain"], "phrase": "a stone fountain beside the path" },
+        { "id": "cherry-trees", "tags": ["cherry blossoms"], "phrase": "a row of cherry blossom trees" },
+        { "id": "footbridge", "tags": ["footbridge"], "phrase": "a small arched footbridge over the river" }
+      ]
+    },
+    {
+      "id": "bar",
+      "displayName": "Bar",
+      "kind": "indoor",
+      "tags": ["bar interior", "bar counter", "bottles on shelves", "bar stools", "dim lighting"],
+      "description": "The interior of a small bar with a long wooden counter, bottles on backlit shelves and tall stools",
+      "details": [
+        { "id": "neon-sign", "tags": ["neon sign"], "phrase": "a glowing neon sign on the wall" },
+        { "id": "brick-walls", "tags": ["brick wall"], "phrase": "exposed brick walls" },
+        { "id": "river-view", "tags": ["window", "river view"], "phrase": "a window looking out over the river" }
+      ]
+    },
+    {
+      "id": "bookshop",
+      "displayName": "Bookshop",
+      "kind": "indoor",
+      "tags": ["bookstore", "bookshelves", "books", "reading nook", "wooden floor"],
+      "description": "The inside of an independent bookshop with tall wooden shelves packed with books and a small reading nook",
+      "details": [
+        { "id": "rolling-ladder", "tags": ["ladder"], "phrase": "a rolling library ladder against the shelves" },
+        { "id": "armchair", "tags": ["armchair"], "phrase": "a worn leather armchair in the corner" },
+        { "id": "sleeping-cat", "tags": ["cat"], "phrase": "a cat asleep on a stack of books" }
+      ]
+    },
+    {
+      "id": "stairwell",
+      "displayName": "Apartment stairwell",
+      "kind": "indoor",
+      "tags": ["apartment building", "stairwell", "stairs", "mailboxes", "landing"],
+      "description": "The stairwell of an old apartment building with worn stairs, a row of metal mailboxes and a narrow landing",
+      "details": [
+        { "id": "potted-plant", "tags": ["potted plant"], "phrase": "a potted plant on the landing" },
+        { "id": "bicycle", "tags": ["bicycle"], "phrase": "a bicycle leaning against the wall" },
+        { "id": "stained-glass", "tags": ["stained glass window"], "phrase": "a small stained glass window" }
+      ]
+    },
+    {
+      "id": "rooftop",
+      "displayName": "Rooftop",
+      "kind": "outdoor",
+      "tags": ["rooftop", "city skyline", "railing", "string lights", "outdoors"],
+      "description": "A rooftop terrace above the city with a railing, a view of the skyline and string lights overhead",
+      "details": [
+        { "id": "planters", "tags": ["planters"], "phrase": "wooden planters full of herbs" },
+        { "id": "water-tower", "tags": ["water tower"], "phrase": "an old water tower on the next roof" },
+        { "id": "deck-chairs", "tags": ["deck chairs"], "phrase": "a pair of folding deck chairs" }
+      ]
+    },
+    {
+      "id": "night-market",
+      "displayName": "Night market",
+      "kind": "outdoor",
+      "tags": ["night market", "market stalls", "paper lanterns", "street food stalls", "outdoors"],
+      "description": "A street night market with rows of food stalls under strings of paper lanterns",
+      "details": [
+        { "id": "red-lanterns", "tags": ["red lanterns"], "phrase": "rows of red paper lanterns" },
+        { "id": "steam", "tags": ["steam"], "phrase": "steam rising from the food stalls" },
+        { "id": "neon-arch", "tags": ["neon arch"], "phrase": "a neon arch over the entrance" }
+      ]
+    },
+    {
+      "id": "office",
+      "displayName": "Office",
+      "kind": "indoor",
+      "tags": ["office", "desks", "computer monitors", "large windows", "modern interior"],
+      "description": "A modern open-plan office with rows of desks, computer monitors and large windows",
+      "details": [
+        { "id": "tall-plants", "tags": ["potted plants"], "phrase": "tall potted plants between the desks" },
+        { "id": "whiteboard", "tags": ["whiteboard"], "phrase": "a whiteboard covered in notes" },
+        { "id": "city-view", "tags": ["cityscape"], "phrase": "floor-to-ceiling windows over the city" }
+      ]
+    },
+    {
+      "id": "diner",
+      "displayName": "Diner",
+      "kind": "indoor",
+      "tags": ["diner", "booths", "counter", "bar stools", "checkered floor"],
+      "description": "A small-town diner with red vinyl booths, a long counter with stools and a checkered floor",
+      "details": [
+        { "id": "jukebox", "tags": ["jukebox"], "phrase": "an old jukebox by the door" },
+        { "id": "pie-case", "tags": ["pie display"], "phrase": "a glass case of pies on the counter" },
+        { "id": "open-sign", "tags": ["neon sign"], "phrase": "a neon open sign in the window" }
+      ]
+    },
+    {
+      "id": "main-street",
+      "displayName": "Main street",
+      "kind": "outdoor",
+      "tags": ["small town", "main street", "shop fronts", "sidewalk", "street lamps"],
+      "description": "The main street of a small town lined with low brick shop fronts, awnings and old street lamps",
+      "details": [
+        { "id": "clock-tower", "tags": ["clock tower"], "phrase": "a clock tower at the end of the street" },
+        { "id": "bunting", "tags": ["bunting"], "phrase": "strings of colorful bunting across the street" },
+        { "id": "bench", "tags": ["bench"], "phrase": "a wooden bench outside a shop" }
+      ]
+    },
+    {
+      "id": "library",
+      "displayName": "Library",
+      "kind": "indoor",
+      "tags": ["library", "bookshelves", "reading tables", "reading lamps"],
+      "description": "A small public library with tall bookshelves, long reading tables and green reading lamps",
+      "details": [
+        { "id": "returns-desk", "tags": ["front desk"], "phrase": "a wooden returns desk" },
+        { "id": "globe", "tags": ["globe"], "phrase": "an old globe on a stand" },
+        { "id": "arched-windows", "tags": ["arched windows"], "phrase": "tall arched windows" }
+      ]
+    },
+    {
+      "id": "lake-pier",
+      "displayName": "Lake pier",
+      "kind": "outdoor",
+      "tags": ["lake", "wooden pier", "water", "trees", "outdoors"],
+      "description": "A long wooden pier stretching out over a calm lake surrounded by trees",
+      "details": [
+        { "id": "rowboat", "tags": ["rowboat"], "phrase": "a rowboat tied to the pier" },
+        { "id": "lamp-post", "tags": ["lamp post"], "phrase": "an old lamp post at the end of the pier" },
+        { "id": "fishing-rods", "tags": ["fishing rod"], "phrase": "fishing rods leaning on the railing" }
+      ]
+    },
+    {
+      "id": "fairground",
+      "displayName": "Fairground",
+      "kind": "outdoor",
+      "tags": ["county fair", "ferris wheel", "game stalls", "string lights", "outdoors"],
+      "description": "A county fairground with a small ferris wheel, striped game stalls and strings of lights",
+      "details": [
+        { "id": "carousel", "tags": ["carousel"], "phrase": "an old painted carousel" },
+        { "id": "cotton-candy", "tags": ["cotton candy stand"], "phrase": "a cotton candy stand" },
+        { "id": "hay-bales", "tags": ["hay bales"], "phrase": "hay bales stacked by the entrance" }
+      ]
+    },
+    {
+      "id": "hilltop",
+      "displayName": "Hilltop",
+      "kind": "outdoor",
+      "tags": ["hilltop", "grass", "valley view", "lone tree", "outdoors"],
+      "description": "A grassy hilltop overlooking the town and the valley below, with a single old tree",
+      "details": [
+        { "id": "bench", "tags": ["bench"], "phrase": "a weathered bench under the tree" },
+        { "id": "wildflowers", "tags": ["wildflowers"], "phrase": "wildflowers scattered through the grass" },
+        { "id": "fence", "tags": ["wooden fence"], "phrase": "an old wooden fence along the ridge" }
+      ]
+    },
+    {
+      "id": "family-shop",
+      "displayName": "Family shop",
+      "kind": "indoor",
+      "tags": ["general store", "shop interior", "shelves", "counter", "cash register"],
+      "description": "The inside of a small family-run general store with crowded shelves, a wooden counter and an old cash register",
+      "details": [
+        { "id": "bell", "tags": ["door bell"], "phrase": "a brass bell above the door" },
+        { "id": "candy-jars", "tags": ["candy jars"], "phrase": "glass jars of candy on the counter" },
+        { "id": "notice-board", "tags": ["notice board"], "phrase": "a notice board covered in flyers" }
+      ]
+    },
+    {
+      "id": "mess-hall",
+      "displayName": "Mess hall",
+      "kind": "indoor",
+      "tags": ["mess hall", "long tables", "benches", "wooden walls", "rafters"],
+      "description": "A camp mess hall with long wooden tables and benches under exposed wooden rafters",
+      "details": [
+        { "id": "banners", "tags": ["banners"], "phrase": "camp banners hanging from the rafters" },
+        { "id": "serving-counter", "tags": ["serving counter"], "phrase": "a long serving counter at one end" },
+        { "id": "notice-board", "tags": ["notice board"], "phrase": "a notice board covered in schedules" }
+      ]
+    },
+    {
+      "id": "lake-dock",
+      "displayName": "Lake dock",
+      "kind": "outdoor",
+      "tags": ["lake", "dock", "canoes", "water", "pine trees", "outdoors"],
+      "description": "A wooden dock on a clear lake with canoes pulled up on the shore and pine trees all around",
+      "details": [
+        { "id": "life-jackets", "tags": ["life jackets"], "phrase": "a rack of orange life jackets" },
+        { "id": "flag-pole", "tags": ["flagpole"], "phrase": "a flag on a tall pole by the shore" },
+        { "id": "diving-platform", "tags": ["diving platform"], "phrase": "a floating diving platform out on the water" }
+      ]
+    },
+    {
+      "id": "campfire-circle",
+      "displayName": "Campfire circle",
+      "kind": "outdoor",
+      "tags": ["campfire", "fire pit", "log benches", "forest clearing", "outdoors"],
+      "description": "A campfire circle in a forest clearing with log benches around a stone fire pit",
+      "details": [
+        { "id": "guitar", "tags": ["guitar"], "phrase": "a guitar leaning against a log" },
+        { "id": "lanterns", "tags": ["lanterns"], "phrase": "lanterns hanging from the nearby trees" },
+        { "id": "firewood", "tags": ["firewood"], "phrase": "a neat stack of firewood" }
+      ]
+    },
+    {
+      "id": "forest-trail",
+      "displayName": "Forest trail",
+      "kind": "outdoor",
+      "tags": ["forest path", "trail", "pine trees", "ferns", "dappled light", "outdoors"],
+      "description": "A narrow trail through a pine forest with ferns on both sides and dappled light",
+      "details": [
+        { "id": "trail-sign", "tags": ["wooden sign"], "phrase": "a carved wooden trail sign" },
+        { "id": "footbridge", "tags": ["footbridge"], "phrase": "a small wooden footbridge over a stream" },
+        { "id": "boulders", "tags": ["boulders"], "phrase": "mossy boulders beside the path" }
+      ]
+    },
+    {
+      "id": "boathouse",
+      "displayName": "Boathouse",
+      "kind": "indoor",
+      "tags": ["boathouse", "canoes", "paddles", "wooden walls", "open doors"],
+      "description": "The inside of an old wooden boathouse with canoes on racks, paddles on the walls and wide doors open to the lake",
+      "details": [
+        { "id": "rope-coils", "tags": ["rope"], "phrase": "coils of rope on hooks" },
+        { "id": "workbench", "tags": ["workbench"], "phrase": "a cluttered workbench" },
+        { "id": "lake-view", "tags": ["lake view"], "phrase": "a view of the lake through the open doors" }
+      ]
+    },
+    {
+      "id": "staff-lounge",
+      "displayName": "Staff lounge",
+      "kind": "indoor",
+      "tags": ["lounge", "couches", "fireplace", "board games", "log cabin interior"],
+      "description": "A cozy staff lounge in a log cabin with worn couches, a stone fireplace and shelves of board games",
+      "details": [
+        { "id": "dartboard", "tags": ["dartboard"], "phrase": "a dartboard on the wall" },
+        { "id": "photo-wall", "tags": ["photos on wall"], "phrase": "a wall of old camp photos" },
+        { "id": "coffee-pot", "tags": ["coffee pot"], "phrase": "a battered coffee pot on a side table" }
+      ]
+    },
+    {
+      "id": "staff-cabin",
+      "displayName": "Staff cabin",
+      "kind": "indoor",
+      "tags": ["cabin interior", "bunk beds", "wooden walls", "window", "rustic"],
+      "description": "A rustic staff cabin with wooden walls, a pair of bunk beds and a small window facing the trees",
+      "details": [
+        { "id": "lantern", "tags": ["lantern"], "phrase": "a camping lantern on a shelf" },
+        { "id": "backpacks", "tags": ["backpacks"], "phrase": "backpacks hanging on hooks" },
+        { "id": "trail-map", "tags": ["map on wall"], "phrase": "a trail map pinned to the wall" }
+      ]
+    }
+  ]
+}

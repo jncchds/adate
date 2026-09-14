@@ -1,0 +1,59 @@
+{
+  "id": "small-town",
+  "displayName": "Small town",
+  "days": 28,
+  "tone": "A slow summer in a small lakeside town where everyone knows everyone: front porches, long evenings, and gossip that travels faster than you do.",
+  "routinePlace": "family-shop",
+  "places": [
+    { "id": "family-shop", "type": "family-shop", "name": "Harlan's General Store", "details": ["bell"] },
+    { "id": "rosies-diner", "type": "diner", "name": "Rosie's Diner", "details": ["pie-case"] },
+    { "id": "main-street", "type": "main-street", "name": "Main Street", "details": ["clock-tower"] },
+    { "id": "town-library", "type": "library", "name": "Willow Creek Library", "details": ["arched-windows"] },
+    { "id": "lake-pier", "type": "lake-pier", "name": "The old pier", "details": ["rowboat"] },
+    { "id": "county-fair", "type": "fairground", "name": "County fairground", "details": ["carousel"], "known": false },
+    { "id": "lookout-hill", "type": "hilltop", "name": "Lookout Hill", "details": ["wildflowers"], "known": false }
+  ],
+  "openings": [
+    {
+      "id": "counter-stools",
+      "name": "Counter stools",
+      "meetingPlace": "rosies-diner",
+      "time": "Morning",
+      "homePlace": "rosies-diner",
+      "homeWindow": "breakfast, most days",
+      "hook": "The only free stool is next to them, and Rosie has already brought you the same order by mistake."
+    },
+    {
+      "id": "overdue-book",
+      "name": "Overdue book",
+      "meetingPlace": "town-library",
+      "time": "Afternoon",
+      "homePlace": "town-library",
+      "homeWindow": "quiet afternoons",
+      "hook": "You are both reaching for the one copy of the same book."
+    },
+    {
+      "id": "pier-sunset",
+      "name": "Sunset on the pier",
+      "meetingPlace": "lake-pier",
+      "time": "Evening",
+      "homePlace": "lake-pier",
+      "homeWindow": "evenings",
+      "hook": "Their rowboat has drifted loose, and you are closest to the rope."
+    }
+  ],
+  "events": [
+    { "id": "street-dance", "name": "Main Street summer dance", "day": 14, "place": "main-street", "time": "Evening" },
+    { "id": "founders-fair", "name": "Founders' Day fair", "day": 26, "place": "county-fair", "time": "Evening" }
+  ],
+  "occupations": [
+    "vet assistant",
+    "schoolteacher",
+    "mechanic",
+    "baker",
+    "librarian",
+    "farm hand",
+    "nurse",
+    "boat repairer"
+  ]
+}

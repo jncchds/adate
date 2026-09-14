@@ -1,0 +1,58 @@
+{
+  "id": "summer-camp",
+  "displayName": "Summer camp",
+  "days": 21,
+  "tone": "A summer working as adult staff at a lakeside camp: counsellors and instructors, long days outdoors, and late talks after lights out. Everyone in the story is staff, and every character is an adult.",
+  "routinePlace": "staff-cabin",
+  "places": [
+    { "id": "staff-cabin", "type": "staff-cabin", "name": "Staff cabin", "details": ["lantern"] },
+    { "id": "mess-hall", "type": "mess-hall", "name": "The mess hall", "details": ["banners"] },
+    { "id": "lake-dock", "type": "lake-dock", "name": "The waterfront", "details": ["life-jackets"] },
+    { "id": "campfire-circle", "type": "campfire-circle", "name": "The campfire circle", "details": ["guitar"] },
+    { "id": "boathouse", "type": "boathouse", "name": "The boathouse", "details": ["lake-view"] },
+    { "id": "staff-lounge", "type": "staff-lounge", "name": "Staff lounge", "details": ["photo-wall"] },
+    { "id": "ridge-trail", "type": "forest-trail", "name": "Ridge trail", "details": ["footbridge"], "known": false }
+  ],
+  "openings": [
+    {
+      "id": "staff-orientation",
+      "name": "Staff orientation",
+      "meetingPlace": "mess-hall",
+      "time": "Morning",
+      "homePlace": "mess-hall",
+      "homeWindow": "staff breakfast",
+      "hook": "Orientation pairs you up for the name game, and they already know yours."
+    },
+    {
+      "id": "boathouse-inventory",
+      "name": "Boathouse inventory",
+      "meetingPlace": "boathouse",
+      "time": "Afternoon",
+      "homePlace": "boathouse",
+      "homeWindow": "afternoons between sessions",
+      "hook": "You are both assigned to count every paddle in the boathouse, and the count keeps coming out different."
+    },
+    {
+      "id": "first-campfire",
+      "name": "First campfire",
+      "meetingPlace": "campfire-circle",
+      "time": "Evening",
+      "homePlace": "campfire-circle",
+      "homeWindow": "evenings after the campers are in bed",
+      "hook": "The staff campfire after the first long day, and the only space left on the log is beside them."
+    }
+  ],
+  "events": [
+    { "id": "talent-show", "name": "Staff talent show", "day": 10, "place": "mess-hall", "time": "Evening" },
+    { "id": "last-campfire", "name": "Last campfire of the session", "day": 21, "place": "campfire-circle", "time": "Night" }
+  ],
+  "occupations": [
+    "swim instructor",
+    "arts and crafts counsellor",
+    "camp nurse",
+    "kitchen lead",
+    "trail guide",
+    "sailing instructor",
+    "assistant camp director"
+  ]
+}

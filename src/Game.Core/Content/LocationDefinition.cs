@@ -3,8 +3,16 @@ using Game.Core.Scenes;
 namespace Game.Core.Content;
 
 /// <summary>
-/// A place the game can render. Locations are content, not code, for the same reason style
-/// packs are: adding one should not mean a recompile.
+/// One piece of a place type's vocabulary: a small visible thing that makes one cafe not another.
+/// </summary>
+/// <param name="Tags">The detail in booru vocabulary.</param>
+/// <param name="Phrase">The same detail as a phrase for natural-language checkpoints.</param>
+public sealed record PlaceDetail(string Id, IReadOnlyList<string> Tags, string Phrase);
+
+/// <summary>
+/// A place type the game can render: a cafe, a park, a boathouse. A save's actual places are rows
+/// that name a type, a name and some of the type's details (phase-2 plan §10). Content, not code,
+/// for the same reason style packs are.
 /// </summary>
 /// <param name="Tags">Base scene tags, emitted in this order. Order is load-bearing.</param>
 /// <param name="TimeTags">
@@ -13,14 +21,26 @@ namespace Game.Core.Content;
 /// </param>
 /// <param name="Description">
 /// The same place as a descriptive phrase, for natural-language checkpoints. Tags are booru
-/// vocabulary and read badly as prose. Optional so a catalog used only by booru packs still
-/// loads; the natural compiler refuses a location without one.
+/// vocabulary and read badly as prose.
 /// </param>
 /// <param name="TimeDescriptions">The time-of-day lighting as phrases, keyed like <paramref name="TimeTags"/>.</param>
+/// <param name="Details">What a place of this type may be given to tell it apart from another of the same type.</param>
 public sealed record LocationDefinition(
     string Id,
     string DisplayName,
     IReadOnlyList<string> Tags,
     IReadOnlyDictionary<string, IReadOnlyList<string>> TimeTags,
     string? Description = null,
-    IReadOnlyDictionary<string, string>? TimeDescriptions = null);
+    IReadOnlyDictionary<string, string>? TimeDescriptions = null,
+    IReadOnlyList<PlaceDetail>? Details = null)
+{
+    /// <summary>The detail <paramref name="detailId"/>, or a throw naming what this type offers.</summary>
+    public PlaceDetail Detail(string detailId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(detailId);
+
+        return (Details ?? []).FirstOrDefault(d => string.Equals(d.Id, detailId, StringComparison.Ordinal))
+            ?? throw new KeyNotFoundException(
+                $"Place type '{Id}' offers no detail '{detailId}'. Known: {string.Join(", ", (Details ?? []).Select(d => d.Id))}.");
+    }
+}

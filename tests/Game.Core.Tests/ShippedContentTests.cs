@@ -31,7 +31,64 @@ public class ShippedContentTests
     private static JsonStylePackLoader PackLoader() => new(Path.Combine(RepoRoot(), "stylepacks"));
 
     private static JsonLocationCatalog Catalog() =>
-        new(Path.Combine(RepoRoot(), "content", "locations.json"));
+        new(Path.Combine(RepoRoot(), "content", "place-types.json"));
+
+    private static Settings.JsonSettingCatalog SettingCatalog() =>
+        new(Path.Combine(RepoRoot(), "content", "settings"), Catalog());
+
+    [Fact]
+    public void The_three_planned_settings_load()
+    {
+        var settings = SettingCatalog().All();
+
+        Assert.Equal(["big-city", "small-town", "summer-camp"], settings.Select(s => s.Id));
+        Assert.All(settings, s => Assert.Equal(Settings.JsonSettingCatalog.OpeningCount, s.Openings.Count));
+    }
+
+    /// <summary>A setting's places are its backgrounds. Every one must render at every time, details included.</summary>
+    [Fact]
+    public async Task Every_place_in_every_setting_compiles_at_every_time_of_day_in_both_dialects()
+    {
+        var zimage = await PackLoader().LoadAsync(ZImagePackId);
+        var booru = await PackLoader().LoadAsync(PackId);
+        var catalog = Catalog();
+        var natural = new NaturalPromptCompiler(catalog);
+        var tags = new BooruPromptCompiler(catalog);
+
+        foreach (var setting in SettingCatalog().All())
+        {
+            foreach (var place in setting.Places)
+            {
+                foreach (var time in Enum.GetValues<TimeOfDay>())
+                {
+                    var intent = new SceneIntent(place.Type, time, "", "", "", Framing.FullBody, place.Details);
+
+                    var prose = natural.CompilePositive(null, Approve(zimage, intent), zimage, RenderTarget.Background);
+                    var booruPrompt = tags.CompilePositive(null, Approve(booru, intent), booru, RenderTarget.Background);
+
+                    foreach (var detail in place.Details ?? [])
+                    {
+                        Assert.Contains(catalog.Get(place.Type).Detail(detail).Phrase, prose, StringComparison.Ordinal);
+                    }
+
+                    Assert.Contains("no people", prose, StringComparison.Ordinal);
+                    Assert.Contains("no humans", booruPrompt, StringComparison.Ordinal);
+                }
+            }
+        }
+
+        static Content.ApprovedIntent Approve(StylePack pack, SceneIntent intent) =>
+            Content.ApprovedIntent.Approve(
+                Content.ContentPolicy.Resolve(Content.GameContentSettings.SafeDefault, 24, pack.HighestCeiling, Content.Intimacy.None),
+                intent,
+                pack);
+    }
+
+    [Fact]
+    public void Every_place_type_offers_details()
+    {
+        Assert.All(Catalog().All(), type => Assert.True((type.Details?.Count ?? 0) >= 2, $"place type '{type.Id}' offers too few details"));
+    }
 
     [Fact]
     public async Task The_shipped_pack_loads()

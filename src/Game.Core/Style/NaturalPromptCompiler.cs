@@ -53,6 +53,12 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
 
             Add(sentences, location.Description);
 
+            var details = (intent.LocationDetails ?? []).Select(id => location.Detail(id).Phrase).ToList();
+            if (details.Count > 0)
+            {
+                Add(sentences, $"With {string.Join(", ", details)}");
+            }
+
             if (location.TimeDescriptions is not null &&
                 location.TimeDescriptions.TryGetValue(intent.Time.ToString(), out var time))
             {

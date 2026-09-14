@@ -68,6 +68,39 @@ public sealed class SaveRepository(Database database)
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }
 
+    public async Task<string?> GetSettingIdAsync(SaveId id, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT setting_id FROM save WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+    }
+
+    /// <summary>
+    /// Sets a save's setting once. A setting is locked like a style pack: its places, openings and
+    /// events are what the save's rows refer to. Returns the setting the save ends up with.
+    /// </summary>
+    public async Task<string> SetSettingAsync(SaveId id, string settingId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(settingId);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            UPDATE save SET setting_id = COALESCE(setting_id, $setting) WHERE id = $id
+            RETURNING setting_id;
+            """;
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$setting", settingId);
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string
+            ?? throw new InvalidOperationException($"No save with id '{id}'.");
+    }
+
     /// <summary>Newest first, so the shell can offer "continue" without a second query.</summary>
     public async Task<IReadOnlyList<SaveRecord>> ListAsync(CancellationToken ct = default)
     {

@@ -1,11 +1,11 @@
 @page "/scene/{CharacterId:guid}"
 @using Game.Core.Characters
-@using Game.Core.Content
+@using Game.Core.Places
 @using Game.Core.Scenes
 @using Game.Data.Repositories
 @using Game.Host.Services
 @inject CharacterRepository Characters
-@inject ILocationCatalog Locations
+@inject WorldService World
 @inject CharacterStudio Studio
 @rendermode InteractiveServer
 
@@ -33,9 +33,9 @@ else
 {
     @* HANDOFF 1.1: the background and the sprite are separate images, stacked as layers in
        the browser. Nothing is ever flattened server-side, which is what lets one background
-       serve every expression and one sprite serve every location. *@
+       serve every expression and one sprite serve every place. *@
     <div class="stage">
-        <img class="layer background" src="@_background" alt="@_location.DisplayName" />
+        <img class="layer background" src="@_background" alt="@_place.Name" />
 
         @* Every sprite is in the DOM at once and switching is an opacity change. The images
            are already in the browser cache and served immutable, so changing expression
@@ -62,13 +62,13 @@ else
         </div>
 
         <div class="control-group">
-            <span class="control-label">Location</span>
-            @foreach (var location in Locations.All())
+            <span class="control-label">Place</span>
+            @foreach (var place in _places)
             {
                 <button type="button"
-                        class="@(location.Id == _location.Id ? "active" : null)"
-                        @onclick="() => ChangeSceneAsync(location.Id, _time)">
-                    @location.DisplayName
+                        class="@(place.Id == _place.Id ? "active" : null)"
+                        @onclick="() => ChangeSceneAsync(place, _time)">
+                    @place.Name
                 </button>
             }
         </div>
@@ -79,7 +79,7 @@ else
             {
                 <button type="button"
                         class="@(time == _time ? "active" : null)"
-                        @onclick="() => ChangeSceneAsync(_location.Id, time)">
+                        @onclick="() => ChangeSceneAsync(_place, time)">
                     @time
                 </button>
             }
@@ -92,18 +92,15 @@ else
     public Guid CharacterId { get; set; }
 
     private CharacterRecord? _character;
+    private IReadOnlyList<PlaceRecord> _places = [];
     private IReadOnlyDictionary<string, string>? _sprites;
     private string? _background;
-    private LocationDefinition _location = null!;
+    private PlaceRecord _place = null!;
     private TimeOfDay _time = TimeOfDay.Evening;
     private string _expression = "neutral";
     private string? _error;
 
-    protected override async Task OnInitializedAsync()
-    {
-        _location = Locations.All()[0];
-        await LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -116,11 +113,16 @@ else
             _character = await Characters.GetAsync(CharacterId)
                 ?? throw new InvalidOperationException($"No character with id {CharacterId}.");
 
+            _places = await World.KnownPlacesAsync(_character.SaveId);
+
+            // A retry keeps the place the player had chosen, when it is still known.
+            _place = _places.FirstOrDefault(p => p.Id == _place?.Id) ?? _places[0];
+
             // Sprites first: they are the slow half and the half the spike is judged on.
             _sprites = await Studio.GenerateSpritesAsync(_character);
             StateHasChanged();
 
-            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, _location.Id, _time);
+            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, _place, _time);
         }
         catch (Exception ex)
         {
@@ -129,17 +131,17 @@ else
     }
 
     /// <summary>
-    /// Changing location or time regenerates only the background. The sprites are unaffected
+    /// Changing place or time regenerates only the background. The sprites are unaffected
     /// because they contain no scenery at all, which is the whole reason for compositing.
     /// </summary>
-    private async Task ChangeSceneAsync(string locationId, TimeOfDay time)
+    private async Task ChangeSceneAsync(PlaceRecord place, TimeOfDay time)
     {
         if (_character is null)
         {
             return;
         }
 
-        _location = Locations.Get(locationId);
+        _place = place;
         _time = time;
 
         // Held so the previous background stays on screen while the new one generates,
@@ -148,7 +150,7 @@ else
 
         try
         {
-            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, locationId, time);
+            _background = await Studio.GenerateBackgroundAsync(_character.SaveId, place, time);
         }
         catch (Exception ex)
         {

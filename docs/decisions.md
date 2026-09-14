@@ -614,3 +614,63 @@ and at 20, a leather jacket and slicked-back hair.
   (the man's beard became glasses), because appearance has one feature slot.
 * **Distinctness is not yet measured.** The plan's check needs someone who has not seen the
   design, and that judgement has not been made.
+
+## Settings and places are content; a save's places are rows with their own seed
+
+Phase-2 plan build step 3.
+
+**Place types replace locations.** `content/place-types.json` holds 22 types, one per place in
+the three settings. Each type has booru tags, a plain-English description and a vocabulary of
+2-3 details, with both wordings. Time-of-day lighting is shared by kind (indoor, outdoor) and
+may be overridden per type, so the file does not repeat 110 lighting lines. The loader refuses a
+type missing any time of day in either vocabulary. Cafe and park keep their earlier wording as
+overrides.
+
+**Settings** are `content/settings/{big-city,small-town,summer-camp}.json`: named places with
+details, a routine place, exactly three openings, dated events, occupations and tone. The loader
+checks every reference by name:
+
+* place types and details;
+* opening and event places;
+* event days within the calendar;
+* opening and routine places known from the start;
+* the id matching the file name.
+
+Summer camp states in its tone that everyone is adult staff. The minimum age is still a game
+setting and no setting touches the clamp.
+
+**A save's places are rows.** Each row has a place type, a name, detail ids and its own seed.
+The seed is the same at every time of day, so morning and night show the same room. It also
+fixes a bug found while building this: the old background seed mixed in `string.GetHashCode`,
+which .NET randomises per process, so every restart regenerated every background. A setting is
+set once per save, like a style pack. A save created before settings is given the default
+setting on first visit.
+
+**Migration 003** adds:
+
+* the save's setting and player columns;
+* the `place`, `character_outfit`, `game_clock`, `flag` and `visit` tables;
+* the cast columns on `character`.
+
+It enforces the cast rules in the schema as well as in `CastGenerator`, because a stored row
+outlives the process that wrote it:
+
+* a variant belongs to a main LI in the same save;
+* a variant shares the main LI's subject;
+* an adult main LI's variants are adults;
+* an under-18 main LI's variants have their exact age;
+* a main LI with a stored cast cannot change age or subject.
+
+The cast is now stored the first time it is built and read back afterwards, so it is fixed for
+the save.
+
+**One bug found by the tests:** variants were read back ordered by id. Version-7 Guids created
+in the same millisecond carry random bits in that position, so Bolder and Other life swapped on
+some runs. The query now orders by rowid, which is insertion order.
+
+**Checked against the real database:** the migration ran on the existing save, which picked up
+`big-city` and its four known places. The office background rendered with its city-view
+detail, and the stored cast read back unchanged.
+
+**Not in this step:** the clock, flags and visits have tables but no behaviour (build step 4), and
+nothing yet chooses a setting or an opening (step 5).

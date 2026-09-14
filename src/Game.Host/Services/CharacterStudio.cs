@@ -2,6 +2,7 @@ using Game.Core;
 using Game.Core.Cast;
 using Game.Core.Characters;
 using Game.Core.Content;
+using Game.Core.Places;
 using Game.Core.Saves;
 using Game.Core.Scenes;
 using Game.Core.Style;
@@ -255,20 +256,20 @@ public sealed class CharacterStudio(
 
     // ---------------------------------------------------------------- backgrounds
 
-    public Task<string> GenerateBackgroundAsync(SaveId saveId, string locationId, TimeOfDay time) =>
+    public Task<string> GenerateBackgroundAsync(SaveId saveId, PlaceRecord place, TimeOfDay time) =>
         jobs.RunAsync(
-            $"background:{saveId}:{locationId}:{time}",
-            ct => GenerateBackgroundCoreAsync(saveId, locationId, time, ct));
+            $"background:{saveId}:{place.Id}:{time}",
+            ct => GenerateBackgroundCoreAsync(saveId, place, time, ct));
 
     private async Task<string> GenerateBackgroundCoreAsync(
         SaveId saveId,
-        string locationId,
+        PlaceRecord place,
         TimeOfDay time,
         CancellationToken ct)
     {
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
-        var intent = new SceneIntent(locationId, time, "", "", "", Framing.FullBody);
+        var intent = new SceneIntent(place.TypeId, time, "", "", "", Framing.FullBody, place.Details);
 
         // A background has no subject, so no age clamp applies -- only the game setting and
         // the pack. It still goes through the gate: a location is authored content, but the
@@ -285,9 +286,10 @@ public sealed class CharacterStudio(
                 WorkflowId: pack.Workflows.Background,
                 Positive: compiler.CompilePositive(null, approved, pack, RenderTarget.Background),
                 Negative: compiler.CompileNegative(pack, backgroundCeiling, RenderTarget.Background, subject: null),
-                // Backgrounds are generated once per location and time and then reused for
-                // the life of the save, so the seed only needs to be stable, not varied.
-                Seed: DeriveSeed(saveId.Value, locationId.GetHashCode(StringComparison.Ordinal) ^ (int)time),
+                // The place's stored seed, the same at every time of day, so morning and night
+                // show the same room. It used to mix in string.GetHashCode, which is randomised per
+                // process, so every restart regenerated every background.
+                Seed: place.Seed,
                 Width: pack.Resolutions.Background.Width,
                 Height: pack.Resolutions.Background.Height,
                 PackFingerprint: PackFingerprint(),
@@ -298,7 +300,7 @@ public sealed class CharacterStudio(
                 Ceiling: backgroundCeiling),
             ct).ConfigureAwait(false);
 
-        await cache.RecordBackgroundAsync(image.Hash, saveId, locationId, time, image.RelativePath, ct)
+        await cache.RecordBackgroundAsync(image.Hash, saveId, place.Id, time, image.RelativePath, ct)
             .ConfigureAwait(false);
 
         return image.RelativePath;
@@ -322,12 +324,18 @@ public sealed class CharacterStudio(
 
         cast.ValidateAgainst(pack);
 
-        // Temper, want and aesthetic are not stored yet; the new-game flow will ask for them.
-        var lead = CastGenerator.PlaceholderMain(
-            main.Appearance, subject, cast, main.AnchorSeed ?? DeriveSeed(main.Id, 0));
+        // Built once and stored, so the cast is fixed for the save. The main LI's temper, want and
+        // aesthetic are still placeholders until the new-game flow asks for them.
+        var members = await characters.GetCastAsync(main.Id, ct).ConfigureAwait(false);
+        if (members is null)
+        {
+            var lead = CastGenerator.PlaceholderMain(
+                main.Appearance, subject, cast, main.AnchorSeed ?? DeriveSeed(main.Id, 0));
+            var variants = CastGenerator.For(lead, subject, cast, DeriveSeed(main.Id, 1000));
 
-        IReadOnlyList<CastMember> members =
-            [lead, .. CastGenerator.For(lead, subject, cast, DeriveSeed(main.Id, 1000))];
+            await characters.SaveCastAsync(main, lead, variants, ct).ConfigureAwait(false);
+            members = [lead, .. variants];
+        }
 
         var results = new List<CastPortrait>(members.Count);
 
@@ -434,7 +442,17 @@ public sealed class StudioOptions
 
     public string StylePackDirectory { get; set; } = "stylepacks";
 
-    public string LocationsFile { get; set; } = Path.Combine("content", "locations.json");
+    /// <summary>Place types: tags, descriptions and detail vocabulary for every kind of place.</summary>
+    public string PlaceTypesFile { get; set; } = Path.Combine("content", "place-types.json");
+
+    /// <summary>One JSON file per setting (phase-2 plan §2).</summary>
+    public string SettingsDirectory { get; set; } = Path.Combine("content", "settings");
+
+    /// <summary>
+    /// The setting a save gets when it was created without one. Stand-in until the new-game flow
+    /// asks the player (build step 5).
+    /// </summary>
+    public string DefaultSettingId { get; set; } = "big-city";
 
     /// <summary>Authored OpenPose skeletons, one PNG per pose slot.</summary>
     public string PoseDirectory { get; set; } = Path.Combine("content", "poses");

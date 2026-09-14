@@ -189,6 +189,11 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         var location = locations.Get(intent.LocationId);
         tags.AddRange(location.Tags);
 
+        foreach (var detail in intent.LocationDetails ?? [])
+        {
+            tags.AddRange(location.Detail(detail).Tags);
+        }
+
         if (location.TimeTags.TryGetValue(intent.Time.ToString(), out var timeTags))
         {
             tags.AddRange(timeTags);

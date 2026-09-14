@@ -35,7 +35,8 @@ builder.Services.Configure<StudioOptions>(builder.Configuration.GetSection(Studi
 builder.Services.PostConfigure<StudioOptions>(o =>
 {
     o.StylePackDirectory = ResolveContentPath(o.StylePackDirectory);
-    o.LocationsFile = ResolveContentPath(o.LocationsFile);
+    o.PlaceTypesFile = ResolveContentPath(o.PlaceTypesFile);
+    o.SettingsDirectory = ResolveContentPath(o.SettingsDirectory);
     o.PoseDirectory = ResolveContentPath(o.PoseDirectory);
     o.TemperFile = ResolveContentPath(o.TemperFile);
     o.WantsFile = ResolveContentPath(o.WantsFile);
@@ -58,7 +59,13 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<IStylePackLoader>(sp => sp.GetRequiredService<JsonStylePackLoader>());
 
 builder.Services.AddSingleton<ILocationCatalog>(sp =>
-    new JsonLocationCatalog(sp.GetRequiredService<IOptions<StudioOptions>>().Value.LocationsFile));
+    new JsonLocationCatalog(sp.GetRequiredService<IOptions<StudioOptions>>().Value.PlaceTypesFile));
+
+builder.Services.AddSingleton<Game.Core.Settings.ISettingCatalog>(sp => new Game.Core.Settings.JsonSettingCatalog(
+    sp.GetRequiredService<IOptions<StudioOptions>>().Value.SettingsDirectory,
+    sp.GetRequiredService<ILocationCatalog>()));
+
+builder.Services.AddSingleton<WorldService>();
 
 builder.Services.AddSingleton(sp =>
 {
