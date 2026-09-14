@@ -27,7 +27,8 @@ public sealed record ScenePacket(
     IReadOnlyList<KnownFact> PresentKnow,
     string RequiredOutcome,
     Ceiling Ceiling,
-    IReadOnlyList<string> Expressions);
+    IReadOnlyList<string> Expressions,
+    IReadOnlyList<string>? KnownPlaces = null);
 
 public static class ScenePacketBuilder
 {
@@ -98,6 +99,11 @@ public static class ScenePacketBuilder
         text.AppendLine("## Where and when");
         text.AppendLine($"{packet.SettingName}. {packet.Tone}");
         text.AppendLine($"Day {packet.Clock.Day}, {packet.Clock.Slot.ToString().ToLowerInvariant()}, at {packet.PlaceName}.");
+        if (packet.KnownPlaces is { Count: > 0 } knownPlaces)
+        {
+            text.AppendLine($"Places the player knows: {string.Join(", ", knownPlaces)}.");
+        }
+
         text.AppendLine();
 
         text.AppendLine("## Who is here");
@@ -149,6 +155,7 @@ public static class ScenePacketBuilder
         text.AppendLine($"- {CeilingWords(packet.Ceiling)}");
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");
+        text.AppendLine("- places: only a place someone names that is not one the player knows, with a place type and up to three details of that type; otherwise an empty list.");
 
         return text.ToString();
     }

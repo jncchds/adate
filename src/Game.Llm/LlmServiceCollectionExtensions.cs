@@ -28,6 +28,8 @@ public static class LlmServiceCollectionExtensions
         });
 
         services.AddSingleton(static sp => new SceneValidator(sp.GetRequiredService<StoryContent>(), sp.GetRequiredService<CastContent>()));
+        services.AddTransient<SceneJudge>();
+        services.AddTransient<BibleWriter>();
         services.AddTransient<SceneWriter>();
 
         return services;

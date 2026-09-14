@@ -20,7 +20,8 @@ services:
     ports:
       - 8000:8000
     volumes:
-      # Edit this file on the host, then: docker compose restart z-image
+      # Edit this file on the host, then: docker compose up -d --force-recreate z-image
+      # (a single-file bind mount pins the replaced file, so restart is not enough; see README)
       - ./z_image_api.py:/app/z_image_api.py:ro
       # Model caches. DiffSynth pulls from ModelScope, but transformers/HF
       # components land in the HF cache -- mount both or you re-download 20GB.
@@ -34,6 +35,9 @@ services:
       - HF_HOME=/root/.cache/huggingface
       - PYTHONUNBUFFERED=1
       - Z_IMAGE_PATTERN_STYLE=glob
+      # Offload whatever does not fit under this many GB, to leave room for an LLM on the same
+      # GPU. Slower renders; unset keeps every model on the GPU.
+      # - Z_IMAGE_VRAM_LIMIT=12
     healthcheck:
       test:
         - CMD

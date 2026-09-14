@@ -997,3 +997,20 @@ present. The packet, answer, attempts and rejections are appended to `turn_log`,
 can be replayed.
 
 **Off by default.** `Llm:Enabled` is false, so a machine without a model plays exactly as before.
+
+**The judge reads prose, the validator reads JSON.** Only a second call can catch a scene that
+gives someone blue hair when their hair is black. `SceneJudge` gets the scene and the immutable,
+non-claimed facts it may use, and returns contradictions that go back to the writer as retry
+reasons. A judge that fails to answer passes the scene, so turning it on can only make scenes
+better, never block one.
+
+**Places are proposed as ids.** A scene may name a new place as a place type from the catalog (an
+enum in the schema), a name, and up to three of that type's detail ids. A name matching an authored
+place the player didn't know yet reveals that place rather than duplicating it. Anything else
+becomes a known story place with its own seed. The name is display text only.
+
+**The story bible splits as the plan says.** C# picks each person's job from the setting's
+occupations, deterministically from the save and person, and already has their want. The model
+adds likes and one secret, which are stored as core facts known only to that person, so a scene
+can reveal them later. Appearance is written as immutable core facts that the player can see. If
+no answer passes, the story runs on the C# picks alone.

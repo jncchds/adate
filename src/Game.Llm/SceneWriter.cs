@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Game.Core.Content;
+using Game.Core.Places;
 using Game.Core.Story;
 using Microsoft.Extensions.Options;
 
@@ -7,25 +9,40 @@ namespace Game.Llm;
 
 public sealed record SceneResponseFact(string Subject, string Predicate, string Object, string Level);
 
-/// <summary>The JSON half of a written scene.</summary>
-public sealed record SceneResponse(string Text, string Expression, IReadOnlyList<SceneResponseFact>? Facts);
+public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details);
 
+/// <summary>The JSON half of a written scene.</summary>
+public sealed record SceneResponse(
+    string Text,
+    string Expression,
+    IReadOnlyList<SceneResponseFact>? Facts,
+    IReadOnlyList<SceneResponsePlace>? Places = null);
+
+/// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
 /// <param name="Rejections">Why each rejected attempt failed, in order; kept for the turn log.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
     IReadOnlyList<ProposedFact> Facts,
+    IReadOnlyList<PlaceProposal> Places,
     bool Fallback,
     int Attempts,
     IReadOnlyList<string> Rejections);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
-/// it against the state it owns and retries with the reasons. After the retries run out, the
-/// encounter's authored text is used, so the game never waits on or trusts a bad answer.
+/// it against the state it owns, optionally asks the judge about the prose, and retries with the
+/// reasons. After the retries run out, the encounter's authored text is used, so the game never waits
+/// on or trusts a bad answer.
 /// </summary>
-public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryContent story, IOptions<LlmOptions> options)
+public sealed class SceneWriter(
+    ILlmClient llm,
+    SceneValidator validator,
+    StoryContent story,
+    ILocationCatalog placeTypes,
+    SceneJudge judge,
+    IOptions<LlmOptions> options)
 {
     public const string SystemPrompt =
         "You write single scenes for a first-person dating sim. You are given the situation, who is " +
@@ -34,7 +51,13 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public async Task<WrittenScene> WriteAsync(ScenePacket packet, SceneWorld world, string fallbackText, CancellationToken ct = default)
+    /// <param name="knownPlaces">Places the player knows. A proposal may not repeat one of their names.</param>
+    public async Task<WrittenScene> WriteAsync(
+        ScenePacket packet,
+        SceneWorld world,
+        string fallbackText,
+        IReadOnlyList<string>? knownPlaces = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
         ArgumentNullException.ThrowIfNull(world);
@@ -42,7 +65,7 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
         var settings = options.Value;
         if (!settings.Enabled)
         {
-            return new WrittenScene(fallbackText, null, [], Fallback: true, Attempts: 0, []);
+            return Fallback(fallbackText, 0, []);
         }
 
         var request = ScenePacketBuilder.Render(packet);
@@ -85,10 +108,17 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
 
             if (response is not null)
             {
-                var (facts, reasons) = Check(response, packet, world, settings);
+                var (facts, places, reasons) = Check(response, packet, world, knownPlaces ?? [], settings);
+
+                if (reasons.Count == 0 && settings.UseJudge)
+                {
+                    var contradictions = await judge.CheckAsync(response.Text, ImmutableFacts(packet), Names(packet), ct).ConfigureAwait(false);
+                    reasons = [.. contradictions.Select(c => $"The scene contradicts an established fact: {c}")];
+                }
+
                 if (reasons.Count == 0)
                 {
-                    return new WrittenScene(response.Text.Trim(), response.Expression, facts, Fallback: false, attempts, rejections);
+                    return new WrittenScene(response.Text.Trim(), response.Expression, facts, places, Fallback: false, attempts, rejections);
                 }
 
                 lastReasons = reasons;
@@ -97,10 +127,10 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
             rejections.AddRange(lastReasons.Select(r => $"attempt {attempts}: {r}"));
         }
 
-        return new WrittenScene(fallbackText, null, [], Fallback: true, attempts, rejections);
+        return Fallback(fallbackText, attempts, rejections);
     }
 
-    /// <summary>The answer schema, with the pack's expressions and the predicate list as enums.</summary>
+    /// <summary>The answer schema, with the pack's expressions, the predicate list and the place types as enums.</summary>
     public JsonObject Schema(ScenePacket packet)
     {
         ArgumentNullException.ThrowIfNull(packet);
@@ -131,16 +161,48 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
                         ["additionalProperties"] = false,
                     },
                 },
+                ["places"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
+                            ["name"] = new JsonObject { ["type"] = "string" },
+                            ["details"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+                        },
+                        ["required"] = Strings(["type", "name", "details"]),
+                        ["additionalProperties"] = false,
+                    },
+                },
             },
-            ["required"] = Strings(["text", "expression", "facts"]),
+            ["required"] = Strings(["text", "expression", "facts", "places"]),
             ["additionalProperties"] = false,
         };
     }
 
-    private (IReadOnlyList<ProposedFact> Facts, IReadOnlyList<string> Reasons) Check(
+    private static WrittenScene Fallback(string text, int attempts, IReadOnlyList<string> rejections) =>
+        new(text, null, [], [], Fallback: true, attempts, rejections);
+
+    /// <summary>What the judge reads the prose against: facts that cannot change and are not mere claims.</summary>
+    private IReadOnlyList<KnownFact> ImmutableFacts(ScenePacket packet) =>
+        [.. packet.PlayerKnows.Concat(packet.PresentKnow)
+            .Where(f => f.Fact.Level is not FactLevel.Claimed && story.Predicate(f.Fact.Predicate) is { Mutable: false })];
+
+    private static IReadOnlyDictionary<string, string> Names(ScenePacket packet)
+    {
+        var names = packet.Present.ToDictionary(p => p.Id, p => p.Name, StringComparer.Ordinal);
+        names[FactLedger.Player] = packet.PlayerName;
+        return names;
+    }
+
+    private (IReadOnlyList<ProposedFact> Facts, IReadOnlyList<PlaceProposal> Places, IReadOnlyList<string> Reasons) Check(
         SceneResponse response,
         ScenePacket packet,
         SceneWorld world,
+        IReadOnlyList<string> knownPlaces,
         LlmOptions settings)
     {
         var reasons = new List<string>();
@@ -178,6 +240,22 @@ public sealed class SceneWriter(ILlmClient llm, SceneValidator validator, StoryC
 
         reasons.AddRange(validator.Validate(new SceneProposal(packet.Clock, packet.PlaceId, present, facts), world));
 
-        return (facts, reasons);
+        var places = new List<PlaceProposal>();
+        foreach (var place in response.Places ?? [])
+        {
+            var proposal = new PlaceProposal(place.Type, place.Name ?? "", place.Details ?? []);
+            var problems = PlaceProposals.Check(proposal, placeTypes, [.. knownPlaces, .. places.Select(p => p.Name)]);
+
+            if (problems.Count == 0)
+            {
+                places.Add(proposal with { Name = proposal.Name.Trim() });
+            }
+            else
+            {
+                reasons.AddRange(problems);
+            }
+        }
+
+        return (facts, places, reasons);
     }
 }

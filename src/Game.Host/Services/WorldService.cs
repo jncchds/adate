@@ -77,6 +77,7 @@ public sealed class WorldService(
     RouteContent routes,
     EndingContent endingContent,
     SceneWriter sceneWriter,
+    BibleWriter bibleWriter,
     CharacterStudio studio,
     IOptions<LlmOptions> llmOptions,
     IOptions<StudioOptions> options)
@@ -416,6 +417,8 @@ public sealed class WorldService(
 
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
         var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        await EnsureBibleAsync(saveId, setting, cast, ct).ConfigureAwait(false);
+
         var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
         var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
         var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
@@ -453,7 +456,8 @@ public sealed class WorldService(
             [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
             outcome.Text,
             ceiling,
-            [.. pack.Expressions.Keys]);
+            [.. pack.Expressions.Keys],
+            [.. known.Select(p => p.Name)]);
 
         var world = new SceneWorld(
             facts,
@@ -462,11 +466,32 @@ public sealed class WorldService(
             stages,
             Summoned: presentIds);
 
-        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, ct).ConfigureAwait(false);
+        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], ct).ConfigureAwait(false);
 
         foreach (var fact in written.Facts)
         {
             await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
+        }
+
+        // A named place the setting already has but the player did not know is revealed, not
+        // duplicated; anything else becomes a story place (plan §10).
+        if (written.Places.Count > 0)
+        {
+            var all = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
+            var ids = all.Select(p => p.Id).ToList();
+
+            foreach (var proposal in written.Places)
+            {
+                if (all.FirstOrDefault(p => string.Equals(p.Name, proposal.Name, StringComparison.OrdinalIgnoreCase)) is { } existing)
+                {
+                    await places.MarkKnownAsync(saveId, existing.Id, outcome.VisitedAt.Day, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                var record = PlaceProposals.ToRecord(saveId, proposal, ids, outcome.VisitedAt.Day);
+                ids.Add(record.Id);
+                await places.AddAsync([record], ct).ConfigureAwait(false);
+            }
         }
 
         await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
@@ -475,11 +500,58 @@ public sealed class WorldService(
             Packet = ScenePacketBuilder.Render(packet),
             written.Text,
             written.Expression,
+            Places = written.Places.Select(p => $"{p.Type}: {p.Name}"),
             written.Attempts,
             written.Rejections,
         }, ct).ConfigureAwait(false);
 
         return written.Text;
+    }
+
+    /// <summary>
+    /// The story bible's facts, written once per save before its first scene (plan §7-8). Appearance
+    /// becomes immutable core facts the player can see; C# picks each person's job from the setting;
+    /// the model adds likes and a secret, which only that person knows until a scene reveals them.
+    /// </summary>
+    private async Task EnsureBibleAsync(SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, CancellationToken ct)
+    {
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
+        if (cast.Count == 0 || facts.Any(f => f.Fact.Source is BibleWriter.Source or "appearance"))
+        {
+            return;
+        }
+
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var people = new List<BiblePerson>();
+
+        foreach (var li in cast)
+        {
+            var id = li.Id.ToString();
+
+            foreach (var fact in FactLedger.AppearanceFacts(id, li.Member.Appearance))
+            {
+                await story.AddFactAsync(saveId, fact, storyContent.Predicate(fact.Predicate), [id, FactLedger.Player], ct: ct).ConfigureAwait(false);
+            }
+
+            var job = setting.Occupations.Count == 0
+                ? "something they rarely talk about"
+                : setting.Occupations[(int)(PlaceRecord.SeedFor(saveId, id) % setting.Occupations.Count)];
+
+            await story.AddFactAsync(
+                saveId,
+                new Fact(id, "works-as", job, FactLevel.Core, BibleWriter.Source, 0),
+                storyContent.Predicate("works-as"),
+                [id],
+                ct: ct).ConfigureAwait(false);
+
+            people.Add(new BiblePerson(id, li.Name, job, castContent.Want(li.Member.WantId).Label,
+                [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))]));
+        }
+
+        foreach (var fact in await bibleWriter.WriteAsync(setting.DisplayName, setting.Tone, people, ct).ConfigureAwait(false))
+        {
+            await story.AddFactAsync(saveId, fact, storyContent.Predicate(fact.Predicate), [fact.Subject], ct: ct).ConfigureAwait(false);
+        }
     }
 
     /// <param name="Key">The flag prefix and invite value: <c>main_li</c> or a route id.</param>

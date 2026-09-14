@@ -158,11 +158,19 @@ async def startup_event():
         print(f"    {c.origin_file_pattern}", flush=True)
     print("First run downloads ~20GB; subsequent starts read from cache.", flush=True)
 
+    # Optional. DiffSynth offloads to CPU whatever does not fit under this many GB, trading render
+    # time for room on a GPU shared with an LLM. Unset keeps everything on the GPU.
+    vram_limit = os.environ.get("Z_IMAGE_VRAM_LIMIT")
+    extra = {"vram_limit": float(vram_limit)} if vram_limit else {}
+    if extra:
+        print(f"vram_limit={extra['vram_limit']}GB", flush=True)
+
     pipeline = ZImagePipeline.from_pretrained(
         torch_dtype=torch.bfloat16,
         device=DEVICE,
         model_configs=configs,
         # tokenizer_config omitted: its default already points at MODEL_ID's tokenizer/
+        **extra,
     )
 
     components = {
@@ -202,12 +210,19 @@ async def health_check():
         and getattr(pipeline, "tokenizer", None) is not None
         and matting is not None
     )
+    gib = 1024 ** 3
     return {
         "status": "ok" if ready else "loading",
         "pipeline_ready": ready,
         "gpu_available": torch.cuda.is_available(),
         "model": MODEL_ID,
         "matting_model": f"{MATTING_MODEL_ID}@{MATTING_REVISION}",
+        # Allocated is what the models hold; reserved adds PyTorch's cache. The gap is what an
+        # LLM on the same GPU is competing with.
+        "vram_allocated_gb": round(torch.cuda.memory_allocated() / gib, 2) if torch.cuda.is_available() else None,
+        "vram_reserved_gb": round(torch.cuda.memory_reserved() / gib, 2) if torch.cuda.is_available() else None,
+        "vram_peak_gb": round(torch.cuda.max_memory_allocated() / gib, 2) if torch.cuda.is_available() else None,
+        "vram_limit_gb": float(os.environ["Z_IMAGE_VRAM_LIMIT"]) if os.environ.get("Z_IMAGE_VRAM_LIMIT") else None,
     }
 
 
@@ -307,6 +322,11 @@ async def generate_image(request: ImageGenerationRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
+    finally:
+        # Hand the render's activations back to the driver. PyTorch otherwise keeps them cached,
+        # and an LLM on the same GPU sees that memory as taken.
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     image_id = str(uuid.uuid4())
     image.save(str(OUTPUT_DIR / f"{image_id}.png"))

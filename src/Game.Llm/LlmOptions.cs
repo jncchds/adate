@@ -25,4 +25,7 @@ public sealed class LlmOptions
     public double Temperature { get; set; } = 0.8;
 
     public int MaxTextLength { get; set; } = 1800;
+
+    /// <summary>Whether a second, short call reads each scene's prose against the facts that cannot change.</summary>
+    public bool UseJudge { get; set; } = true;
 }

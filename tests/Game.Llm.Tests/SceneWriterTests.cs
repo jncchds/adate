@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Game.Core;
 using Game.Core.Cast;
+using Game.Core.Content;
 using Game.Core.Gpu;
 using Game.Core.Scenes;
 using Game.Core.Story;
@@ -46,8 +47,11 @@ public class SceneWriterTests
         }
     }
 
-    private static SceneWriter Writer(ILlmClient llm, bool enabled = true) =>
-        new(llm, new SceneValidator(Story, Cast), Story, Options.Create(new LlmOptions { Enabled = enabled, MaxRetries = 2 }));
+    private static readonly ILocationCatalog PlaceTypes = new JsonLocationCatalog(ContentPath("place-types.json"));
+
+    private static SceneWriter Writer(ILlmClient llm, bool enabled = true, bool judge = false) =>
+        new(llm, new SceneValidator(Story, Cast), Story, PlaceTypes, new SceneJudge(llm),
+            Options.Create(new LlmOptions { Enabled = enabled, MaxRetries = 2, UseJudge = judge }));
 
     private static ScenePacket Packet() => new(
         "Big city",
@@ -70,8 +74,67 @@ public class SceneWriterTests
         new Dictionary<string, RelationshipStage> { [Rin] = RelationshipStage.Acquaintance },
         [Rin]);
 
-    private static string Answer(string text = "You sit down across from Rin.", string expression = "smile", string facts = "[]") =>
-        $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}} }""";
+    private static string Answer(string text = "You sit down across from Rin.", string expression = "smile", string facts = "[]", string places = "[]") =>
+        $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}}, "places": {{places}} }""";
+
+    [Fact]
+    public async Task The_judge_sends_a_contradicting_scene_back_with_the_contradiction()
+    {
+        var llm = new FakeLlm(
+            () => Answer(text: "Rin tucks a strand of blue hair behind one ear."),
+            () => """{ "contradictions": ["'blue hair' contradicts: Rin hair-color black hair"] }""",
+            () => Answer(),
+            () => """{ "contradictions": [] }""");
+
+        var scene = await Writer(llm, judge: true).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(2, scene.Attempts);
+        Assert.Equal("judge", llm.Requests[1].SchemaName);
+        Assert.Contains("Rin hair-color black hair", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Contains("contradicts an established fact", llm.Requests[2].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_judge_that_cannot_answer_passes_the_scene()
+    {
+        var llm = new FakeLlm(() => Answer(), () => throw new HttpRequestException("judge timed out"));
+
+        var scene = await Writer(llm, judge: true).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(1, scene.Attempts);
+    }
+
+    [Fact]
+    public async Task A_named_new_place_is_proposed_and_a_bad_one_is_sent_back()
+    {
+        var cafeDetail = PlaceTypes.Get("bar").Details!.First().Id;
+        var llm = new FakeLlm(
+            () => Answer(places: """[{ "type": "castle", "name": "The Keep", "details": [] }]"""),
+            () => Answer(places: $$"""[{ "type": "bar", "name": "The Blue Note", "details": ["{{cafeDetail}}"] }]"""));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", knownPlaces: ["The Corner Cup"]);
+
+        Assert.False(scene.Fallback);
+        Assert.Contains("'castle' is not one of", llm.Requests[1].User, StringComparison.Ordinal);
+        var place = Assert.Single(scene.Places);
+        Assert.Equal(("bar", "The Blue Note"), (place.Type, place.Name));
+    }
+
+    [Fact]
+    public async Task A_place_the_player_already_knows_is_not_proposed_again()
+    {
+        var llm = new FakeLlm(
+            () => Answer(places: """[{ "type": "cafe", "name": "the corner cup", "details": [] }]"""),
+            () => Answer());
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", knownPlaces: ["The Corner Cup"]);
+
+        Assert.Equal(2, scene.Attempts);
+        Assert.Empty(scene.Places);
+        Assert.Contains(scene.Rejections, r => r.Contains("already a place", StringComparison.Ordinal));
+    }
 
     [Fact]
     public async Task With_no_model_configured_the_authored_text_is_used_without_a_call()
