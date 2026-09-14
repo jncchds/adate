@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.NewGameView"
+             x:DataType="vm:NewGameViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page">
+            <Button Classes="link" Content="‹ Back" Command="{Binding BackCommand}" />
+            <TextBlock Classes="h1" Text="New game" />
+            <TextBlock Classes="lede"
+                       Text="The first portrait shows exactly what you describe here; the others each move one or two of hair colour, hair style and eye colour, and whichever you pick becomes them." />
+
+            <TextBlock Classes="h2" Text="Setting" />
+            <ListBox ItemsSource="{Binding Settings}" SelectedItem="{Binding Setting}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SettingItem">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                            <TextBlock Classes="small" Text="{Binding Detail}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock Classes="h2" Text="You" />
+            <TextBlock Classes="label" Text="Your name" />
+            <TextBox Text="{Binding PlayerName}" MaxLength="40" />
+            <TextBlock Classes="small" Text="Used in the writing only. You are never drawn." />
+            <TextBlock Classes="label" Text="Your gender" />
+            <ComboBox ItemsSource="{Binding Genders}" SelectedItem="{Binding PlayerGender}" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="small" Text="How the story refers to you." />
+
+            <TextBlock Classes="h2" Text="Who you will meet" />
+            <TextBlock Classes="label" Text="Their name" />
+            <TextBox Text="{Binding LiName}" MaxLength="40" />
+            <TextBlock Classes="label" Text="Love interest" />
+            <ComboBox ItemsSource="{Binding Subjects}" SelectedItem="{Binding Subject}" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="small" Text="Everyone else you can fall for shares this." />
+            <TextBlock Classes="label" Text="Age" />
+            <NumericUpDown Value="{Binding Age}" Minimum="18" Maximum="99" Increment="1" FormatString="0" />
+            <TextBlock Classes="small" Text="Adults only. It is what the content rules are computed from." />
+
+            <ItemsControl ItemsSource="{Binding Features}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FeatureField">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="label" Text="{Binding Label}" />
+                            <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Value}" HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Classes="label" Text="Distinguishing feature (optional)" />
+            <TextBox Text="{Binding DistinguishingFeature}" />
+
+            <TextBlock Classes="h2" Text="Their temper" />
+            <ItemsControl ItemsSource="{Binding Temper}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TemperAxisItem">
+                        <StackPanel Spacing="4" Margin="0,0,0,8">
+                            <TextBlock Classes="label" Text="{Binding Label}" />
+                            <ComboBox ItemsSource="{Binding Ends}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:TemperEndOption">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Classes="small" Text="{Binding Writing}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Classes="error" Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <Button Classes="accent" Content="{Binding CreateLabel}" Command="{Binding CreateCommand}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

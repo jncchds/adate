@@ -1,0 +1,12 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Game.App.ViewModels"
+        xmlns:views="using:Game.App.Views"
+        x:Class="Game.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="adate"
+        Width="1280" Height="720"
+        MinWidth="360" MinHeight="420"
+        Background="#121213">
+    <views:MainView />
+</Window>

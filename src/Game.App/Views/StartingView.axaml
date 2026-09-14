@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.StartingView"
+             x:DataType="vm:StartingViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page" VerticalAlignment="Center">
+            <TextBlock Classes="h1" Text="adate" />
+
+            <StackPanel IsVisible="{Binding !Failed}" Spacing="10">
+                <TextBlock Classes="lede" Text="Starting the game." />
+                <ProgressBar IsIndeterminate="True" />
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding Failed}" Spacing="10">
+                <TextBlock Classes="h2" Text="The game could not start." />
+                <TextBlock Classes="error" Text="{Binding Error}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accent" Content="Try again" Command="{Binding RetryCommand}" />
+                    <Button Content="Servers and storage" Command="{Binding SettingsCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

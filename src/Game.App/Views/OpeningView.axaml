@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.OpeningView"
+             x:DataType="vm:OpeningViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page">
+            <Button Classes="link" Content="‹ Saves" Command="{Binding HomeCommand}" />
+            <TextBlock Classes="h1" Text="{Binding Heading}" />
+            <TextBlock Classes="lede" Text="{Binding Lede}" />
+
+            <StackPanel IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Spacing="8">
+                <TextBlock Classes="error" Text="{Binding Error}" />
+                <Button Content="Try again" Command="{Binding RetryCommand}" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Openings}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:OpeningItem">
+                        <Border Classes="panel" Margin="0,0,0,10">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Opening.Name}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
+                                <TextBlock Classes="lede" Text="{Binding Opening.Hook}" />
+                                <TextBlock Classes="small" Text="{Binding Where}" />
+                                <Button Classes="accent" Content="Start here" Command="{Binding Command}" CommandParameter="{Binding}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

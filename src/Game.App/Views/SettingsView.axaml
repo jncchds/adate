@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page">
+            <TextBlock Classes="h1" Text="Servers and storage" />
+            <TextBlock Classes="lede"
+                       Text="The game runs on this device. It asks a language model for the writing and an image service for the pictures, over the network." />
+
+            <TextBlock Classes="h2" Text="Language model" />
+            <TextBlock Classes="label" Text="Address (OpenAI-compatible, ending in /v1/)" />
+            <TextBox Text="{Binding LlmAddress}" />
+            <TextBlock Classes="label" Text="Scene model" />
+            <TextBox Text="{Binding LlmModel}" />
+            <TextBlock Classes="label" Text="Embedding model" />
+            <TextBox Text="{Binding EmbeddingModel}" />
+
+            <TextBlock Classes="h2" Text="Pictures" />
+            <TextBlock Classes="label" Text="Z-Image address" />
+            <TextBox Text="{Binding ImageAddress}" />
+
+            <TextBlock Classes="small" Text="{Binding DataFolder, StringFormat='Saves and pictures are kept in {0}'}" />
+
+            <TextBlock Classes="error" Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="accent" Content="Save and restart" Command="{Binding SaveCommand}" />
+                <Button Content="Cancel" Command="{Binding CancelCommand}" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.CandidatesView"
+             x:DataType="vm:CandidatesViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page">
+            <Button Classes="link" Content="‹ Saves" Command="{Binding HomeCommand}" />
+            <TextBlock Classes="h1" Text="Choose a look" />
+            <TextBlock Classes="lede" Text="{Binding Lede}" />
+
+            <StackPanel IsVisible="{Binding Loading}" Spacing="8">
+                <TextBlock Classes="lede" Text="{Binding LoadingText}" />
+                <ProgressBar IsIndeterminate="True" />
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Spacing="8">
+                <TextBlock Classes="error" Text="{Binding Error}" />
+                <Button Content="Try again" Command="{Binding RetryCommand}" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Candidates}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel ItemWidth="176" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CandidateItem">
+                        <Button Classes="card" Classes.chosen="{Binding IsSelected}"
+                                Command="{Binding Command}" CommandParameter="{Binding}">
+                            <StackPanel Spacing="4">
+                                <Panel Height="240">
+                                    <Border Classes="wait" />
+                                    <Image Source="{Binding Picture}" Stretch="UniformToFill" />
+                                </Panel>
+                                <TextBlock Classes="small" Text="{Binding Description}" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button Classes="accent" Content="{Binding ApproveLabel}" Command="{Binding ApproveCommand}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

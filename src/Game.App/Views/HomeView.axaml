@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Game.App.ViewModels"
+             x:Class="Game.App.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
+    <ScrollViewer>
+        <StackPanel Classes="page">
+            <TextBlock Classes="h1" Text="adate" />
+
+            <TextBlock Classes="error" Text="{Binding Error}"
+                       IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <StackPanel IsVisible="{Binding HasSaves}" Spacing="8">
+                <TextBlock Classes="h2" Text="Continue" />
+                <ItemsControl ItemsSource="{Binding Saves}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SaveItem">
+                            <Button Classes="choice" Command="{Binding Command}" CommandParameter="{Binding}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                    <TextBlock Classes="small" Text="{Binding Started}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Classes="h2" Text="New game" />
+            <TextBlock Classes="lede"
+                       Text="Choose where the story happens, tell it who you are, and describe the person you will meet." />
+            <Button Classes="accent" Content="Start a new story" Command="{Binding NewGameCommand}" />
+
+            <Button Classes="link" Content="Servers and storage" Command="{Binding SettingsCommand}" Margin="0,16,0,0" />
+            <TextBlock Classes="small" Text="{Binding DataFolder, StringFormat='Saves and pictures: {0}'}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,14 +1,17 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Game.App/Game.App.csproj" />
     <Project Path="src/Game.Cli/Game.Cli.csproj" />
     <Project Path="src/Game.Core/Game.Core.csproj" />
     <Project Path="src/Game.Data/Game.Data.csproj" />
+    <Project Path="src/Game.Desktop/Game.Desktop.csproj" />
     <Project Path="src/Game.Host/Game.Host.csproj" />
     <Project Path="src/Game.Imaging/Game.Imaging.csproj" />
     <Project Path="src/Game.Llm/Game.Llm.csproj" />
     <Project Path="src/Game.Play/Game.Play.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Game.App.Tests/Game.App.Tests.csproj" />
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.csproj" />
     <Project Path="tests/Game.Data.Tests/Game.Data.Tests.csproj" />
     <Project Path="tests/Game.Imaging.Tests/Game.Imaging.Tests.csproj" />
