@@ -1,0 +1,19 @@
+{
+  "leaving": {
+    "suspicionTolerance": 60,
+    "neglectDays": 7,
+    "brokenPromises": 2,
+    "dealbreakerLeaves": true
+  },
+  "texts": {
+    "together": "Weeks later, you and {who} are still finding excuses to be in the same place. (Placeholder: the ending with {who}.)",
+    "alone": "The season ends, and you walk out of it on your own terms. (Placeholder: ending alone by choice.)",
+    "leftAlone": "By the end, there is no one left waiting for you. (Placeholder: ending alone after the others walked away.)"
+  },
+  "reasons": {
+    "Dealbreaker": "{who} could not get past what you did.",
+    "Suspicion": "{who} stopped believing they were the only one.",
+    "BrokenPromises": "{who} got tired of waiting for you.",
+    "Neglect": "{who} decided you were not coming back."
+  }
+}

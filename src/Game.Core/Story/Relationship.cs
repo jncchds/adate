@@ -248,14 +248,8 @@ public sealed class RelationshipEngine(StoryContent content)
     public int ThresholdFor(int value, IReadOnlyDictionary<string, string> temper) =>
         (int)Math.Ceiling(value * Scale(temper, m => m.Threshold));
 
-    private double Scale(IReadOnlyDictionary<string, string> temper, Func<TemperModifier, double> pick)
-    {
-        ArgumentNullException.ThrowIfNull(temper);
-
-        return Rules.Temper
-            .Where(m => temper.Values.Contains(m.End, StringComparer.Ordinal))
-            .Aggregate(1.0, (scale, m) => scale * pick(m));
-    }
+    private double Scale(IReadOnlyDictionary<string, string> temper, Func<TemperModifier, double> pick) =>
+        content.TemperScale(temper, pick);
 
     private static int Round(double value) => (int)Math.Round(value, MidpointRounding.AwayFromZero);
 

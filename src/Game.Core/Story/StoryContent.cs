@@ -85,6 +85,17 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
         return content;
     }
 
+    /// <summary>The product of one scale over every temper end the character holds that has a modifier.</summary>
+    public double TemperScale(IReadOnlyDictionary<string, string> temper, Func<TemperModifier, double> pick)
+    {
+        ArgumentNullException.ThrowIfNull(temper);
+        ArgumentNullException.ThrowIfNull(pick);
+
+        return Rules.Temper
+            .Where(m => temper.Values.Contains(m.End, StringComparer.Ordinal))
+            .Aggregate(1.0, (scale, m) => scale * pick(m));
+    }
+
     public PredicateDefinition? Predicate(string id) =>
         Predicates.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
 

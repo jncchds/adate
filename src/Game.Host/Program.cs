@@ -46,6 +46,7 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.PredicatesFile = ResolveContentPath(o.PredicatesFile);
     o.RelationshipFile = ResolveContentPath(o.RelationshipFile);
     o.RoutesFile = ResolveContentPath(o.RoutesFile);
+    o.EndingsFile = ResolveContentPath(o.EndingsFile);
 
     // Fail at startup rather than at the first render: a game that has declared an
     // impossible age floor should not serve a single page.
@@ -97,6 +98,9 @@ builder.Services.AddSingleton(sp =>
     routes.ValidateAgainst(sp.GetRequiredService<Game.Core.Cast.CastContent>());
     return routes;
 });
+
+builder.Services.AddSingleton(sp =>
+    Game.Core.Story.EndingContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.EndingsFile));
 
 // One compiler per prompt dialect; the pack's dialect picks which one runs.
 builder.Services.AddSingleton<IPromptCompiler, BooruPromptCompiler>();

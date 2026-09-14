@@ -31,6 +31,7 @@ public class DatabaseTests
                      "save", "character", "sprite_cache", "background_cache",
                      "place", "character_outfit", "game_clock", "flag", "visit",
                      "fact", "fact_knowledge", "rel_state", "schedule", "promise", "turn_log",
+                     "player_profile",
                  })
         {
             var count = db.Scalar<long>(
@@ -564,6 +565,37 @@ public class DatabaseTests
         var cast = await characters.GetCastAsync(main.Id);
         Assert.Equal("fiery", cast![0].Temper["temper"]);
         Assert.Equal("open-a-bakery", cast[0].WantId);
+    }
+
+    [Fact]
+    public async Task Last_seen_is_the_latest_day_each_person_shared_a_scene()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "corner-cafe")]);
+
+        var clock = await state.GetOrStartClockAsync(save.Id);
+        await state.CommitTurnAsync(save.Id, Turn(clock, "corner-cafe") with { With = ["main_li", "variant:chance"] });
+        clock = clock.Next();
+        await state.CommitTurnAsync(save.Id, Turn(clock, "corner-cafe") with { With = [] });
+
+        for (var i = 0; i < 5; i++)
+        {
+            clock = clock.Next();
+            await state.CommitTurnAsync(save.Id, Turn(clock, "corner-cafe") with { With = [] });
+        }
+
+        clock = clock.Next();
+        await state.CommitTurnAsync(save.Id, Turn(clock, "corner-cafe") with { With = ["main_li"] });
+
+        var seen = await state.GetLastSeenAsync(save.Id);
+        Assert.Equal(clock.Day, seen["main_li"]);
+        Assert.Equal(1, seen["variant:chance"]);
+        Assert.Equal(2, seen.Count);
     }
 
     [Fact]

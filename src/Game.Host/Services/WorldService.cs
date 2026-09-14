@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Game.Core.Cast;
 using Game.Core.Encounters;
 using Game.Core.Places;
@@ -13,12 +14,27 @@ namespace Game.Host.Services;
 /// <summary>An encounter's choice that is still open, with its text filled in.</summary>
 public sealed record PendingChoice(string EncounterId, string Text, IReadOnlyList<EncounterChoice> Choices);
 
-/// <summary>Someone the player can bring along this turn.</summary>
+/// <summary>Someone the player can bring along this turn, or end the story with.</summary>
 /// <param name="Key">The invite value and flag prefix: <c>main_li</c> or a route id.</param>
 public sealed record Invitee(string Key, string Name);
 
 /// <summary>Where the player stands with someone they have met.</summary>
-public sealed record RelationshipView(string Name, RelationshipState State);
+/// <param name="Left">Why they walked away, or null while they are still around.</param>
+public sealed record RelationshipView(string Name, RelationshipState State, string? Left = null);
+
+/// <summary>The ending check: who can be chosen (alone always can), and who has already left.</summary>
+public sealed record EndingOffer(IReadOnlyList<Invitee> Routes, IReadOnlyList<string> Departures);
+
+/// <summary>What the playthrough revealed (plan §9), stored once the story ends.</summary>
+/// <param name="ProfileOf">Whose profile is shown: the person the player ended with, or the one they were closest to.</param>
+public sealed record EndingRecap(
+    EndingKind Kind,
+    string Text,
+    string? PartnerName,
+    IReadOnlyList<string> PassedOver,
+    IReadOnlyList<string> Departures,
+    string? ProfileOf,
+    IReadOnlyList<string> Profile);
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
@@ -26,6 +42,8 @@ public sealed record RelationshipView(string Name, RelationshipState State);
 /// <param name="Pending">A choice the player must answer before the next turn.</param>
 /// <param name="Invitees">Who the player may bring along this turn.</param>
 /// <param name="People">Display names by encounter reference: <c>main_li</c> or <c>variant:{route}</c>.</param>
+/// <param name="EndingOffer">Set when the ending check is due and the player has not picked yet.</param>
+/// <param name="Ending">Set once the story has ended.</param>
 public sealed record PlayState(
     SettingDefinition Setting,
     ClockState Clock,
@@ -39,9 +57,11 @@ public sealed record PlayState(
     PendingChoice? Pending,
     IReadOnlyList<Invitee> Invitees,
     IReadOnlyList<RelationshipView> Relationships,
-    IReadOnlyDictionary<string, string> People);
+    IReadOnlyDictionary<string, string> People,
+    EndingOffer? EndingOffer,
+    EndingRecap? Ending);
 
-/// <summary>A save's setting, places, clock, openings, choices and turns.</summary>
+/// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
     SaveRepository saves,
     PlaceRepository places,
@@ -53,9 +73,13 @@ public sealed class WorldService(
     StoryContent storyContent,
     CastContent castContent,
     RouteContent routes,
+    EndingContent endingContent,
     IOptions<StudioOptions> options)
 {
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
     private readonly RelationshipEngine _engine = new(storyContent);
+    private readonly EndingRules _endings = new(endingContent, storyContent);
 
     /// <summary>
     /// The places the player can choose between, after making sure the save has its setting's
@@ -90,6 +114,23 @@ public sealed class WorldService(
             ? setting.Openings.FirstOrDefault(o => o.Id == openingId)
             : null;
 
+        EndingRecap? ending = null;
+        EndingOffer? offer = null;
+        if (await story.GetEndingAsync(saveId, ct).ConfigureAwait(false) is { } stored)
+        {
+            ending = JsonSerializer.Deserialize<EndingRecap>(stored.SummaryJson, Json);
+        }
+        else if (opening is not null && cast.Count > 0)
+        {
+            var statuses = await StatusesAsync(saveId, cast, flags, null, ct).ConfigureAwait(false);
+            if (EndingRules.IsDue(clock, setting.Days, statuses))
+            {
+                offer = new EndingOffer(
+                    [.. EndingRules.Offer(statuses).Select(key => new Invitee(key, cast.First(li => li.Key == key).Name))],
+                    Departures(cast, flags));
+            }
+        }
+
         PendingChoice? pending = null;
         if (EncounterEvaluator.Holds(flags, EncounterEvaluator.PendingChoiceKey))
         {
@@ -105,14 +146,17 @@ public sealed class WorldService(
 
         var over = clock.IsPast(setting.Days);
 
-        IReadOnlyList<Invitee> invitees = over || pending is not null
+        IReadOnlyList<Invitee> invitees = over || pending is not null || offer is not null || ending is not null
             ? []
-            : [.. cast.Where(li => CanInvite(setting, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
+            : [.. cast.Where(li => !HasLeft(flags, li) && CanInvite(setting, cast, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
 
         var relationships = new List<RelationshipView>();
         foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met")))
         {
-            relationships.Add(new RelationshipView(li.Name, await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false)));
+            relationships.Add(new RelationshipView(
+                li.Name,
+                await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false),
+                HasLeft(flags, li) ? DepartureText(li, flags[$"{li.Key}.left"]) : null));
         }
 
         var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
@@ -131,7 +175,9 @@ public sealed class WorldService(
             pending,
             invitees,
             relationships,
-            people);
+            people,
+            offer,
+            ending);
     }
 
     /// <summary>
@@ -158,11 +204,17 @@ public sealed class WorldService(
 
     /// <summary>
     /// Spends the current slot at <paramref name="placeId"/>, which must be a place the player knows,
-    /// optionally bringing someone along by their <see cref="Invitee.Key"/>.
+    /// optionally bringing someone along by their <see cref="Invitee.Key"/>. When the turn ends a day,
+    /// anyone the leaving rules now apply to walks away, in the same transaction.
     /// </summary>
     public async Task<TurnOutcome> TakeTurnAsync(SaveId saveId, string placeId, string? invite = null, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
+
+        if (play.Ending is not null || play.EndingOffer is not null)
+        {
+            throw new InvalidOperationException("The story is at its ending; there are no more turns.");
+        }
 
         if (play.Over)
         {
@@ -189,20 +241,20 @@ public sealed class WorldService(
             flags[EncounterEvaluator.InviteKey] = invite;
         }
 
+        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
+
         var context = new TurnContext(
             play.Clock,
             place.Id,
             flags,
             await state.CountAloneVisitsAsync(saveId, place.Id, ct).ConfigureAwait(false));
 
-        var outcome = TurnPlanner.Plan(play.Setting, encounters.For(play.Setting.Id), context, place.Name);
+        var outcome = TurnPlanner.Plan(play.Setting, Available(play.Setting, cast, flags), context, place.Name);
 
         if (invite is not null && !outcome.With.Contains(RefFor(invite)))
         {
             throw new InvalidOperationException($"Nothing at {place.Name} would bring them along.");
         }
-
-        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
 
         var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
         after.Remove(EncounterEvaluator.InviteKey);
@@ -224,6 +276,22 @@ public sealed class WorldService(
             }
 
             relationships[li.Id] = Advance(li, current, after, toSet);
+        }
+
+        // The daily world tick (plan §7): at the end of each day, evaluate the leaving rules.
+        if (outcome.Next.Day != outcome.VisitedAt.Day || outcome.GameOver)
+        {
+            foreach (var status in await StatusesAsync(saveId, cast, after, relationships, ct).ConfigureAwait(false))
+            {
+                var seenToday = outcome.With.Contains(RefFor(status.Key));
+                var checkedStatus = seenToday ? status with { LastSeenDay = outcome.VisitedAt.Day } : status;
+
+                if (_endings.Leaving(checkedStatus, outcome.VisitedAt.Day) is { } reason)
+                {
+                    toSet[$"{status.Key}.left"] = reason.ToString();
+                    after[$"{status.Key}.left"] = reason.ToString();
+                }
+            }
         }
 
         outcome = outcome with { FlagsToSet = toSet };
@@ -274,6 +342,58 @@ public sealed class WorldService(
         await state.ResolveChoiceAsync(saveId, pending.EncounterId, choice.Id, sets, relationships, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Ends the story with <paramref name="pick"/>: a route key on offer, or <see cref="EndingRules.AloneKey"/>.
+    /// Stores the recap once; a save that has already ended refuses.
+    /// </summary>
+    public async Task EndAsync(SaveId saveId, string pick, CancellationToken ct = default)
+    {
+        var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
+
+        if (play.Ending is not null)
+        {
+            throw new InvalidOperationException("This story has already ended.");
+        }
+
+        var offer = play.EndingOffer
+            ?? throw new InvalidOperationException("The ending check is not due yet.");
+
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
+        var statuses = await StatusesAsync(saveId, cast, flags, null, ct).ConfigureAwait(false);
+        var choice = EndingRules.Resolve(statuses, pick);
+
+        var partner = choice.Key is null ? null : cast.First(li => li.Key == choice.Key);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
+
+        var stillAround = statuses.Where(s => s.Open).ToList();
+        var closest = partner ?? stillAround
+            .OrderByDescending(s => s.State.Affection)
+            .Select(s => cast.First(li => li.Key == s.Key))
+            .FirstOrDefault();
+
+        var text = choice.Kind switch
+        {
+            EndingKind.Together => endingContent.Texts.Together,
+            EndingKind.Alone => endingContent.Texts.Alone,
+            _ => endingContent.Texts.LeftAlone,
+        };
+
+        var recap = new EndingRecap(
+            choice.Kind,
+            Fill(text, names, partner, "", play.Clock),
+            partner?.Name,
+            [.. stillAround.Where(s => s.Key != choice.Key).Select(s => cast.First(li => li.Key == s.Key).Name)],
+            offer.Departures,
+            closest is null ? null : partner is null ? $"{closest.Name}, the one you were closest to" : closest.Name,
+            closest is null ? [] : ProfileLines(closest));
+
+        await story.SaveEndingAsync(
+            saveId,
+            new StoredEnding(choice.Kind, partner?.Id, Math.Min(play.Clock.Day, play.Setting.Days), JsonSerializer.Serialize(recap, Json)),
+            ct).ConfigureAwait(false);
+    }
+
     /// <param name="Key">The flag prefix and invite value: <c>main_li</c> or a route id.</param>
     /// <param name="Ref">How encounters name them: <c>main_li</c> or <c>variant:{route}</c>.</param>
     private sealed record LoveInterest(Guid Id, string Key, string Ref, string Name, CastMember Member, StoryProfile Profile);
@@ -297,6 +417,78 @@ public sealed class WorldService(
         }
 
         return advanced;
+    }
+
+    /// <summary>Where each love interest stands, for the leaving rules and the ending check.</summary>
+    /// <param name="updated">Relationship states changed by the turn in progress, not yet stored.</param>
+    private async Task<IReadOnlyList<RouteStatus>> StatusesAsync(
+        SaveId saveId,
+        IReadOnlyList<LoveInterest> cast,
+        IReadOnlyDictionary<string, string> flags,
+        IReadOnlyDictionary<Guid, RelationshipState>? updated,
+        CancellationToken ct)
+    {
+        var lastSeen = await state.GetLastSeenAsync(saveId, ct).ConfigureAwait(false);
+        var broken = (await story.GetPromisesAsync(saveId, openOnly: false, ct).ConfigureAwait(false))
+            .Where(p => p.Status is PromiseStatus.Broken)
+            .GroupBy(p => p.CharacterId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var statuses = new List<RouteStatus>(cast.Count);
+        foreach (var li in cast)
+        {
+            var relationship = updated?.GetValueOrDefault(li.Id)
+                ?? await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+
+            statuses.Add(new RouteStatus(
+                li.Key,
+                EncounterEvaluator.Holds(flags, $"{li.Key}.met"),
+                HasLeft(flags, li) ? flags[$"{li.Key}.left"] : null,
+                relationship,
+                li.Member.Temper,
+                lastSeen.TryGetValue(li.Ref, out var day) ? day : null,
+                broken.GetValueOrDefault(li.Id.ToString())));
+        }
+
+        return statuses;
+    }
+
+    private static bool HasLeft(IReadOnlyDictionary<string, string> flags, LoveInterest li) =>
+        EncounterEvaluator.Holds(flags, $"{li.Key}.left");
+
+    private IReadOnlyList<string> Departures(IReadOnlyList<LoveInterest> cast, IReadOnlyDictionary<string, string> flags) =>
+        [.. cast.Where(li => HasLeft(flags, li)).Select(li => DepartureText(li, flags[$"{li.Key}.left"]))];
+
+    private string DepartureText(LoveInterest li, string reason) =>
+        Enum.TryParse<LeaveReason>(reason, out var parsed)
+            ? endingContent.ReasonText(parsed).Replace("{who}", li.Name, StringComparison.Ordinal)
+            : $"{li.Name} is gone.";
+
+    /// <summary>The looks, temper and values of a person, for the recap.</summary>
+    private IReadOnlyList<string> ProfileLines(LoveInterest li)
+    {
+        var desires = storyContent.Values.Desires.ToDictionary(d => d.Id, d => d.Label, StringComparer.Ordinal);
+        var look = li.Member.Appearance;
+
+        return
+        [
+            $"Look: {look.HairColor}, {look.HairStyle}, {look.EyeColor}, {li.Member.Aesthetic} style, {look.Age}",
+            $"Temper: {string.Join(", ", li.Member.Temper.Values)}",
+            $"Wanted: to {castContent.Want(li.Member.WantId).Label}",
+            $"Looked for: {string.Join("; ", li.Profile.Desires.Select(d => desires.GetValueOrDefault(d.Id, d.Id)))}",
+        ];
+    }
+
+    /// <summary>The setting's encounters minus any with someone who has left: a closed route stays closed.</summary>
+    private IReadOnlyList<EncounterDefinition> Available(
+        SettingDefinition setting,
+        IReadOnlyList<LoveInterest> cast,
+        IReadOnlyDictionary<string, string> flags)
+    {
+        var gone = cast.Where(li => HasLeft(flags, li)).Select(li => li.Ref).ToHashSet(StringComparer.Ordinal);
+        var all = encounters.For(setting.Id);
+
+        return gone.Count == 0 ? all : [.. all.Where(e => !(e.With ?? []).Any(gone.Contains))];
     }
 
     /// <summary>
@@ -452,6 +644,7 @@ public sealed class WorldService(
     /// <summary>Whether some encounter would honour inviting <paramref name="key"/> at a place the player knows, now.</summary>
     private bool CanInvite(
         SettingDefinition setting,
+        IReadOnlyList<LoveInterest> cast,
         IReadOnlyList<PlaceRecord> known,
         IReadOnlyDictionary<string, string> flags,
         ClockState clock,
@@ -459,7 +652,7 @@ public sealed class WorldService(
     {
         var requirement = $"{EncounterEvaluator.InviteKey}={key}";
         var withInvite = new Dictionary<string, string>(flags, StringComparer.Ordinal) { [EncounterEvaluator.InviteKey] = key };
-        var inviteBeats = encounters.For(setting.Id).Where(e => (e.Requires ?? []).Contains(requirement)).ToList();
+        var inviteBeats = Available(setting, cast, flags).Where(e => (e.Requires ?? []).Contains(requirement)).ToList();
 
         return known.Any(place =>
             inviteBeats.Any(e => EncounterEvaluator.Matches(e, new TurnContext(clock, place.Id, withInvite, 0))));

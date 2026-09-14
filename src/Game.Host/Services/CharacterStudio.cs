@@ -466,6 +466,8 @@ public sealed class StudioOptions
 
     public string RoutesFile { get; set; } = Path.Combine("content", "routes.json");
 
+    public string EndingsFile { get; set; } = Path.Combine("content", "endings.json");
+
     public string StylePackId { get; set; } = "illustrious-anime";
 
     public string StylePackDirectory { get; set; } = "stylepacks";

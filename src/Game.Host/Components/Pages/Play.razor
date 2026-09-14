@@ -62,6 +62,62 @@ else if (_outcome is not null)
         <button type="button" @onclick="ContinueAsync">Continue</button>
     }
 }
+else if (_state.Ending is { } ending)
+{
+    <h1>@(ending.PartnerName is null ? "On your own" : $"With {ending.PartnerName}")</h1>
+    <p class="encounter-text">@ending.Text</p>
+
+    @if (ending.Departures.Count > 0)
+    {
+        <h2>Who walked away</h2>
+        <ul>
+            @foreach (var departure in ending.Departures)
+            {
+                <li>@departure</li>
+            }
+        </ul>
+    }
+
+    @if (ending.PassedOver.Count > 0)
+    {
+        <h2>Who you passed over</h2>
+        <p>@string.Join(", ", ending.PassedOver)</p>
+    }
+
+    @if (ending.ProfileOf is not null)
+    {
+        <h2>@ending.ProfileOf</h2>
+        <ul>
+            @foreach (var line in ending.Profile)
+            {
+                <li>@line</li>
+            }
+        </ul>
+    }
+
+    <p><a href="/">Start another story</a></p>
+}
+else if (_state.EndingOffer is { } offer)
+{
+    <h1>@(_state.Over ? $"The {_state.Setting.Days} days are over" : "It is time to decide")</h1>
+
+    @foreach (var departure in offer.Departures)
+    {
+        <p class="today">@departure</p>
+    }
+
+    <p class="lede">
+        @(offer.Routes.Count == 0 ? "No one is waiting for an answer." : "Who do you stay with?")
+    </p>
+
+    <div class="choices">
+        @foreach (var route in offer.Routes)
+        {
+            <button type="button" disabled="@_working" @onclick="() => EndAsync(route.Key)">Stay with @route.Name</button>
+        }
+        <button type="button" disabled="@_working" @onclick="() => EndAsync(Game.Core.Story.EndingRules.AloneKey)">Leave on your own</button>
+    </div>
+}
 else if (_state.Pending is not null)
 {
     <h1>Day @_state.Clock.Day</h1>
@@ -112,7 +168,7 @@ else
     @foreach (var relationship in _state.Relationships ?? [])
     {
         <p class="relationship">
-            @relationship.Name: @relationship.State.Stage.ToString().ToLowerInvariant()
+            @relationship.Name: @(relationship.Left is null ? relationship.State.Stage.ToString().ToLowerInvariant() : "gone")
             <small>affection @relationship.State.Affection · trust @relationship.State.Trust · attraction @relationship.State.Attraction</small>
         </p>
     }
@@ -212,6 +268,25 @@ else
         {
             await World.ChooseAsync(SaveId, choice.Id);
             await ContinueAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task EndAsync(string pick)
+    {
+        _working = true;
+
+        try
+        {
+            await World.EndAsync(SaveId, pick);
+            await LoadAsync();
         }
         catch (Exception ex)
         {

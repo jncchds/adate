@@ -53,6 +53,30 @@ public sealed class GameStateRepository(Database database)
         return flags;
     }
 
+    /// <summary>The last day the player shared a scene with each person, by encounter reference.</summary>
+    public async Task<IReadOnlyDictionary<string, int>> GetLastSeenAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT j.value, MAX(v.day)
+            FROM visit v, json_each(v.with_json) j
+            WHERE v.save_id = $save
+            GROUP BY j.value;
+            """;
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            seen[reader.GetString(0)] = reader.GetInt32(1);
+        }
+
+        return seen;
+    }
+
     /// <summary>Earlier visits to a place with no one else there.</summary>
     public async Task<int> CountAloneVisitsAsync(SaveId saveId, string placeId, CancellationToken ct = default)
     {

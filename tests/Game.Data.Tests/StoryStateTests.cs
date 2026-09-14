@@ -159,6 +159,26 @@ public class StoryStateTests
     }
 
     [Fact]
+    public async Task A_save_ends_once_and_a_partner_goes_with_together_only()
+    {
+        using var db = new TempDatabase();
+        var story = new StoryStateRepository(db.Database);
+        var (save, mira) = await NewSaveAsync(db);
+
+        Assert.Null(await story.GetEndingAsync(save));
+
+        await Assert.ThrowsAsync<SqliteException>(() =>
+            story.SaveEndingAsync(save, new StoredEnding(EndingKind.Alone, mira, 28, "{}")));
+
+        var ending = new StoredEnding(EndingKind.Together, mira, 28, """{"text":"Weeks later."}""");
+        await story.SaveEndingAsync(save, ending);
+        Assert.Equal(ending, await story.GetEndingAsync(save));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            story.SaveEndingAsync(save, new StoredEnding(EndingKind.Alone, null, 28, "{}")));
+    }
+
+    [Fact]
     public async Task Turns_are_logged_in_order()
     {
         using var db = new TempDatabase();

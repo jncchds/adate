@@ -923,3 +923,37 @@ the player cannot help both. Here every crisis lands on the setting's last event
 the player to bring that person along. The invite picker makes the dilemma visible, which a
 same-slot priority tie would have hidden. The cost: two people whose wants do not conflict cannot
 both be helped either.
+
+## Endings: people leave at night, and a save ends once
+
+Phase-2 plan build step 8.
+
+**Leaving is a nightly check.** When a turn ends a day, `EndingRules` runs over everyone who has
+been met and hasn't left, using thresholds from `content/endings.json`. It applies the rules in
+this order:
+
+1. a dealbreaker;
+2. suspicion at or over a tolerance divided by the character's temper suspicion scale;
+3. too many broken promises;
+4. a week without a scene together while still at acquaintance.
+
+The reason is stored as `{key}.left` in the turn's own transaction. From then on every encounter
+with that person is filtered out, and they are never offered as an invite, so a closed route stays
+closed.
+
+**The ending check** is due on the last day. It is due earlier when exactly one route is open and
+it has reached committed. It lists who left and why, offers every open route at dating or above,
+and always offers leaving alone. If no route is on offer and someone left, alone is recorded as
+`LeftAlone`: the characters' doing, not only the player's.
+
+**Every combination is tested.** Each of four love interests in five situations (unmet, left,
+acquaintance, dating, committed), 625 combinations in all, times every pick. Each pick yields
+exactly one ending or is refused.
+
+**The recap is stored once**, in `player_profile`, along with its partner check. It names who the
+player ended with, who they passed over and who walked away, plus the look, temper, want and
+desires of the partner or of the person they were closest to.
+
+**Not yet:** a character asking for commitment mid-story, and stood-up dates as promises. Nothing
+in play creates promises yet, so that rule only runs in tests until the LLM or authored scenes make
+them.

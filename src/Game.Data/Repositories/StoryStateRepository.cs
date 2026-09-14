@@ -432,6 +432,52 @@ public sealed class StoryStateRepository(Database database)
         }
     }
 
+    // -------------------------------------------------------------------- endings
+
+    /// <summary>Records how the save ended. Refused if it has already ended: a save ends once.</summary>
+    public async Task SaveEndingAsync(SaveId saveId, StoredEnding ending, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ending);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            INSERT INTO player_profile (save_id, outcome, partner_id, ended_day, summary_json, created_utc)
+            VALUES ($save, $outcome, $partner, $day, $summary, $created)
+            ON CONFLICT(save_id) DO NOTHING;
+            """;
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+        command.Parameters.AddWithValue("$outcome", ending.Kind.ToString());
+        command.Parameters.AddWithValue("$partner", (object?)ending.PartnerId?.ToString() ?? DBNull.Value);
+        command.Parameters.AddWithValue("$day", ending.Day);
+        command.Parameters.AddWithValue("$summary", ending.SummaryJson);
+        command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
+
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
+        {
+            throw new InvalidOperationException($"Save '{saveId}' has already ended.");
+        }
+    }
+
+    public async Task<StoredEnding?> GetEndingAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT outcome, partner_id, ended_day, summary_json FROM player_profile WHERE save_id = $save;";
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false)
+            ? new StoredEnding(
+                Enum.Parse<EndingKind>(reader.GetString(0)),
+                reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+                reader.GetInt32(2),
+                reader.GetString(3))
+            : null;
+    }
+
     // -------------------------------------------------------------------- turn log
 
     /// <summary>Appends what happened in a turn, so a playthrough can be replayed (plan §8).</summary>

@@ -358,7 +358,8 @@ Each step ends in something that runs.
    meeting, contact and first-date beats; four-beat arcs per love interest, with every crisis on
    the last event for whoever the player brings; scoring for everyone in a scene
    (`decisions.md`).*
-8. **Endings** (§9).
+8. **Endings** (§9). *Done: nightly leaving rules as content, the ending check with alone always on
+   offer, every combination tested, and the recap stored once in `player_profile` (migration 005).*
 9. **LLM** (§7-8):
    * **Features:** story bible flavour, scene writing, fact extraction, the judge and place
      proposals.
