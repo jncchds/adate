@@ -1,0 +1,27 @@
+{
+  "desires": [
+    { "id": "honesty", "label": "honesty, even when it is awkward" },
+    { "id": "adventure", "label": "someone who says yes to the unplanned" },
+    { "id": "stability", "label": "someone steady they can count on" },
+    { "id": "humour", "label": "being made to laugh" },
+    { "id": "ambition", "label": "someone going somewhere" },
+    { "id": "kindness", "label": "kindness to people who cannot return it" },
+    { "id": "independence", "label": "room to be their own person" },
+    { "id": "attentiveness", "label": "being listened to and remembered" }
+  ],
+  "dealbreakers": [
+    { "id": "dishonesty", "label": "being lied to", "tag": "lie" },
+    { "id": "second-choice", "label": "being someone's second choice", "tag": "two-timing" },
+    { "id": "cruelty", "label": "cruelty to others", "tag": "cruel" },
+    { "id": "flakiness", "label": "being stood up", "tag": "stood-up" },
+    { "id": "pushiness", "label": "being pushed past a no", "tag": "pushy" }
+  ],
+  "needs": [
+    { "id": "be-seen", "label": "to be seen for who they are, not what they do" },
+    { "id": "be-chosen", "label": "to be chosen first, for once" },
+    { "id": "slow-down", "label": "permission to slow down" },
+    { "id": "be-challenged", "label": "someone who pushes back" },
+    { "id": "be-trusted", "label": "to be trusted with something that matters" },
+    { "id": "feel-at-home", "label": "somewhere that feels like home" }
+  ]
+}

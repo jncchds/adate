@@ -1,0 +1,28 @@
+{
+  "perScene": 6,
+  "perDay": 10,
+  "desireWeights": [3, 2, 1],
+  "tagValue": 2,
+  "aversionWeight": 2,
+  "wantHelp": 4,
+  "dealbreakerTrust": 30,
+  "dealbreakerAffection": 20,
+  "promiseKept": 4,
+  "promiseBroken": 8,
+  "likeHit": 5,
+  "suspicionOnLearn": 15,
+  "stages": {
+    "friendAffection": 12,
+    "datingAffection": 25,
+    "datingAttraction": 5,
+    "committedTrust": 35
+  },
+  "temper": [
+    { "end": "fiery", "affection": 1.5, "suspicion": 1.5 },
+    { "end": "calm", "affection": 0.75, "suspicion": 0.75 },
+    { "end": "guarded", "trust": 0.75, "threshold": 1.25 },
+    { "end": "open", "trust": 1.25, "threshold": 0.8 },
+    { "end": "ambitious", "threshold": 1.1 },
+    { "end": "easygoing", "threshold": 0.9 }
+  ]
+}

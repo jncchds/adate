@@ -30,6 +30,7 @@ public class DatabaseTests
                  {
                      "save", "character", "sprite_cache", "background_cache",
                      "place", "character_outfit", "game_clock", "flag", "visit",
+                     "fact", "fact_knowledge", "rel_state", "schedule", "promise", "turn_log",
                  })
         {
             var count = db.Scalar<long>(
@@ -563,6 +564,31 @@ public class DatabaseTests
         var cast = await characters.GetCastAsync(main.Id);
         Assert.Equal("fiery", cast![0].Temper["temper"]);
         Assert.Equal("open-a-bakery", cast[0].WantId);
+    }
+
+    [Fact]
+    public async Task Relationship_changes_commit_with_the_turn_or_not_at_all()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+        var story = new StoryStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var main = await characters.CreateAsync(save.Id, Appearance(), "Sam");
+        await places.AddAsync([Place(save.Id, "corner-cafe")]);
+        var start = await state.GetOrStartClockAsync(save.Id);
+
+        var met = Game.Core.Story.RelationshipState.Start with { Affection = 5, Stage = Game.Core.Story.RelationshipStage.Acquaintance };
+        await state.CommitTurnAsync(save.Id, Turn(start, "corner-cafe"), new Dictionary<Guid, Game.Core.Story.RelationshipState> { [main.Id] = met });
+        Assert.Equal(met, await story.GetRelationshipAsync(save.Id, main.Id));
+
+        // The same turn again is refused by the clock guard, and its relationship change is not written either.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => state.CommitTurnAsync(
+            save.Id, Turn(start, "corner-cafe"), new Dictionary<Guid, Game.Core.Story.RelationshipState> { [main.Id] = met with { Affection = 50 } }));
+        Assert.Equal(5, (await story.GetRelationshipAsync(save.Id, main.Id)).Affection);
     }
 
     // -------------------------------------------------------------------- cast

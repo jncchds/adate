@@ -42,6 +42,9 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.TemperFile = ResolveContentPath(o.TemperFile);
     o.WantsFile = ResolveContentPath(o.WantsFile);
     o.ContrastsFile = ResolveContentPath(o.ContrastsFile);
+    o.ValuesFile = ResolveContentPath(o.ValuesFile);
+    o.PredicatesFile = ResolveContentPath(o.PredicatesFile);
+    o.RelationshipFile = ResolveContentPath(o.RelationshipFile);
 
     // Fail at startup rather than at the first render: a game that has declared an
     // impossible age floor should not serve a single page.
@@ -76,6 +79,14 @@ builder.Services.AddSingleton(sp =>
 {
     var o = sp.GetRequiredService<IOptions<StudioOptions>>().Value;
     return Game.Core.Cast.CastContent.Load(o.TemperFile, o.WantsFile, o.ContrastsFile);
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<IOptions<StudioOptions>>().Value;
+    var story = Game.Core.Story.StoryContent.Load(o.ValuesFile, o.PredicatesFile, o.RelationshipFile);
+    story.ValidateAgainst(sp.GetRequiredService<Game.Core.Cast.CastContent>());
+    return story;
 });
 
 // One compiler per prompt dialect; the pack's dialect picks which one runs.

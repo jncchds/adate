@@ -25,6 +25,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>Priority of the opening's beats: above ordinary encounters, below events.</summary>
     public const int OpeningPriority = 90;
 
+    /// <summary>The first date with the main LI, whichever opening led to it.</summary>
+    public const string FirstDateId = "beat.first-date";
+
     /// <summary>The first day a first date can happen (plan §1: week 2 opens the relationship).</summary>
     public const int FirstDateDay = 5;
 
@@ -102,8 +105,8 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     {
         EncounterChoice[] contact =
         [
-            new("swap-numbers", "Ask for their number", ["main_li.contact"]),
-            new("let-it-go", "Let the moment pass", ["main_li.contact_declined"]),
+            new("swap-numbers", "Ask for their number", ["main_li.contact"], ["adventure"]),
+            new("let-it-go", "Let the moment pass", ["main_li.contact_declined"], ["independence"]),
         ];
 
         foreach (var opening in setting.Openings)
@@ -150,7 +153,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         if (setting.Openings.Count > 0)
         {
             yield return new EncounterDefinition(
-                "beat.first-date",
+                FirstDateId,
                 new EncounterPlace(),
                 Days: [FirstDateDay, setting.Days],
                 Requires: ["main_li.contact", "!main_li.first_date", $"{EncounterEvaluator.InviteKey}=main_li"],
@@ -240,6 +243,11 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 if (string.IsNullOrWhiteSpace(choice.Id) || !choiceIds.Add(choice.Id) || string.IsNullOrWhiteSpace(choice.Text))
                 {
                     Fail($"has a choice with a blank or duplicate id, or no text.");
+                }
+
+                if ((choice.Tags ?? []).Any(string.IsNullOrWhiteSpace))
+                {
+                    Fail($"choice '{choice.Id}' has a blank tag.");
                 }
 
                 foreach (var set in choice.Sets ?? [])

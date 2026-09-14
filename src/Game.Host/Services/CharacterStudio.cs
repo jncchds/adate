@@ -458,6 +458,12 @@ public sealed class StudioOptions
 
     public string ContrastsFile { get; set; } = Path.Combine("content", "contrasts.json");
 
+    public string ValuesFile { get; set; } = Path.Combine("content", "values.json");
+
+    public string PredicatesFile { get; set; } = Path.Combine("content", "predicates.json");
+
+    public string RelationshipFile { get; set; } = Path.Combine("content", "relationship.json");
+
     public string StylePackId { get; set; } = "illustrious-anime";
 
     public string StylePackDirectory { get; set; } = "stylepacks";

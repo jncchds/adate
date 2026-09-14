@@ -1,0 +1,17 @@
+[
+  { "id": "name", "multi": false, "mutable": false },
+  { "id": "age", "multi": false, "mutable": false },
+  { "id": "hair-color", "multi": false, "mutable": false },
+  { "id": "hair-style", "multi": false, "mutable": false },
+  { "id": "eye-color", "multi": false, "mutable": false },
+  { "id": "skin-tone", "multi": false, "mutable": false },
+  { "id": "met-at", "multi": false, "mutable": false },
+  { "id": "sibling-of", "multi": true, "mutable": false },
+  { "id": "has-secret", "multi": true, "mutable": false },
+  { "id": "works-as", "multi": false, "mutable": true },
+  { "id": "lives-at", "multi": false, "mutable": true },
+  { "id": "wants", "multi": false, "mutable": true },
+  { "id": "likes", "multi": true, "mutable": true },
+  { "id": "dislikes", "multi": true, "mutable": true },
+  { "id": "is-seeing", "multi": true, "mutable": true }
+]

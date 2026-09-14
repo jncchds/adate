@@ -320,7 +320,8 @@ creation only outfit and expression change.
 | Migration | Tables |
 |---|---|
 | 003 | `place`, `character_outfit`, `game_clock`, `flag`, `visit`; new `save` and `character` columns and the variant trigger |
-| 004 | `fact`, `fact_knowledge`, `rel_state`, `want`, `arc_beat`, `schedule`, `promise`, `memory`, `turn_log`, `player_profile` |
+| 004 | `fact`, `fact_knowledge`, `rel_state`, `schedule`, `promise`, `turn_log`; `character.story_json` for desires, dealbreakers, need and likes |
+| later | `arc_beat` (step 7), `player_profile` (step 8), `memory` (step 9) |
 
 ## 11. Build order
 
@@ -348,6 +349,11 @@ Each step ends in something that runs.
    * wants and scoring;
    * schedules and promises;
    * validation.
+
+   *Done: profiles, the relationship engine, the fact ledger, schedules, promises and the scene
+   validator, with content in `values.json`, `predicates.json` and `relationship.json` and
+   migration 004. In play, the contact choice and the first date move the main LI's relationship,
+   and the map shows it (`decisions.md`).*
 7. **Variant routes and arcs** (§5, §7).
 8. **Endings** (§9).
 9. **LLM** (§7-8):

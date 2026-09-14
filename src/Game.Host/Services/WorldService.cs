@@ -1,7 +1,9 @@
+using Game.Core.Cast;
 using Game.Core.Encounters;
 using Game.Core.Places;
 using Game.Core.Saves;
 using Game.Core.Settings;
+using Game.Core.Story;
 using Game.Core.World;
 using Game.Data.Repositories;
 using Microsoft.Extensions.Options;
@@ -27,7 +29,11 @@ public sealed record PlayState(
     SettingOpening? Opening,
     IReadOnlyList<string> Hints,
     PendingChoice? Pending,
-    bool CanInvite);
+    bool CanInvite,
+    IReadOnlyList<RelationshipView>? Relationships = null);
+
+/// <summary>Where the player stands with someone they have met.</summary>
+public sealed record RelationshipView(string Name, RelationshipState State);
 
 /// <summary>A save's setting, places, clock, openings, choices and turns.</summary>
 public sealed class WorldService(
@@ -35,10 +41,14 @@ public sealed class WorldService(
     PlaceRepository places,
     CharacterRepository characters,
     GameStateRepository state,
+    StoryStateRepository story,
     ISettingCatalog settings,
     IEncounterCatalog encounters,
+    StoryContent storyContent,
     IOptions<StudioOptions> options)
 {
+    private readonly RelationshipEngine _engine = new(storyContent);
+
     /// <summary>
     /// The places the player can choose between, after making sure the save has its setting's
     /// authored places. A save created before settings existed is given the default setting, once.
@@ -94,7 +104,8 @@ public sealed class WorldService(
             opening,
             Hints(setting, opening, flags, clock, names.MainLi),
             pending,
-            !over && pending is null && CanInvite(setting, known, flags, clock));
+            !over && pending is null && CanInvite(setting, known, flags, clock),
+            await RelationshipsAsync(saveId, names, flags, ct).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -165,7 +176,28 @@ public sealed class WorldService(
             throw new InvalidOperationException($"Nothing here would bring {play.MainLiName} along.");
         }
 
-        await state.CommitTurnAsync(saveId, outcome, ct).ConfigureAwait(false);
+        // The main LI's relationship moves with the turn and commits with it: a date at a place
+        // they like or dislike, and any stage the turn's flags now allow.
+        var relationships = new Dictionary<Guid, RelationshipState>();
+        if (outcome.With.Contains("main_li") && await MainStoryAsync(saveId, play.Setting, ct).ConfigureAwait(false) is { } main)
+        {
+            var current = await story.GetRelationshipAsync(saveId, main.Id, ct).ConfigureAwait(false);
+            if (outcome.EncounterId == JsonEncounterCatalog.FirstDateId)
+            {
+                current = _engine.DateAt(current, main.Profile, place.TypeId, play.Clock.Day);
+            }
+
+            var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
+            after.Remove(EncounterEvaluator.InviteKey);
+            foreach (var (key, value) in outcome.FlagsToSet)
+            {
+                after[key] = value;
+            }
+
+            relationships[main.Id] = _engine.Advance(current, StageFacts.FromFlags(after, "main_li"), main.Member.Temper);
+        }
+
+        await state.CommitTurnAsync(saveId, outcome, relationships, ct).ConfigureAwait(false);
 
         var names = await NamesAsync(saveId, ct).ConfigureAwait(false);
         return outcome with
@@ -186,8 +218,67 @@ public sealed class WorldService(
         var choice = pending.Choices.FirstOrDefault(c => c.Id == choiceId)
             ?? throw new InvalidOperationException($"'{choiceId}' is not an answer to the open choice.");
 
-        await state.ResolveChoiceAsync(
-            saveId, pending.EncounterId, choice.Id, TurnPlanner.Assignments(choice.Sets ?? []), ct).ConfigureAwait(false);
+        var sets = TurnPlanner.Assignments(choice.Sets ?? []);
+
+        // Every choice so far is in a scene with the main LI, so its tags are scored for them.
+        // Variant routes (build step 7) score whoever is present.
+        var relationships = new Dictionary<Guid, RelationshipState>();
+        if (await MainStoryAsync(saveId, play.Setting, ct).ConfigureAwait(false) is { } main)
+        {
+            var current = await story.GetRelationshipAsync(saveId, main.Id, ct).ConfigureAwait(false);
+            var delta = _engine.Score(main.Profile, main.Member.Temper, main.Member.WantId, choice.Tags ?? []);
+            current = _engine.Apply(current, delta, play.Clock.Day);
+
+            var after = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
+            foreach (var (key, value) in sets)
+            {
+                after[key] = value;
+            }
+
+            relationships[main.Id] = _engine.Advance(current, StageFacts.FromFlags(after, "main_li"), main.Member.Temper);
+        }
+
+        await state.ResolveChoiceAsync(saveId, pending.EncounterId, choice.Id, sets, relationships, ct).ConfigureAwait(false);
+    }
+
+    private sealed record MainStory(Guid Id, CastMember Member, StoryProfile Profile);
+
+    /// <summary>
+    /// The main LI with their cast record and story profile, the profile built and stored the first
+    /// time it is needed. Null for a save without a stored cast, which has nothing to score against.
+    /// </summary>
+    private async Task<MainStory?> MainStoryAsync(SaveId saveId, SettingDefinition setting, CancellationToken ct)
+    {
+        var main = await characters.GetMainAsync(saveId, ct).ConfigureAwait(false);
+        var cast = main is null ? null : await characters.GetCastAsync(main.Id, ct).ConfigureAwait(false);
+        if (main is null || cast is null)
+        {
+            return null;
+        }
+
+        var profile = await story.GetProfileAsync(main.Id, ct).ConfigureAwait(false);
+        if (profile is null)
+        {
+            var placeTypes = setting.Places.Select(p => p.Type).Distinct(StringComparer.Ordinal).ToList();
+            var generated = StoryProfileGenerator.For(cast, storyContent, placeTypes, main.AnchorSeed ?? 0);
+            profile = await story.SetProfileAsync(main.Id, generated[0], ct).ConfigureAwait(false);
+        }
+
+        return new MainStory(main.Id, cast[0], profile);
+    }
+
+    private async Task<IReadOnlyList<RelationshipView>> RelationshipsAsync(
+        SaveId saveId,
+        Names names,
+        IReadOnlyDictionary<string, string> flags,
+        CancellationToken ct)
+    {
+        if (names.MainLiId is not { } mainId || !EncounterEvaluator.Holds(flags, "main_li.met"))
+        {
+            return [];
+        }
+
+        return [new RelationshipView(names.MainLi, await story.GetRelationshipAsync(saveId, mainId, ct).ConfigureAwait(false))];
     }
 
     private sealed record Names(Guid? MainLiId, string MainLi, string Player);

@@ -109,6 +109,14 @@ else
         <p class="today">@hint</p>
     }
 
+    @foreach (var relationship in _state.Relationships ?? [])
+    {
+        <p class="relationship">
+            @relationship.Name: @relationship.State.Stage.ToString().ToLowerInvariant()
+            <small>affection @relationship.State.Affection · trust @relationship.State.Trust · attraction @relationship.State.Attraction</small>
+        </p>
+    }
+
     @if (_state.CanInvite)
     {
         <label class="invite">

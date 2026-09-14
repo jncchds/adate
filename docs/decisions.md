@@ -796,3 +796,73 @@ background with no one in it.
 * Relationship state and choices (step 6).
 * Endings: the play page stops at the end of the calendar (step 8).
 * Characters are named in encounters but not yet drawn in them.
+
+## The four meeting beats are generated from each opening
+
+Phase-2 plan build step 5.
+
+**The beats are built, not authored nine times.** Every opening has the same shape (plan §4), so
+`JsonEncounterCatalog` generates its encounters from the opening's own fields:
+
+* **meet** at the meeting place on days 1-2;
+* **recognise** at the home place, in the opening's slot, on days 2-4;
+* **recognise late** at the opening's new `secondPlace` on days 5-7, if the first was missed;
+* **first date** from day 5, once the player has the main LI's number and invites them along.
+
+A new opening is data with no new encounters, and one test plays all four beats through for every
+opening in every setting.
+
+**A choice is state, not a page.** An encounter's choice leaves `pending.choice` holding the
+encounter id. While it is open no turn can be taken, and it survives a reload. Answering it closes
+the flag, records the answer and sets the answer's flags in one transaction, refused unless that
+choice is the one open.
+
+**An invite is a transient flag.** It shapes the turn's pick and is never stored, and the map only
+offers it where some encounter would honour it.
+
+**The cast is built on approval, not on first view.** A stored temper used to mean a stored cast.
+Now the player's temper is stored at creation, so the cast lookup keys on the want, which only
+storing the cast writes.
+
+## Story state: numbers and facts belong to C#
+
+Phase-2 plan build step 6, with no LLM.
+
+**Profiles make the cast disagree.** Each member gets their own top desire, and averts the next
+member's top desire, so a tag that raises one member always costs another. Weights, dealbreakers,
+a hidden need and liked and disliked place types come from `content/values.json` and a seed.
+
+**The rules are content.** `content/relationship.json` holds:
+
+* the per-scene and per-day clamps;
+* tag and want values;
+* dealbreaker and promise costs;
+* stage thresholds;
+* per-temper-end scales.
+
+`RelationshipEngine` applies them: fiery swings harder, guarded needs more to move a stage. Stages
+advance one requirement at a time and never move back, also enforced by a trigger.
+
+**Facts are append-only.** `FactLedger` decides whether a proposed fact is accepted, a duplicate,
+a supersede or a rejection:
+
+* an immutable single value cannot be contradicted;
+* a mutable one needs an explaining event;
+* claims can be false and never conflict;
+* a claim shown on screen is confirmed.
+
+A trigger keeps stored facts from being edited or superseded twice.
+
+**The validator explains itself.** `SceneValidator` returns reasons written for a retry prompt:
+
+* vocabulary;
+* contradictions;
+* who learns what in a scene they are not in;
+* schedules, overridden by the encounter or an open meeting;
+* knowledge a character does not have;
+* stages a scene gets ahead of.
+
+**In play so far:** choices carry tags, the contact choice is scored for the main LI, a first date
+checks the place type, and relationship changes commit inside the turn or choice transaction.
+Friend needs the want revealed, which arcs set in step 7, so a playthrough stops at acquaintance
+for now.

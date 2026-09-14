@@ -302,6 +302,11 @@ button.active {
     margin: 1rem 0;
 }
 
+.relationship small {
+    color: var(--muted);
+    margin-left: 0.5rem;
+}
+
 .invite {
     display: flex;
     align-items: center;

@@ -45,7 +45,11 @@ public sealed record EncounterDefinition(
     IReadOnlyList<EncounterChoice>? Choices = null);
 
 /// <summary>One answer to an encounter's choice. Its flags are set when the player picks it.</summary>
-public sealed record EncounterChoice(string Id, string Text, IReadOnlyList<string>? Sets = null);
+/// <param name="Tags">
+/// What the answer says about the player, from the story vocabulary (plan §6): desire ids,
+/// dealbreaker tags, or <c>helps:</c>/<c>hinders:</c> a want. The relationship engine scores them.
+/// </param>
+public sealed record EncounterChoice(string Id, string Text, IReadOnlyList<string>? Sets = null, IReadOnlyList<string>? Tags = null);
 
 public interface IEncounterCatalog
 {

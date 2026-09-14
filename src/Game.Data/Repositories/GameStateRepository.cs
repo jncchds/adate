@@ -2,6 +2,7 @@ using System.Text.Json;
 using Game.Core.Encounters;
 using Game.Core.Saves;
 using Game.Core.Scenes;
+using Game.Core.Story;
 using Game.Core.World;
 using Microsoft.Data.Sqlite;
 
@@ -150,6 +151,7 @@ public sealed class GameStateRepository(Database database)
         string encounterId,
         string choiceId,
         IReadOnlyDictionary<string, string> flags,
+        IReadOnlyDictionary<Guid, RelationshipState>? relationships = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(encounterId);
@@ -182,7 +184,21 @@ public sealed class GameStateRepository(Database database)
         };
 
         await UpsertFlagsAsync(connection, transaction, saveId, all, ct).ConfigureAwait(false);
+        await WriteRelationshipsAsync(connection, transaction, saveId, relationships, ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task WriteRelationshipsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        SaveId saveId,
+        IReadOnlyDictionary<Guid, RelationshipState>? relationships,
+        CancellationToken ct)
+    {
+        foreach (var (characterId, relationship) in relationships ?? new Dictionary<Guid, RelationshipState>())
+        {
+            await StoryStateRepository.UpsertRelationshipAsync(connection, transaction, saveId, characterId, relationship, ct).ConfigureAwait(false);
+        }
     }
 
     private static async Task UpsertFlagsAsync(
@@ -211,9 +227,13 @@ public sealed class GameStateRepository(Database database)
     /// Applies a turn in one transaction: advances the clock, records the visit, sets flags and
     /// reveals places. The clock only advances from the slot the turn was planned at, so a turn
     /// planned twice from the same state (a double click, two tabs) is applied once and the second
-    /// is refused, changing nothing.
+    /// is refused, changing nothing. Relationship changes the turn caused commit with it.
     /// </summary>
-    public async Task CommitTurnAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
+    public async Task CommitTurnAsync(
+        SaveId saveId,
+        TurnOutcome outcome,
+        IReadOnlyDictionary<Guid, RelationshipState>? relationships = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(outcome);
 
@@ -257,6 +277,7 @@ public sealed class GameStateRepository(Database database)
         }
 
         await UpsertFlagsAsync(connection, transaction, saveId, outcome.FlagsToSet, ct).ConfigureAwait(false);
+        await WriteRelationshipsAsync(connection, transaction, saveId, relationships, ct).ConfigureAwait(false);
 
         foreach (var placeId in outcome.Reveals)
         {
