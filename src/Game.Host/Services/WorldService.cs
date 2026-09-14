@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Game.Core;
 using Game.Core.Cast;
 using Game.Core.Encounters;
 using Game.Core.Places;
@@ -7,6 +8,7 @@ using Game.Core.Settings;
 using Game.Core.Story;
 using Game.Core.World;
 using Game.Data.Repositories;
+using Game.Llm;
 using Microsoft.Extensions.Options;
 
 namespace Game.Host.Services;
@@ -74,6 +76,9 @@ public sealed class WorldService(
     CastContent castContent,
     RouteContent routes,
     EndingContent endingContent,
+    SceneWriter sceneWriter,
+    CharacterStudio studio,
+    IOptions<LlmOptions> llmOptions,
     IOptions<StudioOptions> options)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -392,6 +397,89 @@ public sealed class WorldService(
             saveId,
             new StoredEnding(choice.Kind, partner?.Id, Math.Min(play.Clock.Day, play.Setting.Days), JsonSerializer.Serialize(recap, Json)),
             ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes the scene for a turn that has been taken (plan §8), when an LLM is configured. The packet
+    /// holds only what the player and the people present know; accepted facts are stored and known by
+    /// everyone present; the packet and the answer are logged so the turn can be replayed. Returns the
+    /// scene text, or the encounter's authored text when there is no model or no answer passed.
+    /// </summary>
+    public async Task<string> WriteSceneAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+
+        if (!llmOptions.Value.Enabled || outcome.EncounterId is null)
+        {
+            return outcome.Text;
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
+        var place = known.FirstOrDefault(p => p.Id == outcome.PlaceId);
+
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var stages = new Dictionary<string, RelationshipStage>(StringComparer.Ordinal);
+        var present = new List<PacketPerson>();
+        foreach (var li in cast.Where(li => outcome.With.Contains(li.Ref)))
+        {
+            var relationship = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            stages[li.Id.ToString()] = relationship.Stage;
+            present.Add(new PacketPerson(
+                li.Id.ToString(),
+                li.Name,
+                [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
+                relationship.Stage,
+                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null));
+        }
+
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
+        var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+
+        var packet = new ScenePacket(
+            setting.DisplayName,
+            setting.Tone,
+            outcome.VisitedAt,
+            outcome.PlaceId,
+            place?.Name ?? outcome.PlaceId,
+            names.Player,
+            present,
+            [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
+            [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
+            outcome.Text,
+            ceiling,
+            [.. pack.Expressions.Keys]);
+
+        var world = new SceneWorld(
+            facts,
+            await story.GetSchedulesAsync(saveId, ct).ConfigureAwait(false),
+            await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false),
+            stages,
+            Summoned: presentIds);
+
+        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, ct).ConfigureAwait(false);
+
+        foreach (var fact in written.Facts)
+        {
+            await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
+        }
+
+        await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
+        {
+            outcome.EncounterId,
+            Packet = ScenePacketBuilder.Render(packet),
+            written.Text,
+            written.Expression,
+            written.Attempts,
+            written.Rejections,
+        }, ct).ConfigureAwait(false);
+
+        return written.Text;
     }
 
     /// <param name="Key">The flag prefix and invite value: <c>main_li</c> or a route id.</param>

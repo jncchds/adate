@@ -957,3 +957,43 @@ desires of the partner or of the person they were closest to.
 **Not yet:** a character asking for commitment mid-story, and stood-up dates as promises. Nothing
 in play creates promises yet, so that rule only runs in tests until the LLM or authored scenes make
 them.
+
+## The scene writer: C# builds the packet, the model fills a schema, C# decides
+
+Phase-2 plan build step 9, first part.
+
+**A small client, not a framework.** The game needs one call: a chat completion that answers in
+JSON. `OpenAiCompatibleClient` posts `chat/completions` with a `json_schema` response format, which
+LM Studio, llama.cpp and vLLM all support, and holds the GPU lease for the call. The
+`Microsoft.Extensions.AI` reference stays for later, but nothing depends on it.
+
+**The packet is built from stored state only**, in plan §8's order:
+
+1. where and when;
+2. who is here, with their temper writing and relationship stage in words;
+3. what the player knows;
+4. what the people present know;
+5. what must happen, which is the encounter's authored text;
+6. rules, including the content ceiling.
+
+Facts are trimmed oldest first to stay within about 3,000 tokens. Memories and outfits are not in
+it yet.
+
+**The schema narrows before validation does.** Expression, predicate and fact level are enums in
+the schema, so a server that constrains decoding cannot produce them wrong. The writer still checks
+every answer:
+
+* text length;
+* the expression slot;
+* no `Core` facts from a scene;
+* everything `SceneValidator` checks.
+
+Rejections go back to the model as reasons, up to two retries, and then the authored text is used.
+An unreachable endpoint also falls back, but its error is not sent to the model as a reason.
+
+**Nothing waits on the model.** The turn commits first. The play page shows the placeholder and
+background, then swaps in the written scene. Accepted facts are stored as known to everyone
+present. The packet, answer, attempts and rejections are appended to `turn_log`, so a playthrough
+can be replayed.
+
+**Off by default.** `Llm:Enabled` is false, so a machine without a model plays exactly as before.

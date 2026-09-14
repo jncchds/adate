@@ -22,6 +22,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddImaging(builder.Configuration);
 builder.Services.AddData(builder.Configuration);
+Game.Llm.LlmServiceCollectionExtensions.AddLlm(builder.Services, builder.Configuration);
 
 builder.Services.Configure<StudioOptions>(builder.Configuration.GetSection(StudioOptions.SectionName));
 

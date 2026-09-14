@@ -11,5 +11,6 @@
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.csproj" />
     <Project Path="tests/Game.Data.Tests/Game.Data.Tests.csproj" />
     <Project Path="tests/Game.Imaging.Tests/Game.Imaging.Tests.csproj" />
+    <Project Path="tests/Game.Llm.Tests/Game.Llm.Tests.csproj" />
   </Folder>
 </Solution>

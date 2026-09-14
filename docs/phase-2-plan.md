@@ -360,7 +360,9 @@ Each step ends in something that runs.
    (`decisions.md`).*
 8. **Endings** (§9). *Done: nightly leaving rules as content, the ending check with alone always on
    offer, every combination tested, and the recap stored once in `player_profile` (migration 005).*
-9. **LLM** (§7-8):
+9. **LLM** (§7-8). *Scene writing built and tested against a fake model: packet, schema,
+   validation, retries, fallback, facts and the turn log (`decisions.md`). Still to do: a live model,
+   story bible flavour, the judge, place proposals and the measures.*
    * **Features:** story bible flavour, scene writing, fact extraction, the judge and place
      proposals.
    * **Measures:** fallback rate under 5% over a scripted 28-day run; judge accuracy on planted

@@ -249,6 +249,14 @@ else
 
             // Drawn at the slot the visit happened in, not the one the clock moved on to.
             _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot);
+            StateHasChanged();
+
+            // Written once the placeholder and background are on screen, so a slow or absent model
+            // never holds up the turn itself.
+            if (_outcome.EncounterId is not null)
+            {
+                _outcome = _outcome with { Text = await World.WriteSceneAsync(SaveId, _outcome) };
+            }
         }
         catch (Exception ex)
         {
