@@ -81,6 +81,14 @@ Each step ends in something that runs and is committed.
    max 92.4 s; rejections: other 22, player action 11, judge 4, json 4, place 3, unreachable 2;
    25 choices answered, reactions written first try. The step-3 commit did not build (a missing
    using), so its earlier measure had run the old binaries.*
-5. **Initiative and temper:** initiative events and temper-scaled leaving.
+5. **Initiative and temper:** initiative events and temper-scaled leaving. *Built: temper modifiers
+   gain patience and initiative. Neglect days and forgiven broken promises scale with patience
+   (fiery 0.7, ambitious 0.8, reserved 1.15, calm and easygoing 1.3), next to the existing suspicion
+   scale. On a turn with no encounter and nobody scheduled at the place, a met, open person may come
+   looking for the player (never at night): a 12% base plus 4% per unseen day, times their initiative
+   scale (outgoing 1.6, fiery 1.3, open 1.2, calm 0.85, guarded 0.75, reserved 0.6), halved for an
+   acquaintance, 1.5x when the player has never invited them and 0.6x once the player has invited
+   them three times or more; capped at 60%, a deterministic roll, and a three-day cooldown per
+   person. The visit is written as them taking the lead and ends in the usual replies.*
 6. **Endings:** the commitment ask, the written epilogue and the choice recap.
 7. **Fixes and tuning:** gender, places, promises, tuning measure, live play in the other settings.

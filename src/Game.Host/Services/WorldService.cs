@@ -305,9 +305,27 @@ public sealed class WorldService(
                 }
             }
 
-            outcome = here.OrderByDescending(h => h.Affection).Select(h => h.Person).FirstOrDefault() is { } company
-                ? outcome with { EncounterId = JsonEncounterCatalog.QuietCompanyId, With = [company.Ref], Text = $"{company.Name} is at {place.Name} too." }
-                : outcome with { EncounterId = JsonEncounterCatalog.QuietAloneId };
+            if (here.OrderByDescending(h => h.Affection).Select(h => h.Person).FirstOrDefault() is { } company)
+            {
+                outcome = outcome with { EncounterId = JsonEncounterCatalog.QuietCompanyId, With = [company.Ref], Text = $"{company.Name} is at {place.Name} too." };
+            }
+            else if (await SeekerAsync(saveId, cast, flags, play.Clock, ct).ConfigureAwait(false) is { } seeker)
+            {
+                outcome = outcome with
+                {
+                    EncounterId = JsonEncounterCatalog.InitiativeId,
+                    With = [seeker.Ref],
+                    Text = $"{seeker.Name} comes to {place.Name} looking for you.",
+                    FlagsToSet = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal)
+                    {
+                        [$"{seeker.Key}.initiative_day"] = play.Clock.Day.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    },
+                };
+            }
+            else
+            {
+                outcome = outcome with { EncounterId = JsonEncounterCatalog.QuietAloneId };
+            }
         }
 
         var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
@@ -321,6 +339,14 @@ public sealed class WorldService(
         // flags now allow. It all commits with the turn.
         var toSet = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal);
         var relationships = new Dictionary<Guid, RelationshipState>();
+
+        // How much the player leads with each person, which leaves them less room to take the lead.
+        if (invite is not null)
+        {
+            var invites = int.TryParse(flags.GetValueOrDefault($"{invite}.invites"), out var n) ? n + 1 : 1;
+            toSet[$"{invite}.invites"] = invites.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            after[$"{invite}.invites"] = toSet[$"{invite}.invites"];
+        }
         foreach (var li in cast.Where(li => outcome.With.Contains(li.Ref)))
         {
             var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
@@ -561,6 +587,8 @@ public sealed class WorldService(
             {
                 JsonEncounterCatalog.QuietCompanyId =>
                     $"{presented.Name} happens to be at {place?.Name ?? outcome.PlaceId}. Show a short, ordinary moment: what they are doing, how they react on noticing the player, maybe a line of dialogue. Nothing important happens.",
+                JsonEncounterCatalog.InitiativeId =>
+                    $"{presented.Name} has come to {place?.Name ?? outcome.PlaceId} looking for the player, of their own accord, after not seeing them for a while. They take the lead in a way that fits their temper and where things stand between them: say why they came, and ask or suggest something the player can answer. Do not decide the player's answer.",
                 JsonEncounterCatalog.QuietAloneId =>
                     $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}. Show the place at this time of day and in this weather, and one small thing going on around, without inventing anyone the player could get to know.",
                 _ => outcome.Text,
@@ -876,6 +904,44 @@ public sealed class WorldService(
 
     /// <summary>Where each love interest stands, for the leaving rules and the ending check.</summary>
     /// <param name="updated">Relationship states changed by the turn in progress, not yet stored.</param>
+    /// <summary>
+    /// Someone who comes looking for the player this turn (phase-3 plan: initiative), the likeliest one
+    /// whose roll comes up, or nobody. Nights stay the player's own.
+    /// </summary>
+    private async Task<LoveInterest?> SeekerAsync(
+        SaveId saveId,
+        IReadOnlyList<LoveInterest> cast,
+        IReadOnlyDictionary<string, string> flags,
+        ClockState clock,
+        CancellationToken ct)
+    {
+        if (clock.Slot is TimeOfDay.Night)
+        {
+            return null;
+        }
+
+        LoveInterest? seeker = null;
+        var best = 0.0;
+        foreach (var status in await StatusesAsync(saveId, cast, flags, new Dictionary<Guid, RelationshipState>(), ct).ConfigureAwait(false))
+        {
+            if (Initiative.CoolingDown(flags.GetValueOrDefault($"{status.Key}.initiative_day"), clock.Day))
+            {
+                continue;
+            }
+
+            var invites = int.TryParse(flags.GetValueOrDefault($"{status.Key}.invites"), out var n) ? n : 0;
+            var chance = Initiative.Chance(status, storyContent.TemperScale(status.Temper, m => m.Initiative), invites, clock.Day);
+
+            if (chance > best && Initiative.Rolls(saveId.ToString(), status.Key, clock, chance))
+            {
+                seeker = cast.First(li => li.Key == status.Key);
+                best = chance;
+            }
+        }
+
+        return seeker;
+    }
+
     private async Task<IReadOnlyList<RouteStatus>> StatusesAsync(
         SaveId saveId,
         IReadOnlyList<LoveInterest> cast,

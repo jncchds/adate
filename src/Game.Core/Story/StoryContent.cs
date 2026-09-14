@@ -18,7 +18,16 @@ public sealed record NeedDefinition(string Id, string Label);
 public sealed record PredicateDefinition(string Id, bool Multi, bool Mutable);
 
 /// <summary>How one temper end scales relationship changes and stage thresholds. 1 leaves it as is.</summary>
-public sealed record TemperModifier(string End, double Affection = 1, double Trust = 1, double Suspicion = 1, double Threshold = 1);
+/// <param name="Patience">How long they wait before giving up on neglect or broken promises.</param>
+/// <param name="Initiative">How readily they seek the player out instead of waiting to be asked.</param>
+public sealed record TemperModifier(
+    string End,
+    double Affection = 1,
+    double Trust = 1,
+    double Suspicion = 1,
+    double Threshold = 1,
+    double Patience = 1,
+    double Initiative = 1);
 
 public sealed record StageThresholds(int FriendAffection, int DatingAffection, int DatingAttraction, int CommittedTrust);
 
@@ -192,7 +201,7 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
 
         foreach (var modifier in Rules.Temper)
         {
-            if (new[] { modifier.Affection, modifier.Trust, modifier.Suspicion, modifier.Threshold }.Any(s => s <= 0))
+            if (new[] { modifier.Affection, modifier.Trust, modifier.Suspicion, modifier.Threshold, modifier.Patience, modifier.Initiative }.Any(s => s <= 0))
             {
                 throw new InvalidOperationException($"Temper modifier for '{modifier.End}' has a scale that is not positive.");
             }

@@ -74,6 +74,24 @@ public class EndingTests
     }
 
     [Fact]
+    public void Patience_follows_temper_for_neglect_and_broken_promises()
+    {
+        var rules = Rules();
+        var leaving = Endings().Leaving;
+        var fiery = new Dictionary<string, string> { ["temper"] = "fiery" };
+        var patient = new Dictionary<string, string> { ["temper"] = "calm", ["drive"] = "easygoing" };
+
+        Assert.Equal(leaving.NeglectDays, rules.NeglectDaysFor(Neutral));
+        Assert.True(rules.NeglectDaysFor(fiery) < leaving.NeglectDays);
+        Assert.True(rules.NeglectDaysFor(patient) > leaving.NeglectDays);
+        Assert.True(rules.BrokenPromisesFor(patient) >= leaving.BrokenPromises);
+
+        var gap = rules.NeglectDaysFor(fiery);
+        Assert.Equal(LeaveReason.Neglect, rules.Leaving(Status(lastSeen: 2, temper: fiery), 2 + gap));
+        Assert.Null(rules.Leaving(Status(lastSeen: 2, temper: patient), 2 + gap));
+    }
+
+    [Fact]
     public void A_fiery_temper_tolerates_less_suspicion()
     {
         var rules = Rules();

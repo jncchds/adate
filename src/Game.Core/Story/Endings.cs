@@ -145,14 +145,14 @@ public sealed class EndingRules(EndingContent content, StoryContent story)
             return LeaveReason.Suspicion;
         }
 
-        if (status.BrokenPromises >= rules.BrokenPromises)
+        if (status.BrokenPromises >= BrokenPromisesFor(status.Temper))
         {
             return LeaveReason.BrokenPromises;
         }
 
         if (status.State.Stage is RelationshipStage.Acquaintance
             && status.LastSeenDay is { } seen
-            && today - seen >= rules.NeglectDays)
+            && today - seen >= NeglectDaysFor(status.Temper))
         {
             return LeaveReason.Neglect;
         }
@@ -163,6 +163,14 @@ public sealed class EndingRules(EndingContent content, StoryContent story)
     /// <summary>A fiery temper tolerates less suspicion than a calm one.</summary>
     public int SuspicionToleranceFor(IReadOnlyDictionary<string, string> temper) =>
         (int)Math.Ceiling(content.Leaving.SuspicionTolerance / story.TemperScale(temper, m => m.Suspicion));
+
+    /// <summary>Days of neglect an acquaintance waits through: longer for a patient temper, never under one.</summary>
+    public int NeglectDaysFor(IReadOnlyDictionary<string, string> temper) =>
+        Math.Max(1, (int)Math.Round(content.Leaving.NeglectDays * story.TemperScale(temper, m => m.Patience), MidpointRounding.AwayFromZero));
+
+    /// <summary>Broken promises forgiven before leaving: more for a patient temper, never under one.</summary>
+    public int BrokenPromisesFor(IReadOnlyDictionary<string, string> temper) =>
+        Math.Max(1, (int)Math.Round(content.Leaving.BrokenPromises * story.TemperScale(temper, m => m.Patience), MidpointRounding.AwayFromZero));
 
     /// <summary>On the last day, or earlier once a single route is open and it has reached committed.</summary>
     public static bool IsDue(ClockState clock, int days, IReadOnlyList<RouteStatus> routes)

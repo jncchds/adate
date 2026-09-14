@@ -36,6 +36,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>A turn with no encounter and nobody the player knows at the place.</summary>
     public const string QuietAloneId = "quiet.alone";
 
+    /// <summary>A turn where someone came looking for the player, of their own accord.</summary>
+    public const string InitiativeId = "initiative.visit";
+
     /// <summary>The first date with the main LI, whichever opening led to it.</summary>
     public const string FirstDateId = "beat.first-date";
 
