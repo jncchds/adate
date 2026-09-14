@@ -74,8 +74,17 @@ public class SceneWriterTests
         new Dictionary<string, RelationshipStage> { [Rin] = RelationshipStage.Acquaintance },
         [Rin]);
 
-    private static string Answer(string text = "You sit down across from Rin.", string expression = "smile", string facts = "[]", string places = "[]") =>
-        $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}}, "places": {{places}} }""";
+    private static string Answer(string text = "You sit down across from Rin.", string expression = "smile", string facts = "[]", string places = "[]", string tags = "[]") =>
+        $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}}, "places": {{places}}, "summary": "Coffee with Rin.", "tags": {{tags}} }""";
+
+    [Fact]
+    public async Task A_scene_keeps_its_summary_and_only_known_tags()
+    {
+        var scene = await Writer(new FakeLlm(() => Answer(tags: """["first", "made-up"]"""))).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.Equal("Coffee with Rin.", scene.Summary);
+        Assert.Equal([MemoryTags.First], scene.Tags);
+    }
 
     [Fact]
     public async Task The_judge_sends_a_contradicting_scene_back_with_the_contradiction()

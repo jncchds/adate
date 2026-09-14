@@ -26,6 +26,15 @@ public sealed class LlmOptions
 
     public int MaxTextLength { get; set; } = 1800;
 
+    /// <summary>The embedding model id for memory retrieval; empty turns retrieval off and memories fall back to recency.</summary>
+    public string EmbeddingModel { get; set; } = "";
+
+    /// <summary>The embeddings API root, when it is not <see cref="BaseAddress"/>.</summary>
+    public string? EmbeddingBaseAddress { get; set; }
+
+    /// <summary>How many retrieved memories go into a packet beside the last shared scene and the week.</summary>
+    public int RetrievedMemories { get; set; } = 3;
+
     /// <summary>Whether a second, short call reads each scene's prose against the facts that cannot change.</summary>
     public bool UseJudge { get; set; } = true;
 }

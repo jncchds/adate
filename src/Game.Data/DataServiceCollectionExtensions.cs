@@ -20,6 +20,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<PlaceRepository>();
         services.AddSingleton<GameStateRepository>();
         services.AddSingleton<StoryStateRepository>();
+        services.AddSingleton<MemoryRepository>();
 
         return services;
     }

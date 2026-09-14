@@ -28,7 +28,8 @@ public sealed record ScenePacket(
     string RequiredOutcome,
     Ceiling Ceiling,
     IReadOnlyList<string> Expressions,
-    IReadOnlyList<string>? KnownPlaces = null);
+    IReadOnlyList<string>? KnownPlaces = null,
+    IReadOnlyList<string>? Memories = null);
 
 public static class ScenePacketBuilder
 {
@@ -143,6 +144,17 @@ public static class ScenePacketBuilder
             text.AppendLine();
         }
 
+        if (packet.Memories is { Count: > 0 } memories)
+        {
+            text.AppendLine("## What happened before");
+            foreach (var memory in memories)
+            {
+                text.AppendLine($"- {memory}");
+            }
+
+            text.AppendLine();
+        }
+
         text.AppendLine("## What must happen");
         text.AppendLine(packet.RequiredOutcome);
         text.AppendLine();
@@ -156,6 +168,8 @@ public static class ScenePacketBuilder
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");
         text.AppendLine("- places: only a place someone names that is not one the player knows, with a place type and up to three details of that type; otherwise an empty list.");
+        text.AppendLine("- summary: one sentence a friend would use to remind the player what happened in this scene.");
+        text.AppendLine("- tags: why it matters, if it does; first for a first time, conflict for a falling-out.");
 
         return text.ToString();
     }

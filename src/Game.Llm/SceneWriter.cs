@@ -16,11 +16,15 @@ public sealed record SceneResponse(
     string Text,
     string Expression,
     IReadOnlyList<SceneResponseFact>? Facts,
-    IReadOnlyList<SceneResponsePlace>? Places = null);
+    IReadOnlyList<SceneResponsePlace>? Places = null,
+    string? Summary = null,
+    IReadOnlyList<string>? Tags = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
 /// <param name="Rejections">Why each rejected attempt failed, in order; kept for the turn log.</param>
+/// <param name="Summary">One sentence to remember the scene by; null for the fallback.</param>
+/// <param name="Tags">Salience tags from <see cref="MemoryTags.All"/>.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -28,7 +32,9 @@ public sealed record WrittenScene(
     IReadOnlyList<PlaceProposal> Places,
     bool Fallback,
     int Attempts,
-    IReadOnlyList<string> Rejections);
+    IReadOnlyList<string> Rejections,
+    string? Summary = null,
+    IReadOnlyList<string>? Tags = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -118,7 +124,16 @@ public sealed class SceneWriter(
 
                 if (reasons.Count == 0)
                 {
-                    return new WrittenScene(response.Text.Trim(), response.Expression, facts, places, Fallback: false, attempts, rejections);
+                    return new WrittenScene(
+                        response.Text.Trim(),
+                        response.Expression,
+                        facts,
+                        places,
+                        Fallback: false,
+                        attempts,
+                        rejections,
+                        string.IsNullOrWhiteSpace(response.Summary) ? null : response.Summary.Trim(),
+                        [.. (response.Tags ?? []).Where(t => MemoryTags.All.Contains(t, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal)]);
                 }
 
                 lastReasons = reasons;
@@ -161,6 +176,8 @@ public sealed class SceneWriter(
                         ["additionalProperties"] = false,
                     },
                 },
+                ["summary"] = new JsonObject { ["type"] = "string" },
+                ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(MemoryTags.All) } },
                 ["places"] = new JsonObject
                 {
                     ["type"] = "array",
@@ -178,7 +195,7 @@ public sealed class SceneWriter(
                     },
                 },
             },
-            ["required"] = Strings(["text", "expression", "facts", "places"]),
+            ["required"] = Strings(["text", "expression", "facts", "places", "summary", "tags"]),
             ["additionalProperties"] = false,
         };
     }

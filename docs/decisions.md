@@ -1014,3 +1014,44 @@ occupations, deterministically from the save and person, and already has their w
 adds likes and one secret, which are stored as core facts known only to that person, so a scene
 can reveal them later. Appearance is written as immutable core facts that the player can see. If
 no answer passes, the story runs on the C# picks alone.
+
+## Memory: summaries, embeddings and compaction
+
+Phase-2 plan build step 9, third part.
+
+**Each written scene leaves a memory.** The scene schema asks for a one-sentence summary and
+salience tags from a fixed list (first, conflict, date, confession, promise, gift, secret). The
+summary is stored with the ids of everyone present, and with its embedding when an embedding model
+is configured (`Llm:EmbeddingModel`, the OpenAI-compatible `embeddings` call).
+
+**The packet's memory section** follows plan §8:
+
+* the last scene shared with anyone present;
+* up to three standing memories most similar to the encounter, by cosine similarity with a small
+  per-day recency discount;
+* last week's summary.
+
+Without embeddings, retrieval falls back to recency.
+
+**Compaction is folding, not deleting.** Scenes from earlier days become one day summary, and days
+from earlier weeks become one week summary. The members stay, pointing at the summary that replaced
+them. First and conflict memories are never folded, enforced by `MemoryRetrieval` and a trigger. If
+the model cannot summarise, the members' summaries are joined, so nothing that happened is lost.
+
+## VRAM on the shared 5090
+
+Measured while planning the live LLM run, with Z-Image Turbo, its text encoder and BiRefNet all on
+the GPU:
+
+| | Before | After `empty_cache` per render |
+|---|---|---|
+| Z-Image allocated | 19.7 GB | 19.7 GB |
+| Z-Image reserved (incl. PyTorch cache) | 21.7 GB | 19.8 GB |
+| Whole GPU used (incl. contexts and desktop) | 29.7 GB | 25.4 GB |
+| Free | 2.4 GB | 6.8 GB |
+
+A render takes 7.9 s at 1152x768 and peaks at 21.5 GB. Returning the cache after each render gives
+back about 4 GB, but the weights themselves leave under 7 GB for an LLM. LM Studio estimates
+gemma-4-26b-a4b-qat at 17 GB with a 100K context. The game needs about 8K, which would bring it
+down, but not to 7 GB. `Z_IMAGE_VRAM_LIMIT` (DiffSynth's `vram_limit`) can offload the text encoder
+at the cost of render time, and stays unset until the trade-off is chosen.

@@ -27,6 +27,15 @@ public static class LlmServiceCollectionExtensions
             http.Timeout = options.RequestTimeout;
         });
 
+        services.AddHttpClient<IEmbeddingClient, OpenAiCompatibleEmbeddingClient>(static (sp, http) =>
+        {
+            var options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+            http.BaseAddress = OpenAiCompatibleClient.EnsureTrailingSlash(options.EmbeddingBaseAddress ?? options.BaseAddress);
+            http.Timeout = options.RequestTimeout;
+        });
+
+        services.AddTransient<MemoryCompactor>();
+
         services.AddSingleton(static sp => new SceneValidator(sp.GetRequiredService<StoryContent>(), sp.GetRequiredService<CastContent>()));
         services.AddTransient<SceneJudge>();
         services.AddTransient<BibleWriter>();

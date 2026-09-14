@@ -78,6 +78,9 @@ public sealed class WorldService(
     EndingContent endingContent,
     SceneWriter sceneWriter,
     BibleWriter bibleWriter,
+    MemoryRepository memoryStore,
+    MemoryCompactor compactor,
+    IEmbeddingClient embeddings,
     CharacterStudio studio,
     IOptions<LlmOptions> llmOptions,
     IOptions<StudioOptions> options)
@@ -444,6 +447,27 @@ public sealed class WorldService(
         var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
 
+        // Memory (plan §8): the last scene shared with whoever is here, the memories most like this
+        // encounter, and last week in a sentence.
+        var day = outcome.VisitedAt.Day;
+        var remembered = await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false);
+        var lastShared = MemoryRetrieval.LastShared(remembered, presentIds);
+        var retrieved = MemoryRetrieval.Retrieve(
+            remembered, await EmbedAsync(outcome.Text, ct).ConfigureAwait(false), presentIds, day, llmOptions.Value.RetrievedMemories, lastShared?.Id);
+        var lastWeek = MemoryRetrieval.LastWeek(remembered, day);
+
+        List<string> memoryLines = [];
+        if (lastShared is not null)
+        {
+            memoryLines.Add($"Last time together, day {lastShared.Day}: {lastShared.Summary}");
+        }
+
+        memoryLines.AddRange(retrieved.Select(m => $"Day {m.Day}: {m.Summary}"));
+        if (lastWeek is not null)
+        {
+            memoryLines.Add($"The week up to day {lastWeek.Day}: {lastWeek.Summary}");
+        }
+
         var packet = new ScenePacket(
             setting.DisplayName,
             setting.Tone,
@@ -457,7 +481,8 @@ public sealed class WorldService(
             outcome.Text,
             ceiling,
             [.. pack.Expressions.Keys],
-            [.. known.Select(p => p.Name)]);
+            [.. known.Select(p => p.Name)],
+            memoryLines);
 
         var world = new SceneWorld(
             facts,
@@ -494,18 +519,60 @@ public sealed class WorldService(
             }
         }
 
+        if (!written.Fallback && written.Summary is { } summary)
+        {
+            await memoryStore.AddAsync(
+                saveId,
+                new MemoryEntry(0, MemoryScope.Scene, day, summary, [.. presentIds], written.Tags ?? [], await EmbedAsync(summary, ct).ConfigureAwait(false)),
+                ct).ConfigureAwait(false);
+
+            foreach (var group in MemoryRetrieval.CompactionGroups(await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false), day))
+            {
+                var folded = await compactor.SummariseAsync(group.Members, useModel: true, ct).ConfigureAwait(false);
+                var people = group.Members.SelectMany(m => m.People).Distinct(StringComparer.Ordinal).ToList();
+
+                await memoryStore.CompactAsync(
+                    saveId,
+                    new MemoryEntry(0, group.Into, group.Day, folded, people, [], await EmbedAsync(folded, ct).ConfigureAwait(false)),
+                    [.. group.Members.Select(m => m.Id)],
+                    ct).ConfigureAwait(false);
+            }
+        }
+
         await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
         {
             outcome.EncounterId,
             Packet = ScenePacketBuilder.Render(packet),
             written.Text,
             written.Expression,
+            written.Summary,
+            written.Tags,
+            Memories = memoryLines,
             Places = written.Places.Select(p => $"{p.Type}: {p.Name}"),
             written.Attempts,
             written.Rejections,
         }, ct).ConfigureAwait(false);
 
         return written.Text;
+    }
+
+    /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>
+    private async Task<float[]?> EmbedAsync(string text, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(llmOptions.Value.EmbeddingModel) || string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await embeddings.EmbedAsync(text, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+                                   || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            return null;
+        }
     }
 
     /// <summary>
