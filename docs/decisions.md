@@ -1129,3 +1129,33 @@ It also showed three writing problems, now checked or asked for:
 
 Jobs are picked per person, stepping past any job another cast member already has, after two
 people in one cast both came out as baristas.
+
+## The LLM measures
+
+Phase-2 plan build step 9. `dotnet run --project src/Game.Host -- measure <run|judge|retrieval>`
+runs these against the configured model, using the game's own services and no images. The results
+below are from Gemma 4 12B QAT with reasoning off, and nomic-embed-text v1.5, on the shared 5090.
+
+**Judge accuracy on planted contradictions.** 20 one- to two-sentence scenes about Rin were checked
+against five immutable facts: hair colour, eye colour, age, hair style and where they met. Ten each
+break one fact (blonde hair, green eyes, "turned forty", a long braid, met at the library). The other
+ten are consistent with every fact, including restatements such as "twenty-four has been a strange
+year".
+
+* The judge caught 10 of 10 planted contradictions and flagged 0 of 10 clean scenes: 100% recall
+  and 100% precision.
+* The 20 checks took 10.6 s, about half a second each.
+
+**Whether retrieval helps.** Twelve memories were stored on consecutive days, each with a query
+that should bring it back without repeating its words. For example, "A golden retriever bounds up
+to the table" should find "Rin admitted they are scared of dogs".
+
+* With embeddings, hit@3 was 9 of 12 (75%).
+* By recency alone, it was 3 of 12 (25%), because only the last three days can ever come back.
+
+The misses were the dog, the lift and the donation jar. Each needed an inference the embedding
+could not make: from a dog to a fear of dogs, from a broken lift to moving day, from coins to rent.
+So retrieval stays on.
+
+**Turn latency on the 12 GB profile** could not be measured here: the only card is 32 GB. It stays
+an open measure for a 12 GB machine.

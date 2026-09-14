@@ -121,6 +121,13 @@ var app = builder.Build();
 // Create or upgrade the schema before anything can query it.
 app.Services.GetRequiredService<Database>().Migrate();
 
+// `dotnet run --project src/Game.Host -- measure <run|judge|retrieval>` runs the LLM measures with
+// the game's own services instead of serving pages (phase-2 plan build step 9).
+if (args is ["measure", ..])
+{
+    return await MeasureRunner.RunAsync(app.Services, args[1..]);
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -153,3 +160,4 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+return 0;
