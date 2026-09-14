@@ -1,7 +1,7 @@
 using Game.Imaging;
 using Game.Imaging.Caching;
 
-namespace Game.Host.Services;
+namespace Game.Play;
 
 /// <summary>
 /// Authored OpenPose skeletons, one per pose slot, checked into <c>content/poses</c>.

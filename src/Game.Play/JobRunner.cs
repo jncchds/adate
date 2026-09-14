@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Game.Host.Services;
+namespace Game.Play;
 
 /// <summary>
 /// Runs long generations outside any one Blazor circuit and deduplicates them by key.

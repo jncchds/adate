@@ -11,7 +11,7 @@ using Game.Imaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Game.Host.Services;
+namespace Game.Play;
 
 /// <summary>
 /// The Spike 0 flow: attributes to candidate portraits, an approved anchor, six expression

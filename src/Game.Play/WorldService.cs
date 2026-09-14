@@ -12,7 +12,7 @@ using Game.Data.Repositories;
 using Game.Llm;
 using Microsoft.Extensions.Options;
 
-namespace Game.Host.Services;
+namespace Game.Play;
 
 /// <summary>An encounter's choice that is still open, with its text filled in.</summary>
 public sealed record PendingChoice(string EncounterId, string Text, IReadOnlyList<EncounterChoice> Choices);

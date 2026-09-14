@@ -6,6 +6,7 @@
     <Project Path="src/Game.Host/Game.Host.csproj" />
     <Project Path="src/Game.Imaging/Game.Imaging.csproj" />
     <Project Path="src/Game.Llm/Game.Llm.csproj" />
+    <Project Path="src/Game.Play/Game.Play.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.csproj" />

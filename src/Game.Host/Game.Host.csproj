@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Game.Imaging\Game.Imaging.csproj" />
     <ProjectReference Include="..\Game.Llm\Game.Llm.csproj" />
     <ProjectReference Include="..\Game.Data\Game.Data.csproj" />
+    <ProjectReference Include="..\Game.Play\Game.Play.csproj" />
   </ItemGroup>
 
   <!--

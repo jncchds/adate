@@ -8,6 +8,7 @@ using Game.Core.Settings;
 using Game.Core.Story;
 using Game.Data.Repositories;
 using Game.Llm;
+using Game.Play;
 using Microsoft.Extensions.Options;
 
 namespace Game.Host.Services;

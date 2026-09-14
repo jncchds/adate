@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The game itself, without a frontend: the world, the studio and the jobs that outlive a screen.
+    The Blazor host and the Avalonia apps both compose it with AddGame.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Core\Game.Core.csproj" />
+    <ProjectReference Include="..\Game.Data\Game.Data.csproj" />
+    <ProjectReference Include="..\Game.Imaging\Game.Imaging.csproj" />
+    <ProjectReference Include="..\Game.Llm\Game.Llm.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+</Project>
