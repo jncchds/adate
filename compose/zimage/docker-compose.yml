@@ -38,6 +38,9 @@ services:
       # Offload whatever does not fit under this many GB, to leave room for an LLM on the same
       # GPU. Slower renders; unset keeps every model on the GPU.
       # - Z_IMAGE_VRAM_LIMIT=12
+      # Store the diffusion transformer in float8 on the GPU and compute in bfloat16: roughly
+      # halves its ~12GB. bfloat16 (the default) keeps full precision.
+      # - Z_IMAGE_DIT_DTYPE=float8
     healthcheck:
       test:
         - CMD

@@ -1055,3 +1055,25 @@ back about 4 GB, but the weights themselves leave under 7 GB for an LLM. LM Stud
 gemma-4-26b-a4b-qat at 17 GB with a 100K context. The game needs about 8K, which would bring it
 down, but not to 7 GB. `Z_IMAGE_VRAM_LIMIT` (DiffSynth's `vram_limit`) can offload the text encoder
 at the cost of render time, and stays unset until the trade-off is chosen.
+
+**Where the 20 GB goes:**
+
+| Component | Size |
+|---|---|
+| Diffusion transformer, ~6B parameters in bf16 | ~12.3 GB |
+| Text encoder, Qwen3-4B in bf16 | ~7.5 GB |
+| BiRefNet | ~0.4 GB |
+| VAE | ~0.2 GB |
+
+The text encoder is a whole LLM that runs for a fraction of a second per render.
+
+**FP8 transformer: blocked by the Docker VM's RAM, not by the GPU.** `Z_IMAGE_DIT_DTYPE=float8`
+follows DiffSynth's low-VRAM examples: fp8 storage on the GPU with bf16 computation. On the box it
+never finished loading. Docker Desktop's WSL VM has 7.7 GB of RAM. The fp8 path reads the 12 GB of
+bf16 shards into RAM before converting them, so the process sat in disk wait on a full swap, with
+the GPU at 0% and 6.3 GB. The bf16 path loads straight to the GPU and never hits this.
+
+The same RAM ceiling rules out offloading the text encoder to the CPU. Both options need more
+memory for the VM (`.wslconfig` on the Windows host), or weights converted to fp8 ahead of time
+with a loader that streams them. The override was removed and the service went back to bf16. The
+option stays in the server, off by default.

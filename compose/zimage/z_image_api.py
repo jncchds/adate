@@ -81,10 +81,34 @@ matting_transform = transforms.Compose([
 ])
 
 
+# Optional FP8 for the diffusion transformer, following DiffSynth's low-VRAM examples: weights
+# stay on the GPU in float8 and each layer computes in bfloat16. Roughly halves the transformer's
+# ~12GB. The text encoder and VAE stay bfloat16.
+DIT_DTYPE = os.environ.get("Z_IMAGE_DIT_DTYPE", "bfloat16").lower()
+if DIT_DTYPE not in ("bfloat16", "float8"):
+    raise RuntimeError(f"Z_IMAGE_DIT_DTYPE must be bfloat16 or float8, not {DIT_DTYPE!r}")
+
+
+def dit_vram_config() -> dict:
+    if DIT_DTYPE != "float8":
+        return {}
+    fp8 = torch.float8_e4m3fn
+    return {
+        "offload_dtype": fp8,
+        "offload_device": DEVICE,
+        "onload_dtype": fp8,
+        "onload_device": DEVICE,
+        "preparing_dtype": fp8,
+        "preparing_device": DEVICE,
+        "computation_dtype": torch.bfloat16,
+        "computation_device": DEVICE,
+    }
+
+
 def build_model_configs() -> List[ModelConfig]:
     suffix = "" if PATTERN_STYLE == "prefix" else "*.safetensors"
     return [
-        ModelConfig(model_id=MODEL_ID, origin_file_pattern=f"transformer/{suffix}"),
+        ModelConfig(model_id=MODEL_ID, origin_file_pattern=f"transformer/{suffix}", **dit_vram_config()),
         ModelConfig(model_id=MODEL_ID, origin_file_pattern=f"text_encoder/{suffix}"),
         ModelConfig(model_id=MODEL_ID, origin_file_pattern=f"vae/{suffix}"),
     ]
@@ -162,6 +186,12 @@ async def startup_event():
     # time for room on a GPU shared with an LLM. Unset keeps everything on the GPU.
     vram_limit = os.environ.get("Z_IMAGE_VRAM_LIMIT")
     extra = {"vram_limit": float(vram_limit)} if vram_limit else {}
+
+    # DiffSynth only applies a per-model vram config when VRAM management is on, which a limit
+    # turns on. FP8 without an explicit limit uses the whole card, as its own examples do.
+    if DIT_DTYPE == "float8" and not extra and torch.cuda.is_available():
+        extra = {"vram_limit": torch.cuda.mem_get_info()[1] / (1024 ** 3) - 0.5}
+    print(f"dit dtype: {DIT_DTYPE}", flush=True)
     if extra:
         print(f"vram_limit={extra['vram_limit']}GB", flush=True)
 
@@ -217,6 +247,7 @@ async def health_check():
         "gpu_available": torch.cuda.is_available(),
         "model": MODEL_ID,
         "matting_model": f"{MATTING_MODEL_ID}@{MATTING_REVISION}",
+        "dit_dtype": DIT_DTYPE,
         # Allocated is what the models hold; reserved adds PyTorch's cache. The gap is what an
         # LLM on the same GPU is competing with.
         "vram_allocated_gb": round(torch.cuda.memory_allocated() / gib, 2) if torch.cuda.is_available() else None,
