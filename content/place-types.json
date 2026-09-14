@@ -45,6 +45,11 @@
       }
     },
     "outdoor": {
+      "outfitLayers": {
+        "rain": "a light hooded rain jacket",
+        "storm": "a hooded waterproof raincoat",
+        "fog": "a soft knitted scarf"
+      },
       "timeTags": {
         "Morning": ["morning", "soft light", "light mist"],
         "Midday": ["blue sky", "bright sunlight", "clouds"],
@@ -134,6 +139,7 @@
     },
     {
       "id": "bar",
+      "dress": "evening",
       "displayName": "Bar",
       "kind": "indoor",
       "tags": ["bar interior", "bar counter", "bottles on shelves", "bar stools", "dim lighting"],
@@ -158,6 +164,7 @@
     },
     {
       "id": "stairwell",
+      "dress": "home",
       "displayName": "Apartment stairwell",
       "kind": "indoor",
       "tags": ["apartment building", "stairwell", "stairs", "mailboxes", "landing"],
@@ -170,6 +177,7 @@
     },
     {
       "id": "rooftop",
+      "dress": "evening",
       "displayName": "Rooftop",
       "kind": "outdoor",
       "tags": ["rooftop", "city skyline", "railing", "string lights", "outdoors"],
@@ -194,6 +202,7 @@
     },
     {
       "id": "office",
+      "dress": "work",
       "displayName": "Office",
       "kind": "indoor",
       "tags": ["office", "desks", "computer monitors", "large windows", "modern interior"],
@@ -290,6 +299,7 @@
     },
     {
       "id": "mess-hall",
+      "dress": "camp",
       "displayName": "Mess hall",
       "kind": "indoor",
       "tags": ["mess hall", "long tables", "benches", "wooden walls", "rafters"],
@@ -302,6 +312,7 @@
     },
     {
       "id": "lake-dock",
+      "dress": "camp",
       "displayName": "Lake dock",
       "kind": "outdoor",
       "tags": ["lake", "dock", "canoes", "water", "pine trees", "outdoors"],
@@ -314,6 +325,7 @@
     },
     {
       "id": "campfire-circle",
+      "dress": "camp",
       "displayName": "Campfire circle",
       "kind": "outdoor",
       "tags": ["campfire", "fire pit", "log benches", "forest clearing", "outdoors"],
@@ -326,6 +338,7 @@
     },
     {
       "id": "forest-trail",
+      "dress": "camp",
       "displayName": "Forest trail",
       "kind": "outdoor",
       "tags": ["forest path", "trail", "pine trees", "ferns", "dappled light", "outdoors"],
@@ -338,6 +351,7 @@
     },
     {
       "id": "boathouse",
+      "dress": "camp",
       "displayName": "Boathouse",
       "kind": "indoor",
       "tags": ["boathouse", "canoes", "paddles", "wooden walls", "open doors"],
@@ -350,6 +364,7 @@
     },
     {
       "id": "staff-lounge",
+      "dress": "camp",
       "displayName": "Staff lounge",
       "kind": "indoor",
       "tags": ["lounge", "couches", "fireplace", "board games", "log cabin interior"],
@@ -362,6 +377,7 @@
     },
     {
       "id": "staff-cabin",
+      "dress": "home",
       "displayName": "Staff cabin",
       "kind": "indoor",
       "tags": ["cabin interior", "bunk beds", "wooden walls", "window", "rustic"],

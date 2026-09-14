@@ -264,16 +264,21 @@ public sealed class CharacterStudio(
     /// expression phrase: measured on Z-Image, that holds one person together across expressions
     /// without a pose skeleton (86-98% silhouette overlap).
     /// </remarks>
-    public Task<string> GenerateSceneSpriteAsync(SaveId saveId, Guid characterId, string aesthetic, string expression) =>
+    /// <param name="dress">A <see cref="DressCode"/>: what the aesthetic wears for the place or the occasion.</param>
+    /// <param name="layer">Something worn over the outfit for the weather, such as a rain jacket; null for none.</param>
+    public Task<string> GenerateSceneSpriteAsync(
+        SaveId saveId, Guid characterId, string aesthetic, string expression, string dress = DressCode.Casual, string? layer = null) =>
         jobs.RunAsync(
-            $"scene-sprite:{characterId}:{aesthetic}:{expression}",
-            ct => GenerateSceneSpriteCoreAsync(saveId, characterId, aesthetic, expression, ct));
+            $"scene-sprite:{characterId}:{aesthetic}:{expression}:{dress}:{layer}",
+            ct => GenerateSceneSpriteCoreAsync(saveId, characterId, aesthetic, expression, dress, layer, ct));
 
     private async Task<string> GenerateSceneSpriteCoreAsync(
         SaveId saveId,
         Guid characterId,
         string aesthetic,
         string expression,
+        string dress,
+        string? layer,
         CancellationToken ct)
     {
         var character = await characters.GetAsync(characterId, ct).ConfigureAwait(false)
@@ -283,7 +288,14 @@ public sealed class CharacterStudio(
         var compiler = compilers.For(pack.Dialect);
         var subject = pack.SubjectFor(character.Appearance.Subject);
 
-        var outfit = aesthetic.Length > 0 ? subject.AestheticOutfit(aesthetic) : subject.Outfit;
+        // Casual with no layer is the everyday outfit, the same prompt as before dress codes, so sprites
+        // already drawn stay valid.
+        IReadOnlyList<string> outfit = subject.OutfitFor(aesthetic, dress);
+        if (!string.IsNullOrWhiteSpace(layer))
+        {
+            outfit = [layer, .. outfit];
+        }
+
         var approved = Approve(character, pack, new SceneIntent(
             "studio",
             TimeOfDay.Midday,
@@ -310,7 +322,8 @@ public sealed class CharacterStudio(
 
         await cache.RecordSpriteAsync(
             image.Hash, saveId, character.Id,
-            aesthetic.Length > 0 ? aesthetic : "default", "standing-full", expression, approved.Ceiling, image.RelativePath, ct)
+            $"{(aesthetic.Length > 0 ? aesthetic : "default")}/{dress}{(string.IsNullOrWhiteSpace(layer) ? "" : "+" + layer)}",
+            "standing-full", expression, approved.Ceiling, image.RelativePath, ct)
             .ConfigureAwait(false);
 
         return image.RelativePath;

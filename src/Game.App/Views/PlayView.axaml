@@ -36,6 +36,28 @@
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" />
+
+            <!-- On the map: everyone met so far, standing left to right on the backdrop, one slot per person. -->
+            <ItemsControl ItemsSource="{Binding Lineup}" IsVisible="{Binding IsMap}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LineupItem">
+                        <Panel ClipToBounds="True">
+                            <ctl:SpriteFrame>
+                                <Image Source="{Binding Portrait}" />
+                            </ctl:SpriteFrame>
+                            <ctl:Spinner Classes="spinner small" IsVisible="{Binding IsWaiting}" />
+                            <Border Classes="lineup-name" IsVisible="{Binding IsMet}">
+                                <TextBlock Text="{Binding Name}" />
+                            </Border>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Panel>
 
         <!-- The person the scene is about, at the left in landscape and over the picture in portrait; and

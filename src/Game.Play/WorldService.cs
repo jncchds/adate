@@ -110,7 +110,9 @@ public sealed record PlayState(
     WeatherDefinition? Weather = null,
     PendingScene? PendingScene = null,
     CurrentScene? Scene = null,
-    string? LastPlaceId = null);
+    string? LastPlaceId = null,
+    IReadOnlyList<Invitee>? Met = null,
+    int CastSize = 0);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
@@ -120,6 +122,7 @@ public sealed class WorldService(
     GameStateRepository state,
     StoryStateRepository story,
     SceneLogRepository sceneLog,
+    Game.Core.Content.ILocationCatalog placeTypes,
     ISettingCatalog settings,
     IEncounterCatalog encounters,
     StoryContent storyContent,
@@ -233,6 +236,9 @@ public sealed class WorldService(
         var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
         people.TryAdd(JsonEncounterCatalog.MainLiRef, names.MainLi);
 
+        // Everyone met who is still around, in cast order: the map's lineup.
+        IReadOnlyList<Invitee> met = [.. cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li)).Select(li => new Invitee(li.Key, li.Name))];
+
         var open = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var scene = open is null
             ? null
@@ -267,7 +273,9 @@ public sealed class WorldService(
             WeatherOn(saveId, setting, clock.Day),
             pendingScene,
             scene,
-            lastPlaceId);
+            lastPlaceId,
+            met,
+            cast.Count);
     }
 
     /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
@@ -726,7 +734,17 @@ public sealed class WorldService(
 
         // Taken before drawing: the player may have moved on by the time the picture is ready.
         var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
-        var path = await SpriteAsync(saveId, view).ConfigureAwait(false);
+
+        string? path;
+        if (scene is not null && view is { CharacterId: { } id, Expression: { } expression })
+        {
+            var (dress, layer) = await WardrobeForAsync(saveId, scene, ct).ConfigureAwait(false);
+            path = await studio.GenerateSceneSpriteAsync(saveId, id, view.Aesthetic ?? "", expression, dress, layer).ConfigureAwait(false);
+        }
+        else
+        {
+            path = await SpriteAsync(saveId, view).ConfigureAwait(false);
+        }
 
         if (scene is not null)
         {
@@ -750,6 +768,27 @@ public sealed class WorldService(
 
     /// <summary>The player has moved on from the scene they were in (Continue).</summary>
     public Task CloseSceneAsync(SaveId saveId, CancellationToken ct = default) => sceneLog.CloseAsync(saveId, ct);
+
+    /// <summary>
+    /// What someone in a scene wears (user feedback: the same outfit everywhere looked wrong): the place's
+    /// dress code, dressed up for a first date whatever the place, with a weather layer outdoors.
+    /// </summary>
+    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, CancellationToken ct)
+    {
+        if (await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false) is not { } place)
+        {
+            return (DressCode.Casual, null);
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var type = placeTypes.Get(place.TypeId);
+        var weather = WeatherOn(saveId, setting, scene.Clock.Day).Id;
+
+        var firstDate = scene.EncounterId is { } encounterId
+            && (await CastAsync(saveId, setting, ct).ConfigureAwait(false)).Any(li => JsonEncounterCatalog.FirstDateIdFor(li.Key) == encounterId);
+
+        return (firstDate ? DressCode.Date : type.Dress, type.OutfitLayers?.GetValueOrDefault(weather));
+    }
 
     /// <summary>
     /// Writes the scene for a turn that has been taken (plan §8), when an LLM is configured. The packet

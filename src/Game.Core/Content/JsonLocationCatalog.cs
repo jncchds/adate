@@ -124,9 +124,16 @@ public sealed class JsonLocationCatalog : ILocationCatalog
             }
         }
 
+        var dress = entry.Dress ?? DressCode.Casual;
+        if (!DressCode.IsKnown(dress) || string.Equals(dress, DressCode.Date, StringComparison.OrdinalIgnoreCase))
+        {
+            Fail($"has dress code '{dress}'. A place's code is one of: {string.Join(", ", DressCode.All.Where(c => c != DressCode.Date))}.");
+        }
+
         return new LocationDefinition(
             entry.Id, entry.DisplayName, entry.Tags, timeTags, entry.Description, timeDescriptions, entry.Details ?? [],
-            defaults.WeatherTags, defaults.WeatherDescriptions, defaults.NeutralTimeTags, defaults.NeutralTimeDescriptions);
+            defaults.WeatherTags, defaults.WeatherDescriptions, defaults.NeutralTimeTags, defaults.NeutralTimeDescriptions,
+            dress.ToLowerInvariant(), defaults.OutfitLayers);
     }
 
     private sealed record CatalogDocument(
@@ -139,7 +146,8 @@ public sealed class JsonLocationCatalog : ILocationCatalog
         IReadOnlyDictionary<string, IReadOnlyList<string>>? WeatherTags = null,
         IReadOnlyDictionary<string, string>? WeatherDescriptions = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? NeutralTimeTags = null,
-        IReadOnlyDictionary<string, string>? NeutralTimeDescriptions = null);
+        IReadOnlyDictionary<string, string>? NeutralTimeDescriptions = null,
+        IReadOnlyDictionary<string, string>? OutfitLayers = null);
 
     private sealed record TypeEntry(
         string Id,
@@ -149,5 +157,6 @@ public sealed class JsonLocationCatalog : ILocationCatalog
         string Description,
         IReadOnlyList<PlaceDetail>? Details = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? TimeTags = null,
-        IReadOnlyDictionary<string, string>? TimeDescriptions = null);
+        IReadOnlyDictionary<string, string>? TimeDescriptions = null,
+        string? Dress = null);
 }

@@ -244,6 +244,11 @@ public sealed record StylePack
 /// leanings in <c>content/temper.json</c>. Optional: only packs that render a cast need them.
 /// </param>
 /// <param name="CastFeatures">Distinguishing features a contrast profile may add to a variant.</param>
+/// <param name="Wardrobe">
+/// Outfits per <see cref="DressCode"/>, then per aesthetic: what someone of that style wears at work, going
+/// out, at home, at camp or on a date. Casual is the aesthetic's own outfit and is not repeated here. Optional:
+/// a pack without it dresses everyone in their everyday outfit everywhere.
+/// </param>
 public sealed record SubjectProfile(
     IReadOnlyList<string> Positive,
     IReadOnlyList<string> Negative,
@@ -251,8 +256,42 @@ public sealed record SubjectProfile(
     IReadOnlyList<AgeBand> AgeBands,
     IReadOnlyDictionary<string, IReadOnlyList<FeatureOption>>? Features = null,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? Aesthetics = null,
-    IReadOnlyList<string>? CastFeatures = null)
+    IReadOnlyList<string>? CastFeatures = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? Wardrobe = null)
 {
+    /// <summary>
+    /// What <paramref name="aesthetic"/> wears for <paramref name="dress"/>: the wardrobe's outfit for that code
+    /// when the pack has one, otherwise the aesthetic's everyday outfit; the default outfit for no aesthetic.
+    /// </summary>
+    public IReadOnlyList<string> OutfitFor(string aesthetic, string dress)
+    {
+        if (string.IsNullOrWhiteSpace(aesthetic))
+        {
+            return Outfit;
+        }
+
+        if (!string.Equals(dress, DressCode.Casual, StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var (code, outfits) in Wardrobe ?? new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>())
+            {
+                if (!string.Equals(code, dress, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (var (key, outfit) in outfits)
+                {
+                    if (string.Equals(key, aesthetic, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return outfit;
+                    }
+                }
+            }
+        }
+
+        return AestheticOutfit(aesthetic);
+    }
+
     /// <summary>The outfit phrases for <paramref name="aesthetic"/>, or a throw naming what exists.</summary>
     public IReadOnlyList<string> AestheticOutfit(string aesthetic)
     {

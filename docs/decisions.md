@@ -1372,3 +1372,27 @@ nothing to do.
   later turn. Routes follow the same rule.
 * **Where to find people.** The map's notes say where the player might run into each person they
   have met, from their schedule: the next slot today or tomorrow that puts them at a known place.
+## The map shows who the player has met, people dress for the place, and the frame cuts at the knees
+
+User feedback: draw the neutral backdrop on the map with every love interest already met standing on
+it, left-aligned so the row fills the screen once all are met; clothes should suit the scene; and the
+person should be larger, cut off below the knees.
+
+* **The map's lineup.** On the map the stage is the neutral backdrop with one slot per person in the
+  cast (`PlayState.CastSize`), filled left to right with everyone met who has not left
+  (`PlayState.Met`), each at their resting expression with a name tag, and the remaining slots empty.
+  The row reaches the right edge only when everyone is met. Where the player last was no longer
+  shows on the map.
+* **Dress codes.** A place type has a `dress` code (`DressCode`): work (office), evening (bar,
+  rooftop), home (the player's stairwell, the staff cabin), camp (the summer camp's places) or casual
+  (everything else, and any type without a code). A first date is `date` whatever the place. The
+  style pack's `wardrobe` gives, per subject, an outfit per code per aesthetic, so a person keeps
+  their style: a sporty woman wears a navy polo at the office and a denim jacket on a date. Outdoor
+  places add a layer for the weather (`outfitLayers`: a rain jacket, a raincoat, a scarf). Casual
+  with no layer is the aesthetic's everyday outfit, the prompt it always was, so sprites already drawn
+  stay valid; a pack without a wardrobe dresses everyone as before. Each person, expression, code and
+  layer is drawn once and cached. Only the anime pack has a wardrobe so far; portraits on cards and
+  on the map stay in everyday clothes.
+* **The frame** now shows 72% of the sprite's height, down to the knees, and may reach 1.7 times past
+  a narrow column's sides before shrinking: the figure fills well under half the sprite's width, so
+  that crops empty space and at most the arms.

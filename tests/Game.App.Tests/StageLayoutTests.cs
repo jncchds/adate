@@ -112,6 +112,16 @@ public class StageLayoutTests
     }
 
     [Fact]
+    public void A_person_on_a_desktop_stage_is_cut_off_at_the_knees()
+    {
+        var regions = StageLayout.Split(new Size(1280, 720), tall: false);
+        var frame = SpriteFrame.Frame(regions.Figure.Size);
+
+        Assert.Equal(720 / SpriteFrame.VisibleShare, frame.Height, 3);
+        Assert.True(frame.Top < 0 && frame.Bottom > 720, "Headroom is cropped above and the legs below the knees.");
+    }
+
+    [Fact]
     public void A_sprite_is_framed_from_the_head_and_centred()
     {
         var frame = SpriteFrame.Frame(new Size(600, 620));
@@ -124,21 +134,21 @@ public class StageLayoutTests
     [Fact]
     public void A_figure_that_fits_whole_stands_on_the_bottom_edge()
     {
-        // A tablet at 4:3: the person's column is narrow for its height.
-        var regions = StageLayout.Split(new Size(1024, 768), tall: false);
-        var frame = SpriteFrame.Frame(regions.Figure.Size);
+        // A column so narrow for its height that the whole figure fits once the width limits it.
+        var area = new Size(200, 768);
+        var frame = SpriteFrame.Frame(area);
 
-        Assert.True(frame.Height < regions.Figure.Height / SpriteFrame.VisibleShare, "The column limits the figure by width.");
-        Assert.Equal(regions.Figure.Height, frame.Top + (frame.Height * (1 - SpriteFrame.FootCrop)), 3);
+        Assert.True(frame.Height < area.Height / SpriteFrame.VisibleShare, "The column limits the figure by width.");
+        Assert.Equal(area.Height, frame.Top + (frame.Height * (1 - SpriteFrame.FootCrop)), 3);
         Assert.True(frame.Top > 0, "No headroom is cropped when the figure stands at the bottom.");
     }
 
     [Fact]
     public void A_narrow_column_crops_the_arms_before_shrinking_the_face_further()
     {
-        var frame = SpriteFrame.Frame(new Size(116, 160));
+        var frame = SpriteFrame.Frame(new Size(60, 160));
 
-        Assert.Equal(116 * SpriteFrame.WidthAllowance, frame.Width, 3);
+        Assert.Equal(60 * SpriteFrame.WidthAllowance, frame.Width, 3);
         Assert.Equal(frame.Width / SpriteFrame.SpriteAspect, frame.Height, 3);
     }
 }

@@ -79,6 +79,26 @@ public sealed partial class ExchangeItem(string reply) : ObservableObject
     public string Reply { get; } = reply;
 }
 
+/// <summary>
+/// One slot of the map's lineup: someone the player has met, standing on the backdrop, or an empty slot for
+/// someone not met yet, so the row fills the stage once everyone is met.
+/// </summary>
+public sealed partial class LineupItem(string key, string name, bool isMet) : ObservableObject
+{
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWaiting))]
+    private Bitmap? _portrait;
+
+    public string Key { get; } = key;
+
+    public string Name { get; } = name;
+
+    public bool IsMet { get; } = isMet;
+
+    /// <summary>Someone met whose picture is still being drawn.</summary>
+    public bool IsWaiting => IsMet && Portrait is null;
+}
+
 /// <summary>A person to pick, drawn standing on the shared backdrop; or nobody.</summary>
 public sealed partial class PersonCardViewModel(string key, string label, bool isNobody, ICommand command) : ObservableObject
 {

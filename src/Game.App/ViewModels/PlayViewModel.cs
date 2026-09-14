@@ -54,6 +54,7 @@ public sealed partial class PlayViewModel : PageViewModel
     // Pictures, reused while the slot and weather they were drawn for last.
     private readonly Dictionary<string, Bitmap> _thumbnails = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Bitmap> _portraits = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Bitmap> _standing = new(StringComparer.Ordinal);
     private string? _picturesFor;
     private Bitmap? _backdrop;
     private int _generation;
@@ -192,6 +193,9 @@ public sealed partial class PlayViewModel : PageViewModel
 
     public ObservableCollection<PlaceCardViewModel> Places { get; } = [];
 
+    /// <summary>The map's stage: everyone met so far standing on the backdrop, then empty slots for the rest.</summary>
+    public ObservableCollection<LineupItem> Lineup { get; } = [];
+
     public override async Task LoadAsync()
     {
         await ReloadAsync();
@@ -246,6 +250,7 @@ public sealed partial class PlayViewModel : PageViewModel
         People.Clear();
         HasPeople = false;
         Places.Clear();
+        Lineup.Clear();
 
         if (state.Scene is { } scene)
         {
@@ -343,6 +348,20 @@ public sealed partial class PlayViewModel : PageViewModel
                 Places.Add(new PlaceCardViewModel(place, _placeTypes.Get(place.TypeId).DisplayName, GoCommand));
             }
 
+            // Everyone met so far stands on the backdrop, left to right, in one slot for each person the
+            // story has; the row fills the stage once all of them are met.
+            var met = state.Met ?? [];
+            foreach (var person in met)
+            {
+                Lineup.Add(new LineupItem(person.Key, person.Name, true));
+            }
+
+            for (var empty = met.Count; empty < state.CastSize; empty++)
+            {
+                Lineup.Add(new LineupItem($"slot-{empty}", "", false));
+            }
+
+            StageLoadingText = "Setting the scene…";
             Mode = PlayMode.Map;
         }
 
@@ -505,7 +524,7 @@ public sealed partial class PlayViewModel : PageViewModel
 
         try
         {
-            if (Mode is PlayMode.EndingOffer or PlayMode.Ending || People.Count > 0)
+            if (Mode is PlayMode.EndingOffer or PlayMode.Ending or PlayMode.Map || People.Count > 0)
             {
                 _backdrop ??= await PictureAsync(await _studio.GenerateBackdropAsync());
                 if (Stale())
@@ -514,7 +533,8 @@ public sealed partial class PlayViewModel : PageViewModel
                 }
             }
 
-            if (Mode is PlayMode.EndingOffer or PlayMode.Ending)
+            // The map, the ending offer and the ending stand on the neutral backdrop.
+            if (Mode is PlayMode.EndingOffer or PlayMode.Ending or PlayMode.Map)
             {
                 StageBackground = _backdrop;
             }
@@ -539,6 +559,33 @@ public sealed partial class PlayViewModel : PageViewModel
         catch (Exception)
         {
             StageLoadingText = "The picture could not be drawn.";
+        }
+
+        // The lineup: each person met, at their resting expression, drawn once and cached.
+        foreach (var item in Lineup.Where(i => i.IsMet).ToList())
+        {
+            if (!_standing.TryGetValue(item.Key, out var standing))
+            {
+                try
+                {
+                    standing = await PictureAsync(await _world.PortraitAsync(_saveId, item.Key));
+                    if (standing is not null)
+                    {
+                        _standing[item.Key] = standing;
+                    }
+                }
+                catch (Exception)
+                {
+                    // An empty slot is shown instead; the map works without the picture.
+                }
+            }
+
+            if (Stale())
+            {
+                return;
+            }
+
+            item.Portrait = standing;
         }
 
         foreach (var card in People.ToList())

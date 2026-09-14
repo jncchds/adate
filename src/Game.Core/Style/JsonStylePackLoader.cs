@@ -106,6 +106,26 @@ public sealed class JsonStylePackLoader : IStylePackLoader
                     "silhouette between expressions and breaks the crossfade.");
             }
 
+            foreach (var (code, outfits) in profile.Wardrobe ?? new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>())
+            {
+                if (!DressCode.IsKnown(code) || string.Equals(code, DressCode.Casual, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Subject '{subject}' in style pack '{packId}' has a wardrobe for '{code}'. Known dress codes: " +
+                        $"{string.Join(", ", DressCode.All.Where(c => c != DressCode.Casual))}; casual is the aesthetics' own outfits.");
+                }
+
+                foreach (var (aesthetic, outfit) in outfits)
+                {
+                    if (profile.Aesthetics?.Keys.Contains(aesthetic, StringComparer.OrdinalIgnoreCase) is not true || outfit.Count == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Subject '{subject}' in style pack '{packId}' dresses '{aesthetic}' for '{code}', but that is not one " +
+                            "of its aesthetics or the outfit is empty.");
+                    }
+                }
+            }
+
             FeatureVocabularyRules.Validate(packId, subject, profile, pack.AlwaysNegative);
         }
 

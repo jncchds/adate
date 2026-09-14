@@ -100,7 +100,9 @@ internal static class FeatureVocabularyRules
         // Cast vocabulary is authored rather than chosen by a player, but it reaches the prompt all
         // the same, so it meets the same bar.
         var castPhrases = (profile.CastFeatures ?? [])
-            .Concat((profile.Aesthetics ?? new Dictionary<string, IReadOnlyList<string>>()).Values.SelectMany(static outfit => outfit));
+            .Concat((profile.Aesthetics ?? new Dictionary<string, IReadOnlyList<string>>()).Values.SelectMany(static outfit => outfit))
+            .Concat((profile.Wardrobe ?? new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>())
+                .Values.SelectMany(static outfits => outfits.Values).SelectMany(static outfit => outfit));
 
         foreach (var phrase in castPhrases)
         {

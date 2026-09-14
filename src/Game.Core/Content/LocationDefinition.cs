@@ -32,6 +32,8 @@ public sealed record PlaceDetail(string Id, IReadOnlyList<string> Tags, string P
 /// clear: "blue sky, bright sunlight" beside "overcast" draws a blue sky.
 /// </param>
 /// <param name="NeutralTimeDescriptions">The same as phrases, replacing <paramref name="TimeDescriptions"/>.</param>
+/// <param name="Dress">How people dress here, a <see cref="DressCode"/>.</param>
+/// <param name="OutfitLayers">What goes over an outfit per weather id, shared by kind: a rain jacket outdoors in the rain.</param>
 public sealed record LocationDefinition(
     string Id,
     string DisplayName,
@@ -43,7 +45,9 @@ public sealed record LocationDefinition(
     IReadOnlyDictionary<string, IReadOnlyList<string>>? WeatherTags = null,
     IReadOnlyDictionary<string, string>? WeatherDescriptions = null,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? NeutralTimeTags = null,
-    IReadOnlyDictionary<string, string>? NeutralTimeDescriptions = null)
+    IReadOnlyDictionary<string, string>? NeutralTimeDescriptions = null,
+    string Dress = DressCode.Casual,
+    IReadOnlyDictionary<string, string>? OutfitLayers = null)
 {
     /// <summary>The detail <paramref name="detailId"/>, or a throw naming what this type offers.</summary>
     public PlaceDetail Detail(string detailId)

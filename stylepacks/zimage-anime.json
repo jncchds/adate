@@ -88,7 +88,48 @@
         "elegant": ["a tailored camel coat", "an ivory silk blouse"],
         "artsy": ["an oversized paint-flecked linen shirt", "wide-leg olive trousers"]
       },
-      "castFeatures": [
+      "wardrobe": {
+        "work": {
+          "sporty": ["a fitted navy polo shirt", "slim black trousers"],
+          "preppy": ["a light blue collared blouse under a grey cardigan", "a knee-length grey pencil skirt"],
+          "alternative": ["a black turtleneck", "dark grey tailored trousers"],
+          "rugged": ["a chambray shirt with rolled sleeves", "dark chinos"],
+          "elegant": ["an ivory silk blouse", "a tailored charcoal skirt suit"],
+          "artsy": ["a mustard knit sweater", "wide-leg cream linen trousers"]
+        },
+        "evening": {
+          "sporty": ["a sleek black bomber jacket over a fitted white top", "black skinny jeans"],
+          "preppy": ["a navy wrap dress", "a thin gold necklace"],
+          "alternative": ["a black slip dress over a mesh top", "a studded black leather jacket"],
+          "rugged": ["a dark brown leather jacket over a burgundy top", "black jeans"],
+          "elegant": ["a deep emerald satin midi dress", "a delicate pendant necklace"],
+          "artsy": ["a flowing rust-coloured midi dress", "chunky wooden bangles"]
+        },
+        "home": {
+          "sporty": ["a loose grey hoodie", "soft black track shorts"],
+          "preppy": ["a soft pastel cardigan over a white t-shirt", "light grey lounge pants"],
+          "alternative": ["an oversized faded band hoodie", "black leggings"],
+          "rugged": ["an open flannel shirt over a white tank top", "worn jeans"],
+          "elegant": ["a cream knit lounge set"],
+          "artsy": ["an oversized paint-splattered sweater", "loose cotton pants"]
+        },
+        "camp": {
+          "sporty": ["a sleeveless athletic top", "hiking shorts", "trail sneakers"],
+          "preppy": ["a white polo shirt", "khaki shorts"],
+          "alternative": ["a black tank top under an open plaid shirt", "cargo shorts"],
+          "rugged": ["a green utility jacket", "hiking pants", "hiking boots"],
+          "elegant": ["a linen button-down shirt", "tan chino shorts"],
+          "artsy": ["a tie-dye t-shirt", "denim overall shorts"]
+        },
+        "date": {
+          "sporty": ["a fitted white top under a light denim jacket", "a black skater skirt"],
+          "preppy": ["a pastel blue sundress with a thin belt"],
+          "alternative": ["a dark velvet dress", "a black choker necklace"],
+          "rugged": ["a fitted olive shirt dress", "brown ankle boots"],
+          "elegant": ["a little black dress", "pearl earrings"],
+          "artsy": ["a floral midi dress", "a woven cardigan"]
+        }
+      },      "castFeatures": [
         "glasses",
         "freckles",
         "a small beauty mark under one eye",
@@ -212,7 +253,48 @@
         "elegant": ["a tailored charcoal blazer", "a crisp white shirt"],
         "artsy": ["an oversized paint-flecked linen shirt", "wide-leg olive trousers"]
       },
-      "castFeatures": [
+      "wardrobe": {
+        "work": {
+          "sporty": ["a fitted navy polo shirt", "grey chinos"],
+          "preppy": ["a light blue oxford shirt with a navy tie", "tan chinos"],
+          "alternative": ["a black turtleneck", "charcoal trousers"],
+          "rugged": ["a chambray shirt with rolled sleeves", "dark chinos"],
+          "elegant": ["a tailored navy suit", "a white dress shirt"],
+          "artsy": ["a mustard knit sweater", "loose olive trousers"]
+        },
+        "evening": {
+          "sporty": ["a black bomber jacket over a white t-shirt", "dark jeans"],
+          "preppy": ["a navy blazer over a light striped shirt", "grey trousers"],
+          "alternative": ["a studded leather jacket over a black shirt", "black jeans"],
+          "rugged": ["a dark brown leather jacket over a burgundy henley", "black jeans"],
+          "elegant": ["a charcoal velvet blazer", "a black shirt"],
+          "artsy": ["a patterned silk shirt", "wide black trousers"]
+        },
+        "home": {
+          "sporty": ["a loose grey hoodie", "black track shorts"],
+          "preppy": ["a soft navy knit sweater", "grey lounge pants"],
+          "alternative": ["an oversized faded band hoodie", "black sweatpants"],
+          "rugged": ["an open flannel shirt over a white t-shirt", "worn jeans"],
+          "elegant": ["a navy cashmere sweater", "soft grey trousers"],
+          "artsy": ["an oversized paint-splattered sweater", "loose cotton pants"]
+        },
+        "camp": {
+          "sporty": ["a sleeveless athletic shirt", "hiking shorts", "trail sneakers"],
+          "preppy": ["a white polo shirt", "khaki shorts"],
+          "alternative": ["a black t-shirt under an open plaid shirt", "cargo shorts"],
+          "rugged": ["a green utility jacket", "hiking pants", "hiking boots"],
+          "elegant": ["a linen button-down shirt", "tan chino shorts"],
+          "artsy": ["a tie-dye t-shirt", "rolled canvas trousers"]
+        },
+        "date": {
+          "sporty": ["a crisp white t-shirt under a light denim jacket", "black chinos"],
+          "preppy": ["a navy knit polo shirt", "beige trousers"],
+          "alternative": ["a black shirt with rolled sleeves", "slim black jeans", "a thin silver chain"],
+          "rugged": ["a fitted olive henley", "dark jeans", "brown boots"],
+          "elegant": ["a charcoal blazer over a black turtleneck", "dark trousers"],
+          "artsy": ["a patterned linen shirt", "cream trousers"]
+        }
+      },      "castFeatures": [
         "glasses",
         "a trimmed beard",
         "a small scar through one eyebrow",

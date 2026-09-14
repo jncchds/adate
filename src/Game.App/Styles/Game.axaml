@@ -159,6 +159,15 @@
         <Setter Property="CornerRadius" Value="0" />
     </Style>
 
+    <Style Selector="Border.lineup-name">
+        <Setter Property="Background" Value="#B0101012" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="Margin" Value="0,0,0,14" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+    </Style>
+
     <Style Selector="Border.nametag">
         <Setter Property="Background" Value="#E8C872" />
         <Setter Property="CornerRadius" Value="6" />
