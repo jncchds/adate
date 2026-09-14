@@ -46,7 +46,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     public const string FirstDateId = "beat.first-date";
 
     /// <summary>The first day a first date can happen (plan §1: week 2 opens the relationship).</summary>
-    public const int FirstDateDay = 5;
+    // Was 5: a player with the number on day 3 had two days of nothing to do (user feedback). A first date
+    // can now follow as soon as the player has the number; the invite still has to be made on a later turn.
+    public const int FirstDateDay = 2;
 
     /// <summary>The words an encounter's text may ask to have filled in.</summary>
     public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot", "who", "want", "need"];
@@ -137,8 +139,8 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>
     /// The four beats of meeting the main LI (plan §4), the same shape for every opening so the
     /// systems under them are tested once: meet, recognise at the home place (re-armed once at a
-    /// second place), a contact choice inside the recognise scene, and a first date from day 5 that
-    /// the player invites the main LI to.
+    /// second place), a contact choice inside the recognise scene, and a first date, once the player has
+    /// the number, that the player invites the main LI to.
     /// </summary>
     private static IEnumerable<EncounterDefinition> OpeningBeats(SettingDefinition setting)
     {

@@ -64,6 +64,21 @@ public sealed partial class FeatureField(string label, string feature) : Observa
     public string Feature { get; } = feature;
 }
 
+/// <summary>One exchange of a scene's conversation: what the player said or did, and how the others answered.</summary>
+public sealed partial class ExchangeItem(string reply) : ObservableObject
+{
+    [ObservableProperty]
+    private string? _reaction;
+
+    [ObservableProperty]
+    private string? _popup;
+
+    [ObservableProperty]
+    private string? _agreed;
+
+    public string Reply { get; } = reply;
+}
+
 /// <summary>A person to pick, drawn standing on the shared backdrop; or nobody.</summary>
 public sealed partial class PersonCardViewModel(string key, string label, bool isNobody, ICommand command) : ObservableObject
 {

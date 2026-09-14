@@ -105,10 +105,6 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string _writingText = "Writing the scene…";
 
-    /// <summary>What the player chose or typed, shown in the scene before the reaction.</summary>
-    [ObservableProperty]
-    private string? _playerReply;
-
     [ObservableProperty]
     private string? _withLine;
 
@@ -127,15 +123,6 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ReplyCommand))]
     private string _replyText = "";
-
-    [ObservableProperty]
-    private string? _reaction;
-
-    [ObservableProperty]
-    private string? _popup;
-
-    [ObservableProperty]
-    private string? _agreed;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNotes))]
@@ -171,6 +158,12 @@ public sealed partial class PlayViewModel : PageViewModel
 
     /// <summary>Raised when new words replace the old ones, so the view scrolls back to their start.</summary>
     public event Action? ScrollToTopRequested;
+
+    /// <summary>Raised when the conversation grows, so the view follows it to the newest words.</summary>
+    public event Action? ScrollToEndRequested;
+
+    /// <summary>The scene's conversation: each reply the player gave and the answer to it.</summary>
+    public ObservableCollection<ExchangeItem> Exchanges { get; } = [];
 
     public bool IsLoading => Mode == PlayMode.Loading;
 
@@ -243,10 +236,7 @@ public sealed partial class PlayViewModel : PageViewModel
         _scene++;
         _outcome = null;
         _view = null;
-        Reaction = null;
-        Popup = null;
-        Agreed = null;
-        PlayerReply = null;
+        Exchanges.Clear();
         IsWriting = false;
         ReplyText = "";
         WithLine = null;
@@ -265,6 +255,7 @@ public sealed partial class PlayViewModel : PageViewModel
         {
             Heading = $"Day {waiting.Clock.Day}, {waiting.Clock.Slot}";
             SceneText = waiting.Text;
+            _view = new SceneView(waiting.Text, null, null, null, null, waiting.Choices);
             Mode = PlayMode.Scene;
         }
         else if (state.Ending is { } ending)
@@ -377,10 +368,11 @@ public sealed partial class PlayViewModel : PageViewModel
         WithLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
         RevealLine = outcome.Reveals.Count > 0 ? $"New place: {string.Join(", ", outcome.Reveals.Select(PlaceName))}" : null;
         Speaker = scene.Speaker;
-        PlayerReply = scene.Reply;
-        Reaction = scene.Reaction;
-        Popup = scene.Popup;
-        Agreed = scene.Agreed;
+        foreach (var exchange in scene.Exchanges)
+        {
+            Exchanges.Add(new ExchangeItem(exchange.Reply) { Reaction = exchange.Reaction, Popup = exchange.Popup, Agreed = exchange.Agreed });
+        }
+
         Mode = PlayMode.Scene;
     }
 
@@ -458,8 +450,9 @@ public sealed partial class PlayViewModel : PageViewModel
     }
 
     /// <summary>
-    /// What a scene offers now: the encounter's own choices, the proposed replies with a free reply, or
-    /// Continue once the player has answered. Nothing while the words are still being written.
+    /// What a scene offers now: the encounter's own choices before anything is said, what the player can
+    /// say next while the conversation goes on (with a reply of their own), or Continue once it has closed.
+    /// Nothing while words are still being written.
     /// </summary>
     private void RefreshSceneControls()
     {
@@ -467,43 +460,21 @@ public sealed partial class PlayViewModel : PageViewModel
         IReadOnlyList<EncounterChoice>? authored = null;
         var showContinue = false;
 
-        if (IsWriting)
+        if (IsWriting || Mode != PlayMode.Scene)
         {
-            // The spinner stands in for the words and the choices alike.
+            // The spinner stands in for the words and the choices alike; outside a scene there is nothing to pick.
         }
-        else if (_outcome is not null)
+        else if (Exchanges.Count == 0 && (_outcome?.Choices ?? _state?.Pending?.Choices) is { Count: > 0 } choices)
         {
-            if (PlayerReply is not null)
-            {
-                showContinue = true;
-            }
-            else if (_outcome.Choices is { Count: > 0 } choices)
-            {
-                authored = choices;
-            }
-            else if (_view?.Choices is { Count: > 0 } offered)
-            {
-                replies = offered;
-            }
-            else
-            {
-                showContinue = true;
-            }
+            authored = choices;
         }
-        else if (_state?.PendingScene is { } waiting)
+        else if (_view?.Choices is { Count: > 0 } offered)
         {
-            if (Reaction is not null)
-            {
-                showContinue = true;
-            }
-            else
-            {
-                replies = waiting.Choices;
-            }
+            replies = offered;
         }
-        else if (_state?.Pending is { } pending && Mode == PlayMode.Scene)
+        else
         {
-            authored = pending.Choices;
+            showContinue = true;
         }
 
         Choices = authored is not null
@@ -696,10 +667,7 @@ public sealed partial class PlayViewModel : PageViewModel
             StageBackground = null;
             StageSprite = null;
             Speaker = null;
-            PlayerReply = null;
-            Reaction = null;
-            Popup = null;
-            Agreed = null;
+            Exchanges.Clear();
             WithLine = null;
             RevealLine = null;
             SceneText = null;
@@ -837,21 +805,89 @@ public sealed partial class PlayViewModel : PageViewModel
         }
 
         Working = true;
-        PlayerReply = choice.Text;
-        RefreshSceneControls();
+        var token = _scene;
+        var exchange = BeginExchange(choice.Text);
 
         try
         {
-            await _world.ChooseAsync(_saveId, choice.Id);
-            await ContinueCoreAsync();
+            // The people there answer the choice like any reply; only a choice nobody hears moves straight on.
+            if (await _world.ChooseAsync(_saveId, choice.Id) is { } result)
+            {
+                if (token != _scene)
+                {
+                    return;
+                }
+
+                ApplyReaction(exchange, result);
+                await ShowReactionSpriteAsync(result, token);
+            }
+            else
+            {
+                await ContinueCoreAsync();
+            }
         }
         catch (Exception ex)
         {
+            Exchanges.Remove(exchange);
             ShowError(ex);
         }
         finally
         {
             Working = false;
+        }
+    }
+
+    /// <summary>The player's words join the conversation at once, with a spinner while the others answer.</summary>
+    private ExchangeItem BeginExchange(string words)
+    {
+        var exchange = new ExchangeItem(words);
+        Exchanges.Add(exchange);
+        WritingText = Speaker is { } who ? $"{who} is answering…" : "Writing what happens…";
+        IsWriting = true;
+        RefreshSceneControls();
+        ScrollToEndRequested?.Invoke();
+        return exchange;
+    }
+
+    /// <summary>The answer joins the conversation; new replies keep it going, and without them Continue ends it.</summary>
+    private void ApplyReaction(ExchangeItem exchange, ReactionResult result)
+    {
+        exchange.Reaction = result.View.Text;
+        exchange.Popup = result.Popup;
+        exchange.Agreed = result.Agreed;
+        _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null };
+        IsWriting = false;
+        RefreshSceneControls();
+        ScrollToEndRequested?.Invoke();
+    }
+
+    /// <summary>A different expression in the answer brings the person's picture for it.</summary>
+    private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
+    {
+        if (result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
+        {
+            return;
+        }
+
+        _view = _view with
+        {
+            CharacterId = result.View.CharacterId,
+            Name = result.View.Name ?? _view.Name,
+            Aesthetic = result.View.Aesthetic ?? _view.Aesthetic,
+            Expression = result.View.Expression,
+        };
+
+        try
+        {
+            var picture = await PictureAsync(await _world.SceneSpriteAsync(_saveId, result.View));
+            if (token == _scene)
+            {
+                StageSprite = picture;
+            }
+        }
+        catch (Exception)
+        {
+            // Keeps the picture already shown.
         }
     }
 
@@ -875,42 +911,24 @@ public sealed partial class PlayViewModel : PageViewModel
 
         Working = true;
         var token = _scene;
-
-        // The player's words go into the scene straight away, with a spinner while the others react.
-        PlayerReply = words;
-        WritingText = Speaker is { } who ? $"{who} is answering…" : "Writing what happens…";
-        IsWriting = true;
-        RefreshSceneControls();
+        var freeText = index is null ? ReplyText : null;
+        var exchange = BeginExchange(words);
 
         try
         {
-            var result = await _world.RespondAsync(_saveId, index, index is null ? ReplyText : null);
+            var result = await _world.RespondAsync(_saveId, index, freeText);
             if (token != _scene)
             {
                 return;
             }
 
-            Reaction = result.View.Text;
-            Popup = result.Popup;
-            Agreed = result.Agreed;
             ReplyText = "";
-            IsWriting = false;
-            RefreshSceneControls();
-
-            if (result.View.CharacterId is not null && result.View.Expression != _view?.Expression)
-            {
-                _view = result.View with { Choices = null };
-                var picture = await PictureAsync(await _world.SceneSpriteAsync(_saveId, result.View));
-                if (token == _scene)
-                {
-                    StageSprite = picture;
-                }
-            }
+            ApplyReaction(exchange, result);
+            await ShowReactionSpriteAsync(result, token);
         }
         catch (Exception ex)
         {
-            PlayerReply = null;
-            IsWriting = false;
+            Exchanges.Remove(exchange);
             ShowError(ex);
         }
         finally

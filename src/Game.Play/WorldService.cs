@@ -35,7 +35,14 @@ public sealed record SceneView(
 
 /// <summary>The other people's reaction to a reply, and a popup when the reaction was considerable.</summary>
 /// <param name="Agreed">A meeting the reply settled, now held as a promise.</param>
-public sealed record ReactionResult(SceneView View, string? Popup, string? Agreed = null);
+/// <param name="Transcript">The scene so far including this exchange, as the waiting scene now holds it.</param>
+/// <param name="Next">What the player can say next when the conversation goes on; empty when the reaction closed it.</param>
+public sealed record ReactionResult(
+    SceneView View,
+    string? Popup,
+    string? Agreed = null,
+    string Transcript = "",
+    IReadOnlyList<ProposedChoice>? Next = null);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
@@ -64,7 +71,7 @@ public sealed record EndingRecap(
 /// <param name="Written">Whether <paramref name="Text"/> is the finished scene; false when the writing was interrupted.</param>
 /// <param name="BackgroundPath">The place's picture, once drawn.</param>
 /// <param name="SpritePath">The person as last shown, once drawn.</param>
-/// <param name="Reply">What the player chose or typed, once they have.</param>
+/// <param name="Exchanges">The conversation so far: each reply the player gave and the answer to it.</param>
 public sealed record CurrentScene(
     TurnOutcome Outcome,
     bool Written,
@@ -74,10 +81,7 @@ public sealed record CurrentScene(
     string? Speaker,
     string? Expression,
     string? SpritePath,
-    string? Reply,
-    string? Reaction,
-    string? Popup,
-    string? Agreed);
+    IReadOnlyList<SceneExchange> Exchanges);
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
@@ -241,10 +245,7 @@ public sealed class WorldService(
                 open.Speaker,
                 open.Expression,
                 open.SpritePath,
-                open.Reply,
-                open.Reaction,
-                open.Popup,
-                open.Agreed);
+                open.Exchanges);
         var lastPlaceId = open?.PlaceId ?? await sceneLog.GetLastPlaceIdAsync(saveId, ct).ConfigureAwait(false);
 
         return new PlayState(
@@ -256,7 +257,7 @@ public sealed class WorldService(
             names.MainLiId,
             names.MainLi,
             opening,
-            Hints(setting, opening, flags, clock, names.MainLi),
+            [.. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
             pending,
             invitees,
             relationships,
@@ -485,8 +486,11 @@ public sealed class WorldService(
         return filled;
     }
 
-    /// <summary>Answers the open choice. Its tags are scored for everyone in the scene.</summary>
-    public async Task ChooseAsync(SaveId saveId, string choiceId, CancellationToken ct = default)
+    /// <summary>
+    /// Answers the open choice. Its tags are scored for everyone in the scene, and the person the scene is
+    /// about answers it like any reply, so the conversation can go on. Null when nobody is there to answer.
+    /// </summary>
+    public async Task<ReactionResult?> ChooseAsync(SaveId saveId, string choiceId, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
 
@@ -511,10 +515,12 @@ public sealed class WorldService(
         var tags = (choice.Tags ?? []).Select(t => t.Replace(StoryContent.WantToken, ownerWant, StringComparison.Ordinal)).ToList();
 
         var relationships = new Dictionary<Guid, RelationshipState>();
+        var before = new Dictionary<Guid, RelationshipState>();
         var effects = new List<ChoiceEffect>();
         foreach (var li in cast.Where(li => (encounter.With ?? []).Contains(li.Ref)))
         {
             var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            before[li.Id] = current;
             var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, tags);
             relationships[li.Id] = Advance(li, _engine.Apply(current, delta, play.Clock.Day), after, sets);
             effects.Add(Effect(li.Name, current, relationships[li.Id]));
@@ -524,10 +530,19 @@ public sealed class WorldService(
         await story.LogTurnAsync(saveId, play.Clock, ChoiceLogKind,
             new ChoiceRecord(play.Clock.Day, play.Clock.Slot.ToString(), choice.Text, effects), ct).ConfigureAwait(false);
 
-        if (await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } scene)
+        // The person the scene is about answers, as for any reply, and the conversation can go on from here.
+        // The choice's tags are scored above, so the reaction scores nothing more.
+        var owner = Owner(cast, encounter.With ?? []);
+        if (owner is null || await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is not { } open)
         {
-            await sceneLog.SetReplyAsync(scene.Id, choice.Text, null, null, null, ct).ConfigureAwait(false);
+            return null;
         }
+
+        var popup = relationships.TryGetValue(owner.Id, out var changed) ? ReactionPopup.For(owner.Name, before[owner.Id], changed) : null;
+        var moment = new PendingScene(open.Clock, open.PlaceId, pending.EncounterId, encounter.With ?? [], open.Text, []);
+        await state.SavePendingSceneAsync(saveId, moment, ct).ConfigureAwait(false);
+
+        return await RespondCoreAsync(saveId, moment, choice.Text, chosenTags: [], logChoice: false, choicePopup: popup, ct).ConfigureAwait(false);
     }
 
     /// <summary>The turn-log kind every choice the player makes is recorded under, for the ending's recap.</summary>
@@ -974,6 +989,25 @@ public sealed class WorldService(
             chosenTags = null;
         }
 
+        return await RespondCoreAsync(saveId, scene, words, chosenTags, logChoice: true, choicePopup: null, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes the answer to <paramref name="words"/>, scores its tags for everyone present, and either closes
+    /// the waiting scene or keeps the conversation going with what the player can say next.
+    /// </summary>
+    /// <param name="chosenTags">A proposed choice's tags, or empty for a choice already scored; null for free text.</param>
+    /// <param name="logChoice">False when the choice was already logged for the recap.</param>
+    /// <param name="choicePopup">A popup the choice already earned, shown instead of this reaction's.</param>
+    private async Task<ReactionResult> RespondCoreAsync(
+        SaveId saveId,
+        PendingScene scene,
+        string words,
+        IReadOnlyList<string>? chosenTags,
+        bool logChoice,
+        string? choicePopup,
+        CancellationToken ct)
+    {
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
         var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
         var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
@@ -1020,7 +1054,7 @@ public sealed class WorldService(
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
-            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", ct).ConfigureAwait(false);
+            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.MaxReplies, ct).ConfigureAwait(false);
 
         // "{want}" in a tag means the want of the person the scene is about.
         var tags = reaction.Tags.Select(t => t.Replace(StoryContent.WantToken, owner?.Member.WantId ?? "", StringComparison.Ordinal)).ToList();
@@ -1035,16 +1069,31 @@ public sealed class WorldService(
         }
 
         await state.ResolvePendingSceneAsync(saveId, relationships, toSet, ct).ConfigureAwait(false);
-        await story.LogTurnAsync(saveId, scene.Clock, ChoiceLogKind, new ChoiceRecord(
-            scene.Clock.Day,
-            scene.Clock.Slot.ToString(),
-            words,
-            [.. presentPeople.Select(li => Effect(li.Name, before[li.Id], relationships[li.Id]))]), ct).ConfigureAwait(false);
+
+        // The conversation goes on while the answer offers the player something to say next, up to a limit;
+        // the scene waits again, holding everything said so far.
+        var transcript = SceneConversation.Transcript(scene.Text, words, reaction.Text);
+        IReadOnlyList<ProposedChoice> next = !reaction.Fallback && !reaction.Ends && scene.Replies + 1 < SceneConversation.MaxReplies
+            ? reaction.Choices ?? []
+            : [];
+        if (next.Count > 0)
+        {
+            await state.SavePendingSceneAsync(saveId, scene with { Text = transcript, Choices = next, Replies = scene.Replies + 1 }, ct).ConfigureAwait(false);
+        }
+
+        if (logChoice)
+        {
+            await story.LogTurnAsync(saveId, scene.Clock, ChoiceLogKind, new ChoiceRecord(
+                scene.Clock.Day,
+                scene.Clock.Slot.ToString(),
+                words,
+                [.. presentPeople.Select(li => Effect(li.Name, before[li.Id], relationships[li.Id]))]), ct).ConfigureAwait(false);
+        }
 
         await story.LogTurnAsync(saveId, scene.Clock, reaction.Fallback ? "reaction-fallback" : "reaction", new
         {
             Reply = words,
-            Chosen = choiceIndex,
+            Proposed = chosenTags is not null,
             Tags = tags,
             reaction.Text,
             reaction.Expression,
@@ -1052,9 +1101,9 @@ public sealed class WorldService(
             reaction.Rejections,
         }, ct).ConfigureAwait(false);
 
-        var popup = owner is not null && relationships.TryGetValue(owner.Id, out var changed)
+        var popup = choicePopup ?? (owner is not null && relationships.TryGetValue(owner.Id, out var changed)
             ? ReactionPopup.For(owner.Name, before[owner.Id], changed)
-            : null;
+            : null);
 
         var expression = owner is null
             ? null
@@ -1073,13 +1122,15 @@ public sealed class WorldService(
 
         if (await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } open)
         {
-            await sceneLog.SetReplyAsync(open.Id, words, reaction.Text, popup, agreed, ct).ConfigureAwait(false);
+            await sceneLog.AddExchangeAsync(open.Id, new SceneExchange(words, reaction.Text, popup, agreed), ct).ConfigureAwait(false);
         }
 
         return new ReactionResult(
             new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression),
             popup,
-            agreed);
+            agreed,
+            transcript,
+            next);
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>
@@ -1463,12 +1514,56 @@ public sealed class WorldService(
             }
         }
 
-        if (Has("main_li.contact") && !Has("main_li.first_date") && clock.Day < JsonEncounterCatalog.FirstDateDay)
+        if (Has("main_li.contact") && !Has("main_li.first_date"))
         {
-            return [$"You have {mainLi}'s number. Ask them somewhere from day {JsonEncounterCatalog.FirstDateDay}."];
+            return [$"You have {mainLi}'s number. Bring them along somewhere for a first date."];
         }
 
         return [];
+    }
+
+    /// <summary>
+    /// Where the player might run into the people they have met, from their schedules: the next slot, today
+    /// or tomorrow, that puts each of them at a place the player knows. So the days between the story's
+    /// beats always have somewhere to go (user feedback: day 3 of waiting for day 5 had nothing to do).
+    /// </summary>
+    private static IReadOnlyList<string> Sightings(
+        SaveId saveId,
+        SettingDefinition setting,
+        IReadOnlyList<LoveInterest> cast,
+        IReadOnlyDictionary<string, string> flags,
+        IReadOnlyList<PlaceRecord> known,
+        ClockState clock)
+    {
+        var lines = new List<string>();
+        foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li)))
+        {
+            var schedule = ScheduleFor(saveId, setting, li, flags);
+            var at = clock;
+            for (var step = 0; step < 6 && at.Day <= clock.Day + 1; step++, at = at.Next())
+            {
+                if (schedule.Where(at) is { } placeId && known.FirstOrDefault(p => p.Id == placeId) is { } place)
+                {
+                    lines.Add($"You might run into {li.Name} at {place.Name} {When(at, clock)}.");
+                    break;
+                }
+            }
+        }
+
+        return lines;
+    }
+
+    private static string When(ClockState at, ClockState now)
+    {
+        var today = at.Day == now.Day;
+        return at.Slot switch
+        {
+            TimeOfDay.Morning => today ? "this morning" : "tomorrow morning",
+            TimeOfDay.Midday => today ? "at midday" : "tomorrow at midday",
+            TimeOfDay.Afternoon => today ? "this afternoon" : "tomorrow afternoon",
+            TimeOfDay.Evening => today ? "this evening" : "tomorrow evening",
+            _ => today ? "tonight" : "tomorrow night",
+        };
     }
 
     /// <summary>Whether some encounter would honour inviting <paramref name="key"/> at a place the player knows, now.</summary>

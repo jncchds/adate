@@ -69,6 +69,34 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task A_reaction_that_leaves_room_offers_the_next_replies()
+    {
+        var llm = new FakeLlm(() => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Ask about her week", "tags": ["attentiveness"] }, { "text": "Tease her again", "tags": ["humour"] }] }""");
+
+        var reaction = await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Tease her about the planner", ["humour"], "Maya takes that in.", replyNumber: 1, maxReplies: 4);
+
+        Assert.False(reaction.Ends);
+        Assert.Equal(["Ask about her week", "Tease her again"], reaction.Choices!.Select(c => c.Text));
+        Assert.Contains("reply 1 of at most 4", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_reaction_closes_the_conversation_on_the_last_reply_or_without_usable_replies()
+    {
+        var last = new FakeLlm(() => """{ "text": "Maya waves goodbye.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Wave back", "tags": ["kindness"] }, { "text": "Call after her", "tags": ["adventure"] }] }""");
+        var unusable = new FakeLlm(() => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Say something", "tags": ["made-up"] }] }""");
+
+        var atTheEnd = await Writer(last).WriteAsync(Packet(), "Maya looks up.", "Say goodbye", ["kindness"], "Maya takes that in.", replyNumber: 4, maxReplies: 4);
+        var withoutReplies = await Writer(unusable).WriteAsync(Packet(), "Maya looks up.", "Say hi", ["kindness"], "Maya takes that in.", replyNumber: 1, maxReplies: 4);
+
+        Assert.True(atTheEnd.Ends);
+        Assert.Empty(atTheEnd.Choices ?? []);
+        Assert.Contains("last reply", last.Requests[0].User, StringComparison.Ordinal);
+        Assert.False(withoutReplies.Fallback);
+        Assert.True(withoutReplies.Ends);
+    }
+
+    [Fact]
     public async Task A_proposed_choice_keeps_its_own_tags()
     {
         var llm = new FakeLlm(() => Answer("Maya laughs and pushes the planner across the desk.", tags: """["dishonesty"]"""));

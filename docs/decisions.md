@@ -1350,3 +1350,25 @@ what the player had said.
   player never sees tags. C# now keeps the tag on the first reply that touches the want and takes it
   off the others; a reply left with no tags is dropped, and only fewer than two replies left sends
   the scene back.
+## Scenes are conversations, choices are answered, and no days are dead
+
+User feedback after playing: scenes felt hollow; asking the main LI for their number jumped straight
+to the map with only a note; and the hint said to ask them out from day 5 while it was day 3 with
+nothing to do.
+
+* **A scene is a conversation** of up to `SceneConversation.MaxReplies` (4) replies. Each reaction
+  also says whether the moment has run its course and, when it has not, offers the next two or three
+  replies, checked like a scene's (the same tags, the same want-tag rule). The fourth reply's reaction
+  is told to close the moment. Replies the model offers that cannot be used end the conversation
+  there; the reaction itself is kept, never thrown away for them. The waiting scene holds the
+  transcript ("You: …" lines between the answers) as the scene so far, and counts the replies
+  (migration 011); the scene log keeps every exchange as a list, so leaving and coming back shows the
+  whole conversation. Every reply is scored and logged for the recap as before.
+* **An authored choice is answered.** Its flags and tags are applied as before, then the person the
+  scene is about answers it like any reply (scoring nothing more), and the conversation can go on.
+  Only a choice with nobody there moves straight on.
+* **No waiting for day 5.** The first date needed day 5 (`FirstDateDay`); a player with the number
+  on day 3 had nothing to do. It now needs only the number, and the invitation is still made on a
+  later turn. Routes follow the same rule.
+* **Where to find people.** The map's notes say where the player might run into each person they
+  have met, from their schedule: the next slot today or tomorrow that puts them at a known place.

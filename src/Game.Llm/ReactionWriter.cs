@@ -6,7 +6,13 @@ using Microsoft.Extensions.Options;
 
 namespace Game.Llm;
 
-public sealed record ReactionResponse(string Text, string Expression, IReadOnlyList<string>? Tags, ProposedMeeting? Meet = null);
+public sealed record ReactionResponse(
+    string Text,
+    string Expression,
+    IReadOnlyList<string>? Tags,
+    ProposedMeeting? Meet = null,
+    bool? Ends = null,
+    IReadOnlyList<SceneResponseChoice>? Choices = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
@@ -17,7 +23,9 @@ public sealed record WrittenReaction(
     bool Fallback,
     int Attempts,
     IReadOnlyList<string> Rejections,
-    ProposedMeeting? Meet = null);
+    ProposedMeeting? Meet = null,
+    bool Ends = true,
+    IReadOnlyList<ProposedChoice>? Choices = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -47,6 +55,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         string playerWords,
         IReadOnlyList<string>? chosenTags,
         string fallbackText,
+        int replyNumber = 1,
+        int maxReplies = 1,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
@@ -69,7 +79,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                   "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n"
                 : "- tags: an empty list.\n")
             + "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
-              $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n";
+              $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
+            + Conversation(replyNumber, maxReplies);
 
         var schema = Schema(packet);
         var rejections = new List<string>();
@@ -126,7 +137,17 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 var tags = chosenTags
                     ?? [.. (response!.Tags ?? []).Distinct(StringComparer.Ordinal).Where(t => story.IsKnownTag(t, cast))];
 
-                return new WrittenReaction(response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet);
+                // The conversation goes on only with usable replies to offer; otherwise this answer closes it,
+                // and the reaction itself is still kept.
+                var nextReasons = new List<string>();
+                var next = replyNumber < maxReplies && response!.Ends is false
+                    ? SceneWriter.CheckChoices(response.Choices, story, cast, nextReasons)
+                    : [];
+                var goesOn = next.Count >= SceneWriter.MinChoices && nextReasons.Count == 0;
+
+                return new WrittenReaction(
+                    response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet,
+                    Ends: !goesOn, Choices: goesOn ? next : []);
             }
 
             lastReasons = reasons;
@@ -148,6 +169,22 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 ["text"] = new JsonObject { ["type"] = "string" },
                 ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
                 ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                ["ends"] = new JsonObject { ["type"] = "boolean" },
+                ["choices"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["text"] = new JsonObject { ["type"] = "string" },
+                            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                        },
+                        ["required"] = Strings(["text", "tags"]),
+                        ["additionalProperties"] = false,
+                    },
+                },
                 ["meet"] = new JsonObject
                 {
                     ["type"] = Strings(["object", "null"]),
@@ -161,10 +198,20 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     ["additionalProperties"] = false,
                 },
             },
-            ["required"] = Strings(["text", "expression", "tags", "meet"]),
+            ["required"] = Strings(["text", "expression", "tags", "meet", "ends", "choices"]),
             ["additionalProperties"] = false,
         };
     }
+
+    /// <summary>Whether the moment may go on, and what the player could say next when it does.</summary>
+    private static string Conversation(int replyNumber, int maxReplies) =>
+        replyNumber >= maxReplies
+            ? "- ends: true. This is the player's last reply here: close the moment naturally, without deciding anything for the player.\n"
+              + "- choices: an empty list.\n"
+            : $"- This is the player's reply {replyNumber} of at most {maxReplies} in this scene.\n"
+              + "- ends: true when the moment has run its course or someone has to go; otherwise false, ending on something the player can answer.\n"
+              + "- choices: when ends is false, two or three short, different things the player could say or do next, in the player's own voice, "
+              + "each tagged from the list with what it shows about the player (at most one may be helps:{want} or hinders:{want}); an empty list when ends is true.\n";
 
     private static IReadOnlyDictionary<string, string> Names(ScenePacket packet)
     {

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Game.Core.Saves;
 using Game.Core.Scenes;
 using Game.Core.Story;
@@ -7,15 +8,18 @@ using Microsoft.Data.Sqlite;
 namespace Game.Data.Repositories;
 
 /// <summary>
-/// Every scene as the player saw it (migration 010). A row is added when a turn is taken and filled in
-/// as the picture, the person, the words and the reply arrive. Updates address a scene by id, so a
-/// picture that finishes after the player has moved on never lands on the next scene.
+/// Every scene as the player saw it (migrations 010 and 011). A row is added when a turn is taken and
+/// filled in as the picture, the person, the words and each exchange of the conversation arrive. Updates
+/// address a scene by id, so a picture that finishes after the player has moved on never lands on the
+/// next scene.
 /// </summary>
 public sealed class SceneLogRepository(Database database)
 {
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
-        speaker, expression, sprite_path, reply, reaction, popup, agreed, closed
+        speaker, expression, sprite_path, exchanges_json, closed
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -129,15 +133,17 @@ public sealed class SceneLogRepository(Database database)
     public Task SetWrittenAsync(long sceneId, string text, string? expression, CancellationToken ct = default) =>
         UpdateAsync(sceneId, "written = 1, text = $text, expression = COALESCE($expression, expression)", ct, ("$text", text), ("$expression", expression));
 
-    public Task SetReplyAsync(long sceneId, string reply, string? reaction, string? popup, string? agreed, CancellationToken ct = default) =>
-        UpdateAsync(
+    /// <summary>Adds one exchange of the conversation to the end, in a single statement.</summary>
+    public Task AddExchangeAsync(long sceneId, SceneExchange exchange, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(exchange);
+
+        return UpdateAsync(
             sceneId,
-            "reply = $reply, reaction = $reaction, popup = $popup, agreed = $agreed",
+            "exchanges_json = json_insert(COALESCE(exchanges_json, '[]'), '$[#]', json($exchange))",
             ct,
-            ("$reply", reply),
-            ("$reaction", reaction),
-            ("$popup", popup),
-            ("$agreed", agreed));
+            ("$exchange", JsonSerializer.Serialize(exchange, Json)));
+    }
 
     /// <summary>The player has moved on from the scene they were in.</summary>
     public async Task CloseAsync(SaveId saveId, CancellationToken ct = default)
@@ -182,10 +188,7 @@ public sealed class SceneLogRepository(Database database)
             Text(10),
             Text(11),
             Text(12),
-            Text(13),
-            Text(14),
-            Text(15),
-            Text(16),
-            reader.GetInt64(17) == 1);
+            Text(13) is { } exchanges ? JsonSerializer.Deserialize<List<SceneExchange>>(exchanges, Json) ?? [] : [],
+            reader.GetInt64(14) == 1);
     }
 }

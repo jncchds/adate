@@ -221,12 +221,12 @@ public sealed class GameStateRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            INSERT INTO pending_scene (save_id, day, slot, place_id, encounter_id, with_json, text, choices_json, created_utc)
-            VALUES ($save, $day, $slot, $place, $encounter, $with, $text, $choices, $created)
+            INSERT INTO pending_scene (save_id, day, slot, place_id, encounter_id, with_json, text, choices_json, replies, created_utc)
+            VALUES ($save, $day, $slot, $place, $encounter, $with, $text, $choices, $replies, $created)
             ON CONFLICT(save_id) DO UPDATE SET
                 day = excluded.day, slot = excluded.slot, place_id = excluded.place_id,
                 encounter_id = excluded.encounter_id, with_json = excluded.with_json, text = excluded.text,
-                choices_json = excluded.choices_json, created_utc = excluded.created_utc;
+                choices_json = excluded.choices_json, replies = excluded.replies, created_utc = excluded.created_utc;
             """;
         command.Parameters.AddWithValue("$save", saveId.ToString());
         command.Parameters.AddWithValue("$day", scene.Clock.Day);
@@ -236,6 +236,7 @@ public sealed class GameStateRepository(Database database)
         command.Parameters.AddWithValue("$with", JsonSerializer.Serialize(scene.With, Json));
         command.Parameters.AddWithValue("$text", scene.Text);
         command.Parameters.AddWithValue("$choices", JsonSerializer.Serialize(scene.Choices, Json));
+        command.Parameters.AddWithValue("$replies", scene.Replies);
         command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -246,7 +247,7 @@ public sealed class GameStateRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            SELECT day, slot, place_id, encounter_id, with_json, text, choices_json
+            SELECT day, slot, place_id, encounter_id, with_json, text, choices_json, replies
             FROM pending_scene WHERE save_id = $save;
             """;
         command.Parameters.AddWithValue("$save", saveId.ToString());
@@ -259,7 +260,8 @@ public sealed class GameStateRepository(Database database)
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 JsonSerializer.Deserialize<List<string>>(reader.GetString(4), Json)!,
                 reader.GetString(5),
-                JsonSerializer.Deserialize<List<ProposedChoice>>(reader.GetString(6), Json)!)
+                JsonSerializer.Deserialize<List<ProposedChoice>>(reader.GetString(6), Json)!,
+                reader.GetInt32(7))
             : null;
     }
 

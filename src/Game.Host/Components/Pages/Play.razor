@@ -504,8 +504,20 @@ else
 
         try
         {
-            await World.ChooseAsync(SaveId, choice.Id);
-            await ContinueAsync();
+            // The people there answer the choice like any reply; a choice nobody hears moves straight on.
+            var result = await World.ChooseAsync(SaveId, choice.Id);
+            if (result is null)
+            {
+                await ContinueAsync();
+            }
+            else if (_outcome is null)
+            {
+                await LoadAsync();
+            }
+            else
+            {
+                ShowReaction(result);
+            }
         }
         catch (Exception ex)
         {
@@ -530,15 +542,14 @@ else
         try
         {
             var result = await World.RespondAsync(SaveId, index, index is null ? _reply : null);
-            _reaction = result.View.Text;
-            _popup = result.Popup;
-            _agreed = result.Agreed;
+            var expressionBefore = _view?.Expression;
+            ShowReaction(result);
             _reply = "";
             StateHasChanged();
 
-            if (_outcome is not null && result.View.CharacterId is not null && result.View.Expression != _view?.Expression)
+            if (_outcome is not null && result.View.CharacterId is not null && result.View.Expression != expressionBefore)
             {
-                _view = result.View;
+                _view = (_view ?? result.View) with { Expression = result.View.Expression };
                 _sprite = await World.SceneSpriteAsync(SaveId, result.View);
             }
         }
@@ -549,6 +560,32 @@ else
         finally
         {
             _working = false;
+        }
+    }
+
+    /// <summary>
+    /// The answer joins the scene's words. While the conversation goes on the next replies are offered;
+    /// once it closes, Continue moves on.
+    /// </summary>
+    private void ShowReaction(ReactionResult result)
+    {
+        _popup = result.Popup;
+        _agreed = result.Agreed;
+
+        if (_outcome is not null)
+        {
+            _outcome = _outcome with { Text = result.Transcript, Choices = [] };
+            _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null };
+            _reaction = null;
+        }
+        else if (result.Next is { Count: > 0 } more && _state?.PendingScene is { } waiting)
+        {
+            _state = _state with { PendingScene = waiting with { Text = result.Transcript, Choices = more } };
+            _reaction = null;
+        }
+        else
+        {
+            _reaction = result.View.Text;
         }
     }
 

@@ -98,17 +98,14 @@ public class OpeningBeatTests
 
         flags[EncounterEvaluator.PendingChoiceKey] = "false";
 
-        // Before day 5 an invitation brings no one.
-        var tooEarly = Turn(setting, encounters, flags, 4, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
-        Assert.NotEqual("beat.first-date", tooEarly.EncounterId);
-
-        // 4. First date, from day 5, at a place the player picks, when they invite them along.
-        var date = Turn(setting, encounters, flags, 5, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        // 4. First date, as soon as the next day, at a place the player picks, when they invite them along:
+        //    no days of waiting with nothing to do.
+        var date = Turn(setting, encounters, flags, 3, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
         Assert.Equal("beat.first-date", date.EncounterId);
         Assert.DoesNotContain(EncounterEvaluator.InviteKey, date.FlagsToSet.Keys);
 
         // And it happens once.
-        var again = Turn(setting, encounters, flags, 6, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        var again = Turn(setting, encounters, flags, 4, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
         Assert.NotEqual("beat.first-date", again.EncounterId);
     }
 

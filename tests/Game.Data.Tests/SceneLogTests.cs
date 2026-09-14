@@ -1,5 +1,6 @@
 using Game.Core;
 using Game.Core.Scenes;
+using Game.Core.Story;
 using Game.Core.World;
 using Game.Data.Repositories;
 
@@ -23,11 +24,13 @@ public class SceneLogTests
         Assert.False(started.Written);
         Assert.Equal("Rin is here too.", started.Text);
         Assert.Null(started.BackgroundPath);
+        Assert.Empty(started.Exchanges);
 
         await log.SetBackgroundAsync(id, "img/aa.png");
         await log.SetPersonAsync(id, rin, "Rin", "neutral", "img/bb.png");
         await log.SetWrittenAsync(id, "Rin looks up from a book.", null);
-        await log.SetReplyAsync(id, "Ask about the book", "Rin smiles.", "Rin liked that.", null);
+        await log.AddExchangeAsync(id, new SceneExchange("Ask about the book", "Rin smiles.", "Rin liked that."));
+        await log.AddExchangeAsync(id, new SceneExchange("Ask her out", "Rin says yes.", Agreed: "You agreed to meet Rin."));
 
         var shown = await log.GetOpenAsync(save.Id);
         Assert.NotNull(shown);
@@ -36,7 +39,9 @@ public class SceneLogTests
         Assert.Equal("neutral", shown.Expression);
         Assert.Equal(("img/aa.png", "img/bb.png"), (shown.BackgroundPath, shown.SpritePath));
         Assert.Equal((rin, "Rin"), (shown.CharacterId!.Value, shown.Speaker));
-        Assert.Equal(("Ask about the book", "Rin smiles.", "Rin liked that."), (shown.Reply, shown.Reaction, shown.Popup));
+        Assert.Equal(["Ask about the book", "Ask her out"], shown.Exchanges.Select(e => e.Reply));
+        Assert.Equal(("Rin smiles.", "Rin liked that."), (shown.Exchanges[0].Reaction, shown.Exchanges[0].Popup));
+        Assert.Equal("You agreed to meet Rin.", shown.Exchanges[1].Agreed);
         Assert.Equal(new ClockState(2, TimeOfDay.Evening), shown.Clock);
     }
 

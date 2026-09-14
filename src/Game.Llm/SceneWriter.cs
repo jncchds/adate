@@ -130,7 +130,7 @@ public sealed class SceneWriter(
             {
                 var (facts, places, reasons) = Check(response, packet, world, knownPlaces ?? [], settings);
                 var choiceReasons = new List<string>();
-                var choices = wantChoices ? CheckChoices(response, choiceReasons) : [];
+                var choices = wantChoices ? CheckChoices(response.Choices, story, cast, choiceReasons) : [];
                 reasons = [.. reasons, .. choiceReasons];
 
                 var doubtedOnly = false;
@@ -267,9 +267,14 @@ public sealed class SceneWriter(
     }
 
     /// <summary>Two or three distinct replies, short, each carrying at least one tag the story can score.</summary>
-    private IReadOnlyList<ProposedChoice> CheckChoices(SceneResponse response, List<string> reasons)
+    /// <remarks>Shared with the reaction writer, whose answers offer the conversation's next replies.</remarks>
+    internal static IReadOnlyList<ProposedChoice> CheckChoices(
+        IReadOnlyList<SceneResponseChoice>? proposed,
+        StoryContent story,
+        Game.Core.Cast.CastContent cast,
+        List<string> reasons)
     {
-        var offered = response.Choices ?? [];
+        var offered = proposed ?? [];
 
         if (offered.Count is < MinChoices or > MaxChoices)
         {
