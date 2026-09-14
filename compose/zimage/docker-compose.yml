@@ -1,0 +1,49 @@
+services:
+  z-image:
+    build:
+      context: .
+      dockerfile: Dockerfile.z-image
+    container_name: z-image-api
+    restart: unless-stopped
+    # Run uvicorn from the command line rather than the Dockerfile CMD, so the
+    # bind-mounted app file is picked up on restart with no rebuild.
+    command: |
+      python -m uvicorn z_image_api:app --host 0.0.0.0 --port 8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+    ports:
+      - 8000:8000
+    volumes:
+      # Edit this file on the host, then: docker compose restart z-image
+      - ./z_image_api.py:/app/z_image_api.py:ro
+      # Model caches. DiffSynth pulls from ModelScope, but transformers/HF
+      # components land in the HF cache -- mount both or you re-download 20GB.
+      - /d/docker/zimage/models:/root/.cache/modelscope
+      - /d/docker/zimage/huggingface:/root/.cache/huggingface
+      - /d/docker/zimage/appmodels:/app/models
+      - /d/docker/zimage/output:/app/output
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODELSCOPE_CACHE=/root/.cache/modelscope
+      - HF_HOME=/root/.cache/huggingface
+      - PYTHONUNBUFFERED=1
+      - Z_IMAGE_PATTERN_STYLE=glob
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:8000/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # First run downloads ~20GB; don't let the healthcheck mark it unhealthy.
+      start_period: 40m
+    shm_size: 8gb
+networks: {}

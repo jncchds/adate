@@ -1,0 +1,42 @@
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 python3.10-venv python3.10-dev python3-pip git curl build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.10 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --upgrade pip setuptools wheel
+
+# The versions the running image resolved to, installed first so DiffSynth's unpinned
+# requirements are already satisfied and a rebuild cannot drift. The PyPI torch wheel bundles
+# its own CUDA 13.0 runtime; the 12.4 base image only supplies the driver interface.
+RUN pip install torch==2.14.0 torchvision==0.29.0 transformers==5.17.0
+
+# DiffSynth-Studio provides ZImagePipeline. Pinned to the commit the running image was built
+# from, so a rebuild cannot silently change the art. Bump deliberately, then re-measure.
+ARG DIFFSYNTH_REF=32ef37e4fc38400f9fe14b1affd335dad9cdf50d
+RUN git init /opt/DiffSynth-Studio \
+    && cd /opt/DiffSynth-Studio \
+    && git remote add origin https://github.com/modelscope/DiffSynth-Studio.git \
+    && git fetch --depth=1 origin ${DIFFSYNTH_REF} \
+    && git checkout FETCH_HEAD \
+    && pip install -e .
+
+RUN pip install fastapi "uvicorn[standard]" python-multipart pillow modelscope
+
+# BiRefNet matting for `"background": "remove"`. Its model code (fetched at a pinned revision,
+# see z_image_api.py) imports these.
+RUN pip install timm==1.0.29 kornia==0.8.2
+
+WORKDIR /app
+RUN mkdir -p /app/output
+
+# No COPY of z_image_api.py: compose bind-mounts it at /app/z_image_api.py.
+# Compose also supplies the uvicorn command.
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "z_image_api:app", "--host", "0.0.0.0", "--port", "8000"]
