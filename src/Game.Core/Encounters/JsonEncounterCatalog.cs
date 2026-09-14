@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Game.Core.Scenes;
 using Game.Core.Settings;
+using Game.Core.Story;
 
 namespace Game.Core.Encounters;
 
@@ -33,7 +34,15 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     public const int FirstDateDay = 5;
 
     /// <summary>The words an encounter's text may ask to have filled in.</summary>
-    public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot", "who"];
+    public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot", "who", "want", "need"];
+
+    /// <summary>Priority of arc beats: above route beats, below the opening's.</summary>
+    public const int ArcPriority = 75;
+
+    /// <summary>The first day a want can be revealed, and the first day its obstacle can appear.</summary>
+    public const int ArcRevealDay = 6;
+
+    public const int ArcObstacleDay = 9;
 
     /// <summary>Who an encounter is with: the main LI, or a variant by its route.</summary>
     public const string MainLiRef = "main_li";
@@ -87,6 +96,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 .. setting.Events.Select(Event),
                 .. OpeningBeats(setting),
                 .. RouteBeats(setting, routes ?? []),
+                .. ArcBeats(setting, routes ?? []),
             ];
 
             Validate(setting, all, routes);
@@ -239,6 +249,88 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 With: [who],
                 Priority: OpeningPriority + 5,
                 Text: "You and {who} spend the {slot} at {place}. (Placeholder: a first date with {who}.)");
+        }
+    }
+
+    /// <summary>
+    /// Every love interest's arc (plan §7): reveal, obstacle, crisis and resolution, tied to their
+    /// primary want. Generated per person where they are usually found, with the want and need
+    /// filled in at play time (<c>{want}</c>, <c>{need}</c>, <c>helps:{want}</c>).
+    /// </summary>
+    /// <remarks>
+    /// Every crisis lands on the setting's last event, and each needs the player to bring that person
+    /// along. Only one person can be brought, so the player cannot help everyone: plan §7's
+    /// conflicting crises, made a choice the player sees.
+    /// </remarks>
+    private static IEnumerable<EncounterDefinition> ArcBeats(SettingDefinition setting, IReadOnlyList<string> routes)
+    {
+        IEnumerable<string> keys = setting.Openings.Count > 0 ? [MainLiRef, .. routes] : routes;
+        var crisisEvent = setting.Events.OrderBy(e => e.Day).LastOrDefault();
+        var want = StoryContent.WantToken;
+
+        foreach (var key in keys)
+        {
+            var who = key == MainLiRef ? MainLiRef : VariantPrefix + key;
+            var usual = new EncounterPlace(PlaceFlag: key == MainLiRef ? "main_li.home_place" : $"{key}.place");
+
+            yield return new EncounterDefinition(
+                $"arc.{key}.reveal",
+                usual,
+                Days: [ArcRevealDay, setting.Days],
+                Requires: [$"{key}.contact", $"!{key}.want_revealed"],
+                Sets: [$"{key}.want_revealed"],
+                With: [who],
+                Priority: ArcPriority,
+                Text: "Somewhere in a long conversation at {place}, {who} admits what they really want: to {want}. (Placeholder: the reveal.)");
+
+            yield return new EncounterDefinition(
+                $"arc.{key}.obstacle",
+                usual,
+                Days: [ArcObstacleDay, setting.Days],
+                Requires: [$"{key}.want_revealed", $"{key}.first_date", $"!{key}.obstacle"],
+                Sets: [$"{key}.obstacle"],
+                With: [who],
+                Priority: ArcPriority,
+                Text: "{who} is quiet today. Something has got in the way of their plan to {want}. (Placeholder: the obstacle.)",
+                Choices:
+                [
+                    new("think-it-through", "Help them think it through", [$"{key}.obstacle_helped"], [StoryContent.HelpsPrefix + want, "attentiveness"]),
+                    new("be-realistic", "Tell them to be realistic", [$"{key}.obstacle_doubted"], [StoryContent.HindersPrefix + want, "honesty"]),
+                ]);
+
+            if (crisisEvent is null)
+            {
+                continue;
+            }
+
+            yield return new EncounterDefinition(
+                $"arc.{key}.crisis",
+                new EncounterPlace(Id: crisisEvent.Place),
+                Time: [crisisEvent.Time],
+                Days: [crisisEvent.Day, crisisEvent.Day],
+                Requires: [$"{key}.obstacle", $"{EncounterEvaluator.InviteKey}={key}"],
+                With: [who],
+                Priority: EventPriority + 1,
+                Text: $"{crisisEvent.Name} is in full swing when {{who}}'s plan to {{want}} comes apart, right here. (Placeholder: the crisis.)",
+                Choices:
+                [
+                    new("help", "Step in and help", [$"{key}.crisis_resolved"], [StoryContent.HelpsPrefix + want, "kindness"]),
+                    new("stay-out", "Let them handle it", [$"{key}.crisis_skipped"], ["independence"]),
+                    new("make-it-worse", "Say it was never going to work", [$"{key}.crisis_worsened"], [StoryContent.HindersPrefix + want]),
+                ]);
+
+            yield return new EncounterDefinition(
+                $"arc.{key}.resolution",
+                usual,
+                Requires: [$"{key}.crisis_resolved"],
+                With: [who],
+                Priority: ArcPriority,
+                Text: "When it is all over, {who} finally says what they need: {need}. (Placeholder: the resolution.)",
+                Choices:
+                [
+                    new("hear-them", "Take it seriously", [$"{key}.need_addressed"], ["attentiveness"]),
+                    new("reassure", "Tell them it will all work out", [$"{key}.need_missed"], ["stability"]),
+                ]);
         }
     }
 

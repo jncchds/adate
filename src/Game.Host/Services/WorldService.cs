@@ -51,6 +51,7 @@ public sealed class WorldService(
     ISettingCatalog settings,
     IEncounterCatalog encounters,
     StoryContent storyContent,
+    CastContent castContent,
     RouteContent routes,
     IOptions<StudioOptions> options)
 {
@@ -94,12 +95,12 @@ public sealed class WorldService(
         {
             var encounter = Encounter(setting, flags[EncounterEvaluator.PendingChoiceKey]);
             var placeId = encounter.Place.Id ?? (encounter.Place.PlaceFlag is { } placeFlag ? flags.GetValueOrDefault(placeFlag) : null);
-            var who = WhoName(cast, names, encounter.With ?? []);
+            var owner = Owner(cast, encounter.With ?? []);
 
             pending = new PendingChoice(
                 encounter.Id,
-                Fill(encounter.Text, names, who, PlaceName(setting, known, placeId), clock),
-                [.. (encounter.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, who, "", clock) })]);
+                Fill(encounter.Text, names, owner, PlaceName(setting, known, placeId), clock),
+                [.. (encounter.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, owner, "", clock) })]);
         }
 
         var over = clock.IsPast(setting.Days);
@@ -229,11 +230,11 @@ public sealed class WorldService(
         await state.CommitTurnAsync(saveId, outcome, relationships, ct).ConfigureAwait(false);
 
         var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
-        var who = WhoName(cast, names, outcome.With);
+        var owner = Owner(cast, outcome.With);
         return outcome with
         {
-            Text = Fill(outcome.Text, names, who, place.Name, outcome.VisitedAt),
-            Choices = [.. (outcome.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, who, place.Name, outcome.VisitedAt) })],
+            Text = Fill(outcome.Text, names, owner, place.Name, outcome.VisitedAt),
+            Choices = [.. (outcome.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, owner, place.Name, outcome.VisitedAt) })],
         };
     }
 
@@ -258,11 +259,15 @@ public sealed class WorldService(
             after[key] = value;
         }
 
+        // Arc choices name "the want of the person this scene is about"; score them as that want.
+        var ownerWant = Owner(cast, encounter.With ?? [])?.Member.WantId ?? "";
+        var tags = (choice.Tags ?? []).Select(t => t.Replace(StoryContent.WantToken, ownerWant, StringComparison.Ordinal)).ToList();
+
         var relationships = new Dictionary<Guid, RelationshipState>();
         foreach (var li in cast.Where(li => (encounter.With ?? []).Contains(li.Ref)))
         {
             var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
-            var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, choice.Tags ?? []);
+            var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, tags);
             relationships[li.Id] = Advance(li, _engine.Apply(current, delta, play.Clock.Day), after, sets);
         }
 
@@ -375,19 +380,29 @@ public sealed class WorldService(
         return new Names(main?.Id, string.IsNullOrWhiteSpace(mainName) ? "them" : mainName, playerName);
     }
 
-    /// <summary>The <c>{who}</c> of a scene: the first variant in it, or the main LI.</summary>
-    private static string WhoName(IReadOnlyList<LoveInterest> cast, Names names, IReadOnlyList<string> with)
+    /// <summary>Who a scene is about: the first variant in it, otherwise the main LI if present.</summary>
+    private static LoveInterest? Owner(IReadOnlyList<LoveInterest> cast, IReadOnlyList<string> with)
     {
-        var variant = with.FirstOrDefault(w => w.StartsWith(JsonEncounterCatalog.VariantPrefix, StringComparison.Ordinal));
-        return variant is null ? names.MainLi : cast.FirstOrDefault(li => li.Ref == variant)?.Name ?? "someone";
+        var reference = with.FirstOrDefault(w => w.StartsWith(JsonEncounterCatalog.VariantPrefix, StringComparison.Ordinal))
+            ?? with.FirstOrDefault(w => w == JsonEncounterCatalog.MainLiRef);
+
+        return reference is null ? null : cast.FirstOrDefault(li => li.Ref == reference);
     }
 
-    private static string Fill(string text, Names names, string who, string place, ClockState clock) =>
-        text.Replace("{main_li}", names.MainLi, StringComparison.Ordinal)
+    /// <summary>Fills an encounter's text, with <c>{who}</c>, <c>{want}</c> and <c>{need}</c> taken from the person it is about.</summary>
+    private string Fill(string text, Names names, LoveInterest? owner, string place, ClockState clock)
+    {
+        var want = owner is null ? "" : castContent.Want(owner.Member.WantId).Label;
+        var need = owner is null ? "" : storyContent.Values.Needs.FirstOrDefault(n => n.Id == owner.Profile.Need)?.Label ?? "";
+
+        return text.Replace("{main_li}", names.MainLi, StringComparison.Ordinal)
             .Replace("{player}", names.Player, StringComparison.Ordinal)
-            .Replace("{who}", who, StringComparison.Ordinal)
+            .Replace("{who}", owner?.Name ?? names.MainLi, StringComparison.Ordinal)
+            .Replace("{want}", want, StringComparison.Ordinal)
+            .Replace("{need}", need, StringComparison.Ordinal)
             .Replace("{place}", place, StringComparison.Ordinal)
             .Replace("{slot}", clock.Slot.ToString().ToLowerInvariant(), StringComparison.Ordinal);
+    }
 
     private static string PlaceName(SettingDefinition setting, IReadOnlyList<PlaceRecord> known, string? placeId) =>
         placeId is null ? "" : known.FirstOrDefault(p => p.Id == placeId)?.Name ?? setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;

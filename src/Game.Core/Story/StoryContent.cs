@@ -57,6 +57,12 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
     public const string HelpsPrefix = "helps:";
     public const string HindersPrefix = "hinders:";
 
+    /// <summary>
+    /// Stands for the want of the person a scene is about, in <c>helps:</c>/<c>hinders:</c> tags on
+    /// generated arcs, and is replaced with their want id before scoring.
+    /// </summary>
+    public const string WantToken = "{want}";
+
     /// <summary>The tag that also builds trust (plan §6: trust rises with honesty).</summary>
     public const string HonestyTag = "honesty";
 
@@ -99,7 +105,8 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
         {
             if (tag.StartsWith(prefix, StringComparison.Ordinal))
             {
-                return cast.Wants.Any(w => w.Id == tag[prefix.Length..]);
+                var want = tag[prefix.Length..];
+                return want == WantToken || cast.Wants.Any(w => w.Id == want);
             }
         }
 

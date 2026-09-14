@@ -898,3 +898,28 @@ value, and a first date the player invites them to.
 **Everyone in a scene is scored.** Choices and dates change the relationship of each love interest
 the encounter is with, not only the main LI's. The map's invite is a picker over whoever some
 encounter would honour now.
+
+## Arcs: four generated beats per love interest, and one crisis night
+
+Phase-2 plan build step 7, second half.
+
+**An arc is four beats tied to the person's want**, generated for the main LI and every route, at
+the place they are usually found (the main LI's home place, or where a variant was met):
+
+1. **Reveal:** from day 6, once the player has their number.
+2. **Obstacle:** from day 9, after a first date, with a choice to help them think it through or
+   tell them to be realistic.
+3. **Crisis:** at the setting's last event, with a choice to help, stay out, or make it worse.
+4. **Resolution:** a choice that addresses their need, or misses it.
+
+The beats set the flags the stages read: want revealed, crisis resolved, need addressed.
+
+**The want is filled in at play time.** Text uses `{want}` and `{need}`, and choice tags use
+`helps:{want}` and `hinders:{want}`. The world service swaps in the want of the person the scene is
+about before anything is shown or scored, so the catalog stays per setting rather than per save.
+
+**One crisis night, one person.** Plan §7 puts crises for conflicting wants on the same event so
+the player cannot help both. Here every crisis lands on the setting's last event, and each needs
+the player to bring that person along. The invite picker makes the dilemma visible, which a
+same-slot priority tie would have hidden. The cost: two people whose wants do not conflict cannot
+both be helped either.
