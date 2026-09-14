@@ -135,8 +135,21 @@ public sealed class SceneWriter(
 
                 if (reasons.Count == 0 && settings.UseJudge)
                 {
-                    var contradictions = await judge.CheckAsync(response.Text, ImmutableFacts(packet), Names(packet), ct).ConfigureAwait(false);
-                    reasons = [.. contradictions.Select(c => $"The scene contradicts an established fact: {c}")];
+                    // Other languages have no word checks for the player's agency; the judge reads for it instead.
+                    var verdict = await judge.ReviewAsync(
+                        response.Text, ImmutableFacts(packet), Names(packet), agency: !NarrationLanguage.IsEnglish(packet.Language), ct: ct).ConfigureAwait(false);
+                    reasons = [.. verdict.Contradictions.Select(c => $"The scene contradicts an established fact: {c}")];
+
+                    if (verdict.PlayerActions.Count > 0)
+                    {
+                        reasons =
+                        [
+                            .. reasons,
+                            $"The narration decides for the player ({string.Join("; ", verdict.PlayerActions.Take(4))}). " +
+                            "Never say what the player does, says, decides, thinks or feels, and give them nothing to hold; " +
+                            "describe only the place, the weather and the other people.",
+                        ];
+                    }
                 }
 
                 if (reasons.Count == 0)
@@ -221,7 +234,17 @@ public sealed class SceneWriter(
                         {
                             ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
                             ["name"] = new JsonObject { ["type"] = "string" },
-                            ["details"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+                            // Detail ids as an enum: in other languages Gemma translated them ("кадки с растениями" for
+                            // planters) even when told not to. Whether a detail fits the type is still checked below.
+                            ["details"] = new JsonObject
+                            {
+                                ["type"] = "array",
+                                ["items"] = new JsonObject
+                                {
+                                    ["type"] = "string",
+                                    ["enum"] = Strings(placeTypes.All().SelectMany(t => t.Details ?? []).Select(d => d.Id).Distinct(StringComparer.Ordinal)),
+                                },
+                            },
                         },
                         ["required"] = Strings(["type", "name", "details"]),
                         ["additionalProperties"] = false,

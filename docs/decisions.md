@@ -1293,4 +1293,16 @@ English for now. A later step may add a selectable interface language on top.
   closes „ with “) and may end on 。！？ 」 or ». The epilogue's check that the partner is named also
   runs in English only, since other languages inflect or transliterate names.
 * The judge is told the scene may be in another language than the facts and to compare meaning.
+* Live, in Russian (days 1 to 5, before the next point), Gemma wrote fluent prose but broke the
+  agency rule the English checks would have caught: "Ты сидишь за небольшим столиком" (you sit),
+  "твоя книга" (your book), "Твои шаги" (your footsteps). The phase-3 decision is that this rule is
+  checked, not just asked for, so for stories not in English the judge now also lists narration that
+  says what the player does, says, decides, thinks or feels, or gives them things to hold, in scenes
+  and in reactions (where restating the player's own reply is allowed). It runs under `UseJudge`,
+  also when a scene has no facts to check. English stories keep the word checks and the facts-only
+  judge. Also seen: stray English words ("drizzle", "barista") and replies in the formal «Вы» while
+  the narration says "ты"; neither is checked.
 * Place names a scene proposes come in the story's language; memory summaries are in it too.
+* In that Russian run, place details came back translated ("кадки с растениями" for planters), and
+  were rejected even on a second attempt. The answer schema now lists the detail ids as an enum, so
+  a detail can only be a known id in every language; whether it fits the place type is still checked.

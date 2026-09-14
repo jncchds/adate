@@ -24,7 +24,8 @@ public sealed record WrittenReaction(
 /// the model also reads what the reply shows about the player, as tags C# then scores; unknown tags
 /// are dropped, never trusted. The reaction may repeat what the player did or said, and nothing more.
 /// </summary>
-public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastContent cast, IOptions<LlmOptions> options)
+/// <param name="judge">Reads a reaction in another language for things the player did not choose; none in English, which has word checks.</param>
+public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastContent cast, IOptions<LlmOptions> options, SceneJudge? judge = null)
 {
     public const int MaxLength = 1000;
     public const int MaxReplyLength = 300;
@@ -103,6 +104,16 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             }
 
             var reasons = Check(response, packet, playerWords);
+            if (reasons.Count == 0 && judge is not null && settings.UseJudge && !NarrationLanguage.IsEnglish(packet.Language))
+            {
+                // Other languages have no word checks; the judge reads for what the player did not choose.
+                var verdict = await judge.ReviewAsync(response!.Text, [], Names(packet), agency: true, playerWords, ct).ConfigureAwait(false);
+                if (verdict.PlayerActions.Count > 0)
+                {
+                    reasons.Add($"The reaction adds things the player did not choose ({string.Join("; ", verdict.PlayerActions.Take(4))}). Describe only how the others react.");
+                }
+            }
+
             if (reasons.Count == 0)
             {
                 var tags = chosenTags
@@ -146,6 +157,13 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             ["required"] = Strings(["text", "expression", "tags", "meet"]),
             ["additionalProperties"] = false,
         };
+    }
+
+    private static IReadOnlyDictionary<string, string> Names(ScenePacket packet)
+    {
+        var names = packet.Present.ToDictionary(p => p.Id, p => p.Name, StringComparer.Ordinal);
+        names[FactLedger.Player] = packet.PlayerName;
+        return names;
     }
 
     private static List<string> Check(ReactionResponse? response, ScenePacket packet, string playerWords)

@@ -177,6 +177,47 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task In_another_language_the_judge_reads_for_narration_that_acts_for_the_player()
+    {
+        var llm = new FakeLlm(
+            () => Answer(text: "Ты садишься напротив Рин, и она поднимает взгляд."),
+            () => """{ "contradictions": [], "playerActions": ["Ты садишься напротив Рин"] }""",
+            () => Answer(text: "Рин поднимает взгляд от книги у окна."),
+            () => """{ "contradictions": [], "playerActions": [] }""");
+
+        var scene = await Writer(llm, judge: true).WriteAsync(Packet() with { Language = "Русский" }, World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(2, scene.Attempts);
+        Assert.Equal("judge", llm.Requests[1].SchemaName);
+        Assert.Contains("playerActions", llm.Requests[1].System, StringComparison.Ordinal);
+        Assert.Contains("decides for the player (Ты садишься напротив Рин)", llm.Requests[2].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Place_details_can_only_be_answered_with_known_detail_ids()
+    {
+        var schema = Writer(new FakeLlm()).Schema(Packet());
+        var details = schema["properties"]!["places"]!["items"]!["properties"]!["details"]!["items"]!["enum"]!.AsArray()
+            .Select(n => n!.GetValue<string>())
+            .ToList();
+
+        Assert.Contains("planters", details);
+        Assert.Equal(details.Count, details.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(details, d => Assert.Matches("^[a-z0-9-]+$", d));
+    }
+
+    [Fact]
+    public async Task In_english_the_judge_reads_only_the_facts()
+    {
+        var llm = new FakeLlm(() => Answer(), () => """{ "contradictions": [] }""");
+
+        await Writer(llm, judge: true).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.DoesNotContain("playerActions", llm.Requests[1].System, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_story_in_another_language_is_still_sent_back_when_it_stops_mid_sentence()
     {
         var llm = new FakeLlm(

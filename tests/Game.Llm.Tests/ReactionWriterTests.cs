@@ -51,6 +51,24 @@ public class ReactionWriterTests
         $$"""{ "text": "{{text}}", "expression": "{{expression}}", "tags": {{tags}} }""";
 
     [Fact]
+    public async Task In_another_language_the_judge_sends_back_a_reaction_that_adds_player_actions()
+    {
+        var llm = new FakeLlm(
+            () => Answer("Ты берёшь её за руку, и Майя улыбается."),
+            () => """{ "contradictions": [], "playerActions": ["Ты берёшь её за руку"] }""",
+            () => Answer("Майя улыбается и откладывает ежедневник."),
+            () => """{ "contradictions": [], "playerActions": [] }""");
+        var writer = new ReactionWriter(llm, Story, Cast, Options.Create(new LlmOptions { Enabled = true, MaxRetries = 2 }), new Game.Llm.SceneJudge(llm));
+
+        var reaction = await writer.WriteAsync(Packet() with { Language = "Русский" }, "Майя поднимает взгляд.", "Сказать, что рада её видеть", ["kindness"], "Майя кивает.");
+
+        Assert.False(reaction.Fallback);
+        Assert.Equal(2, reaction.Attempts);
+        Assert.Contains("Сказать, что рада её видеть", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Contains("adds things the player did not choose (Ты берёшь её за руку)", llm.Requests[2].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_proposed_choice_keeps_its_own_tags()
     {
         var llm = new FakeLlm(() => Answer("Maya laughs and pushes the planner across the desk.", tags: """["dishonesty"]"""));
