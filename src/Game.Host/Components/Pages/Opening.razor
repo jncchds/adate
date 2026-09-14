@@ -78,7 +78,8 @@ else
         try
         {
             await World.ChooseOpeningAsync(new SaveId(SaveGuid), opening.Id);
-            Navigation.NavigateTo($"/play/{SaveGuid}");
+            // Straight into the meeting the opening describes, rather than a map with a hint.
+            Navigation.NavigateTo($"/play/{SaveGuid}?start={Uri.EscapeDataString(opening.MeetingPlace)}");
         }
         catch (Exception ex)
         {

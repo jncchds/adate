@@ -57,6 +57,28 @@ public sealed record EndingRecap(
     IReadOnlyList<string> Profile,
     IReadOnlyList<RecapLine>? Choices = null);
 
+/// <summary>
+/// The scene the player is in, as saved while it happened, so leaving and coming back shows exactly
+/// what was on screen: the same place, picture, person, words and reply.
+/// </summary>
+/// <param name="Written">Whether <paramref name="Text"/> is the finished scene; false when the writing was interrupted.</param>
+/// <param name="BackgroundPath">The place's picture, once drawn.</param>
+/// <param name="SpritePath">The person as last shown, once drawn.</param>
+/// <param name="Reply">What the player chose or typed, once they have.</param>
+public sealed record CurrentScene(
+    TurnOutcome Outcome,
+    bool Written,
+    string Text,
+    string? BackgroundPath,
+    Guid? CharacterId,
+    string? Speaker,
+    string? Expression,
+    string? SpritePath,
+    string? Reply,
+    string? Reaction,
+    string? Popup,
+    string? Agreed);
+
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
 /// <param name="Hints">Where the story expects the player to look next, while the opening's beats are open.</param>
@@ -82,7 +104,9 @@ public sealed record PlayState(
     EndingOffer? EndingOffer,
     EndingRecap? Ending,
     WeatherDefinition? Weather = null,
-    PendingScene? PendingScene = null);
+    PendingScene? PendingScene = null,
+    CurrentScene? Scene = null,
+    string? LastPlaceId = null);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
@@ -91,6 +115,7 @@ public sealed class WorldService(
     CharacterRepository characters,
     GameStateRepository state,
     StoryStateRepository story,
+    SceneLogRepository sceneLog,
     ISettingCatalog settings,
     IEncounterCatalog encounters,
     StoryContent storyContent,
@@ -204,6 +229,24 @@ public sealed class WorldService(
         var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
         people.TryAdd(JsonEncounterCatalog.MainLiRef, names.MainLi);
 
+        var open = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        var scene = open is null
+            ? null
+            : new CurrentScene(
+                TurnOutcomeJson.Deserialize(open.OutcomeJson),
+                open.Written,
+                open.Text,
+                open.BackgroundPath,
+                open.CharacterId,
+                open.Speaker,
+                open.Expression,
+                open.SpritePath,
+                open.Reply,
+                open.Reaction,
+                open.Popup,
+                open.Agreed);
+        var lastPlaceId = open?.PlaceId ?? await sceneLog.GetLastPlaceIdAsync(saveId, ct).ConfigureAwait(false);
+
         return new PlayState(
             setting,
             clock,
@@ -221,7 +264,9 @@ public sealed class WorldService(
             offer,
             ending,
             WeatherOn(saveId, setting, clock.Day),
-            pendingScene);
+            pendingScene,
+            scene,
+            lastPlaceId);
     }
 
     /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
@@ -427,11 +472,17 @@ public sealed class WorldService(
 
         var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
         var owner = Owner(cast, outcome.With);
-        return outcome with
+        var filled = outcome with
         {
             Text = Fill(outcome.Text, names, owner, place.Name, outcome.VisitedAt),
             Choices = [.. (outcome.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, owner, place.Name, outcome.VisitedAt) })],
         };
+
+        // The scene is saved as it happens; its picture, person, words and reply are added as they arrive.
+        await sceneLog.StartAsync(
+            saveId, filled.VisitedAt, place.Id, filled.EncounterId, TurnOutcomeJson.Serialize(filled), filled.Text, ct).ConfigureAwait(false);
+
+        return filled;
     }
 
     /// <summary>Answers the open choice. Its tags are scored for everyone in the scene.</summary>
@@ -472,6 +523,11 @@ public sealed class WorldService(
         await state.ResolveChoiceAsync(saveId, pending.EncounterId, choice.Id, sets, relationships, ct).ConfigureAwait(false);
         await story.LogTurnAsync(saveId, play.Clock, ChoiceLogKind,
             new ChoiceRecord(play.Clock.Day, play.Clock.Slot.ToString(), choice.Text, effects), ct).ConfigureAwait(false);
+
+        if (await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } scene)
+        {
+            await sceneLog.SetReplyAsync(scene.Id, choice.Text, null, null, null, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>The turn-log kind every choice the player makes is recorded under, for the ending's recap.</summary>
@@ -623,6 +679,64 @@ public sealed class WorldService(
     }
 
     /// <summary>
+    /// The open scene's background, drawn at the slot and weather of the visit and saved with the scene,
+    /// so coming back shows the same picture without drawing it again. Null when no scene is open.
+    /// </summary>
+    public async Task<string?> SceneBackgroundAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        if (scene is null)
+        {
+            return null;
+        }
+
+        if (scene.BackgroundPath is { } saved)
+        {
+            return saved;
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var place = await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"The scene's place '{scene.PlaceId}' is not in this save.");
+
+        var path = await studio.GenerateBackgroundAsync(saveId, place, scene.Clock.Slot, WeatherOn(saveId, setting, scene.Clock.Day).Id).ConfigureAwait(false);
+        await sceneLog.SetBackgroundAsync(scene.Id, path, ct).ConfigureAwait(false);
+        return path;
+    }
+
+    /// <summary>The person a scene shows, drawn and saved with the open scene. Null when it shows no one.</summary>
+    public async Task<string?> SceneSpriteAsync(SaveId saveId, SceneView view, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        // Taken before drawing: the player may have moved on by the time the picture is ready.
+        var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        var path = await SpriteAsync(saveId, view).ConfigureAwait(false);
+
+        if (scene is not null)
+        {
+            await sceneLog.SetPersonAsync(scene.Id, view.CharacterId, view.Name, view.Expression, path, ct).ConfigureAwait(false);
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// Finishes writing the open scene when leaving the game interrupted it. Null when no scene is open
+    /// or it is already written.
+    /// </summary>
+    public async Task<SceneView?> ResumeSceneAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        return scene is null || scene.Written
+            ? null
+            : await WriteSceneAsync(saveId, TurnOutcomeJson.Deserialize(scene.OutcomeJson), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The player has moved on from the scene they were in (Continue).</summary>
+    public Task CloseSceneAsync(SaveId saveId, CancellationToken ct = default) => sceneLog.CloseAsync(saveId, ct);
+
+    /// <summary>
     /// Writes the scene for a turn that has been taken (plan §8), when an LLM is configured. The packet
     /// holds only what the player and the people present know; accepted facts are stored and known by
     /// everyone present; the packet and the answer are logged so the turn can be replayed. Returns the
@@ -634,8 +748,20 @@ public sealed class WorldService(
 
         var presented = await PresentAsync(saveId, outcome, ct).ConfigureAwait(false);
 
+        // The scene row this turn started; the words are saved with it once written.
+        var sceneId = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } open
+                      && open.Clock == outcome.VisitedAt
+                      && open.PlaceId == outcome.PlaceId
+            ? open.Id
+            : (long?)null;
+
         if (!llmOptions.Value.Enabled || outcome.EncounterId is null)
         {
+            if (sceneId is { } unwrittenId)
+            {
+                await sceneLog.SetWrittenAsync(unwrittenId, presented.Text, presented.Expression, ct).ConfigureAwait(false);
+            }
+
             return presented;
         }
 
@@ -800,7 +926,7 @@ public sealed class WorldService(
                 ct).ConfigureAwait(false);
         }
 
-        return presented with
+        var result = presented with
         {
             Text = written.Text,
             Expression = presented.Expression is null
@@ -808,6 +934,14 @@ public sealed class WorldService(
                 : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
             Choices = choices,
         };
+
+        // Marked written last, so an interrupted scene is written again rather than left half-done.
+        if (sceneId is { } writtenId)
+        {
+            await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, ct).ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -935,6 +1069,11 @@ public sealed class WorldService(
             await story.AddPromiseAsync(saveId, promise, ct).ConfigureAwait(false);
             var placeName = known.First(p => p.Id == promise.PlaceId).Name;
             agreed = $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
+        }
+
+        if (await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } open)
+        {
+            await sceneLog.SetReplyAsync(open.Id, words, reaction.Text, popup, agreed, ct).ConfigureAwait(false);
         }
 
         return new ReactionResult(

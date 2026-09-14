@@ -20,6 +20,7 @@
                         <ctl:SpriteFrame>
                             <Image Source="{Binding Portrait}" />
                         </ctl:SpriteFrame>
+                        <Arc Classes="spinner small" IsVisible="{Binding IsWaiting}" />
                     </Panel>
                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
                 </StackPanel>
@@ -37,10 +38,19 @@
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" />
         </Panel>
 
-        <!-- The person the scene is about: at the left in landscape, over the picture in portrait. -->
-        <ctl:SpriteFrame>
-            <Image Source="{Binding StageSprite}" />
-        </ctl:SpriteFrame>
+        <!-- The person the scene is about, at the left in landscape and over the picture in portrait; and
+             while the picture is on its way, a spinner saying what is being drawn, where no text box covers it. -->
+        <Panel>
+            <ctl:SpriteFrame>
+                <Image Source="{Binding StageSprite}" />
+            </ctl:SpriteFrame>
+            <Border Classes="loading" IsVisible="{Binding IsStageLoading}">
+                <StackPanel Spacing="10">
+                    <Arc Classes="spinner" />
+                    <TextBlock Classes="lede" Text="{Binding StageLoadingText}" TextAlignment="Center" MaxWidth="240" />
+                </StackPanel>
+            </Border>
+        </Panel>
 
         <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->
         <Border Classes="textbox">
@@ -55,16 +65,20 @@
 
                 <ScrollViewer Grid.Row="1" x:Name="Side">
                     <StackPanel Classes="side">
-                        <TextBlock Classes="lede" Text="Loading the save." IsVisible="{Binding IsLoading}" />
+                        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsLoading}">
+                            <Arc Classes="spinner small" />
+                            <TextBlock Classes="lede" Text="Loading the save…" VerticalAlignment="Center" />
+                        </StackPanel>
 
                         <StackPanel IsVisible="{Binding IsError}" Spacing="10">
                             <TextBlock Classes="error" Text="{Binding Error}" />
                             <Button Classes="accent" Content="Try again" Command="{Binding RetryCommand}" />
                         </StackPanel>
 
-                        <!-- A scene: its words, then choices, a reply of the player's own, or the reaction. -->
+                        <!-- A scene: its words, the choices or a reply of the player's own, the reply given, and the reaction. -->
                         <StackPanel IsVisible="{Binding IsScene}" Spacing="12">
-                            <TextBlock Classes="story" Text="{Binding SceneText}" />
+                            <TextBlock Classes="story" Text="{Binding SceneText}"
+                                       IsVisible="{Binding SceneText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Classes="small" Text="{Binding WithLine}"
                                        IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Classes="small" Text="{Binding RevealLine}"
@@ -88,6 +102,18 @@
                                     </TextBox.KeyBindings>
                                 </TextBox>
                                 <Button Content="Reply" Command="{Binding ReplyCommand}" />
+                            </StackPanel>
+
+                            <Border Classes="reply" IsVisible="{Binding PlayerReply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="small" Text="You" />
+                                    <TextBlock Classes="story" Text="{Binding PlayerReply}" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsWriting}">
+                                <Arc Classes="spinner small" />
+                                <TextBlock Classes="lede" Text="{Binding WritingText}" VerticalAlignment="Center" />
                             </StackPanel>
 
                             <TextBlock Classes="story reaction" Text="{Binding Reaction}"
@@ -130,6 +156,8 @@
                                                 <Panel Height="90" ClipToBounds="True">
                                                     <Border Classes="wait" />
                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                                    <Arc Classes="spinner small"
+                                                         IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}" />
                                                 </Panel>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                                 <TextBlock Classes="small" Text="{Binding TypeName}" />

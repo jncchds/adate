@@ -133,6 +133,7 @@ public sealed class SceneWriter(
                 var choices = wantChoices ? CheckChoices(response, choiceReasons) : [];
                 reasons = [.. reasons, .. choiceReasons];
 
+                var doubtedOnly = false;
                 if (reasons.Count == 0 && settings.UseJudge)
                 {
                     // Other languages have no word checks for the player's agency; the judge reads for it instead.
@@ -142,6 +143,7 @@ public sealed class SceneWriter(
 
                     if (verdict.PlayerActions.Count > 0)
                     {
+                        doubtedOnly = verdict.Contradictions.Count == 0;
                         reasons =
                         [
                             .. reasons,
@@ -150,6 +152,14 @@ public sealed class SceneWriter(
                             "describe only the place, the weather and the other people.",
                         ];
                     }
+                }
+
+                // The judge's reading of agency is a second opinion that errs strict. On the last attempt its
+                // doubt alone keeps the scene rather than throwing it away for the authored text.
+                if (doubtedOnly && attempt == settings.MaxRetries)
+                {
+                    rejections.Add($"attempt {attempts}: kept despite the judge: {reasons[0]}");
+                    reasons = [];
                 }
 
                 if (reasons.Count == 0)

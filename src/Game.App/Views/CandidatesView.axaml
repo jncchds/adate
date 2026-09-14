@@ -33,6 +33,8 @@
                                 <Panel Height="240">
                                     <Border Classes="wait" />
                                     <Image Source="{Binding Picture}" Stretch="UniformToFill" />
+                                    <Arc Classes="spinner small"
+                                         IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNull}}" />
                                 </Panel>
                                 <TextBlock Classes="small" Text="{Binding Description}" />
                             </StackPanel>

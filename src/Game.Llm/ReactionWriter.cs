@@ -111,6 +111,13 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 if (verdict.PlayerActions.Count > 0)
                 {
                     reasons.Add($"The reaction adds things the player did not choose ({string.Join("; ", verdict.PlayerActions.Take(4))}). Describe only how the others react.");
+
+                    // As for scenes: on the last attempt the judge's doubt alone keeps the reaction.
+                    if (attempt == settings.MaxRetries)
+                    {
+                        rejections.Add($"attempt {attempts}: kept despite the judge: {reasons[0]}");
+                        reasons.Clear();
+                    }
                 }
             }
 

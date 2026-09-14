@@ -1306,3 +1306,38 @@ English for now. A later step may add a selectable interface language on top.
 * In that Russian run, place details came back translated ("кадки с растениями" for planters), and
   were rejected even on a second attempt. The answer schema now lists the detail ids as an enum, so
   a detail can only be a known id in every language; whether it fits the place type is still checked.
+## Scenes are saved as they happen
+
+User feedback after playing the desktop app: choosing an opening led to a map instead of the meeting;
+place pictures took long enough to stare at a black screen; going back to the saves and returning
+showed a black screen, the wrong place and no love interest, although both had been drawn; the
+placeholder text showed before the model's words; and the reaction to a chosen reply never showed
+what the player had said.
+
+* **One row per scene** (`scene_log`, migration 010). Taking a turn adds it with the decided turn as
+  JSON; the background, the person (who, expression, picture), the written words, the reply, the
+  reaction, the popup and an agreed meeting are filled in as they arrive, addressed by the scene's id
+  so a late picture never lands on the next scene. The newest row not closed is the scene the player
+  is in; Continue closes it, and so does the next turn. `PlayState.Scene` carries it, and coming back
+  shows it exactly, from cached images, without drawing anything again. A scene whose writing was
+  interrupted is marked unwritten and written again on return (its facts may then be proposed
+  twice; judged acceptable). Every scene stays in the table, so a scene history can be built later.
+* **The opening goes straight into its meeting.** The opening only started the clock and hinted at
+  the meeting place, so the first screen was a map. Both frontends now take the first turn at the
+  meeting place right after the opening is chosen.
+* **Nothing waits on a black screen.** The stage shows a spinner with what is being drawn until its
+  picture arrives ("Drawing The Corner Cup…"), in the person's column so no text box covers it; every
+  card has a spinner until its picture arrives. The scene's picture, the person and the words are
+  produced at the same time instead of one after the other. While the player reads a scene, the
+  next map's place pictures are drawn at the slot and weather the clock moved on to, so the map
+  usually opens with them already cached. On the map the stage shows where the latest scene was.
+* **No placeholder before the words.** A spinner ("Writing the scene…") stands in until the model
+  answers; the authored text shows only when the model fails and it is the fallback.
+* **The player's reply is part of the scene.** The chosen or typed words show under "You" as soon
+  as they are given, with a spinner while the other person answers, and they are saved with the scene.
+* **Russian, measured with the agency judge**: 138 scenes, 30 fallbacks (22%, against the 5% target);
+  most findings were not the player acting at all: other people's actions ("Rin sits across from
+  you"), descriptions addressed to the player ("the city spreads out before you"), "the stairwell of
+  your building", and dialogue in reactions. The judge's instruction now lists what is fine with those
+  examples, and on the last attempt its doubt about agency alone keeps the scene or reaction (logged
+  as "kept despite the judge") instead of throwing it away. Still to measure again.

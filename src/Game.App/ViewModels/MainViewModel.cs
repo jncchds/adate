@@ -40,7 +40,8 @@ public sealed partial class MainViewModel(GamePaths paths) : ObservableObject
 
     public void ShowOpening(SaveId saveId) => Show(new OpeningViewModel(this, Services, saveId));
 
-    public void ShowPlay(SaveId saveId) => Show(new PlayViewModel(this, Services, saveId));
+    /// <param name="startAt">An opening's meeting place, to go straight into instead of showing the map.</param>
+    public void ShowPlay(SaveId saveId, string? startAt = null) => Show(new PlayViewModel(this, Services, saveId, startAt));
 
     public void ShowSettings() => Show(new SettingsViewModel(this));
 

@@ -322,6 +322,10 @@ else
     [Parameter]
     public Guid SaveGuid { get; set; }
 
+    /// <summary>An opening's meeting place, to go straight into instead of showing the map.</summary>
+    [SupplyParameterFromQuery]
+    public string? Start { get; set; }
+
     private SaveId SaveId => new(SaveGuid);
 
     private PlayState? _state;
@@ -346,7 +350,17 @@ else
     // One neutral backdrop, shared by every person card, with the cut-out sprites standing on it.
     private string? _backdrop;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        if (Start is { } start
+            && _state is { Opening: not null, Pending: null, PendingScene: null, Scene: null, EndingOffer: null, Ending: null, Over: false }
+            && _state.KnownPlaces.FirstOrDefault(p => p.Id == start) is { } place)
+        {
+            await GoAsync(place);
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -451,13 +465,13 @@ else
             _background = null;
             StateHasChanged();
 
-            // Drawn at the slot the visit happened in, not the one the clock moved on to.
-            _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot, _state?.Weather?.Id ?? "clear");
+            // Drawn at the slot the visit happened in, and saved with the scene.
+            _background = await World.SceneBackgroundAsync(SaveId);
             StateHasChanged();
 
             // Whoever the scene is about steps in at their resting expression straight away.
             _view = await World.PresentAsync(SaveId, _outcome);
-            _sprite = await World.SpriteAsync(SaveId, _view);
+            _sprite = await World.SceneSpriteAsync(SaveId, _view);
             StateHasChanged();
 
             // Written once the placeholder, background and sprite are on screen, so a slow or absent
@@ -471,7 +485,7 @@ else
 
             if (expressionChanged)
             {
-                _sprite = await World.SpriteAsync(SaveId, written);
+                _sprite = await World.SceneSpriteAsync(SaveId, written);
             }
         }
         catch (Exception ex)
@@ -525,7 +539,7 @@ else
             if (_outcome is not null && result.View.CharacterId is not null && result.View.Expression != _view?.Expression)
             {
                 _view = result.View;
-                _sprite = await World.SpriteAsync(SaveId, result.View);
+                _sprite = await World.SceneSpriteAsync(SaveId, result.View);
             }
         }
         catch (Exception ex)
@@ -559,6 +573,7 @@ else
 
     private async Task ContinueAsync()
     {
+        await World.CloseSceneAsync(SaveId);
         _outcome = null;
         _outcomePlace = null;
         _background = null;

@@ -172,6 +172,51 @@
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
+    <!-- A turning arc wherever a picture or words are on their way. -->
+    <Style Selector="Arc.spinner">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="StartAngle" Value="0" />
+        <Setter Property="SweepAngle" Value="270" />
+        <Setter Property="Stroke" Value="#E8C872" />
+        <Setter Property="StrokeThickness" Value="3" />
+        <Setter Property="StrokeLineCap" Value="Round" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Style.Animations>
+            <Animation Duration="0:0:1" IterationCount="Infinite">
+                <KeyFrame Cue="0%">
+                    <Setter Property="RenderTransform" Value="rotate(0deg)" />
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="RenderTransform" Value="rotate(360deg)" />
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <Style Selector="Arc.spinner.small">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="StrokeThickness" Value="2.5" />
+    </Style>
+
+    <Style Selector="Border.loading">
+        <Setter Property="Background" Value="#B0101012" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="18,14" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The player's own words inside the scene, before the reaction. -->
+    <Style Selector="Border.reply">
+        <Setter Property="Background" Value="#22E8C872" />
+        <Setter Property="BorderBrush" Value="#E8C872" />
+        <Setter Property="BorderThickness" Value="3,0,0,0" />
+        <Setter Property="Padding" Value="12,6" />
+    </Style>
+
     <Style Selector="ProgressBar.busy">
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="MinHeight" Value="3" />

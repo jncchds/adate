@@ -29,11 +29,16 @@ public sealed class SceneJudge(ILlmClient llm)
         "nothing else. The scene may be written in another language than the facts; compare meaning, not wording. " +
         "Answer with JSON matching the schema, with an empty list when nothing contradicts.";
 
+    // Live in Russian, a looser wording flagged 22% of scenes into fallbacks, mostly for other people's actions
+    // ("Rin sits across from you"), descriptions ("the city spreads out before you") and "your building".
     public const string AgencyPrompt =
-        " Also list as playerActions, quoting each, every sentence of narration outside quoted dialogue that says what " +
-        "the player (addressed as \"you\") does, says, decides, thinks or feels, or that gives the player something to hold, " +
-        "wear or carry. What the player sees, hears or notices is fine. When the player's own reply is given, restating " +
-        "it is fine. An empty list when there is none.";
+        " Also list as playerActions, quoting each, every sentence of narration outside quoted dialogue in which the " +
+        "player (addressed as \"you\") is the one who acts: moves, sits, takes, says, decides, thinks or feels something, " +
+        "or holds, wears or carries something. These are fine and must not be listed: what other people do, even towards " +
+        "or about the player (\"she notices you\", \"he sits across from you\"); what the player sees, hears or notices; " +
+        "descriptions of the place that mention the player (\"the city spreads out before you\", \"the stairwell of your " +
+        "building\"); anything inside quoted dialogue; and restating the player's own reply when it is given. " +
+        "An empty list when there is none.";
 
     private static readonly JsonObject Schema = new()
     {

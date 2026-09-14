@@ -208,6 +208,22 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task On_the_last_attempt_the_judge_s_doubt_about_agency_alone_keeps_the_scene()
+    {
+        const string Doubt = """{ "contradictions": [], "playerActions": ["Город раскинулся перед тобой"] }""";
+        var llm = new FakeLlm(
+            () => Answer(text: "Город раскинулся перед тобой."), () => Doubt,
+            () => Answer(text: "Город раскинулся перед тобой."), () => Doubt,
+            () => Answer(text: "Город раскинулся перед тобой."), () => Doubt);
+
+        var scene = await Writer(llm, judge: true).WriteAsync(Packet() with { Language = "Русский" }, World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(3, scene.Attempts);
+        Assert.Contains(scene.Rejections, r => r.Contains("kept despite the judge", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task In_english_the_judge_reads_only_the_facts()
     {
         var llm = new FakeLlm(() => Answer(), () => """{ "contradictions": [] }""");

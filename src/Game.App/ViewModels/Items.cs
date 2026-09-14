@@ -74,9 +74,13 @@ public sealed partial class PersonCardViewModel(string key, string label, bool i
     private Bitmap? _backdrop;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWaiting))]
     private Bitmap? _portrait;
 
     public string Key { get; } = key;
+
+    /// <summary>A person whose picture is still being drawn.</summary>
+    public bool IsWaiting => !IsNobody && Portrait is null;
 
     public string Label { get; } = label;
 

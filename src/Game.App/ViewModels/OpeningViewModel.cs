@@ -70,7 +70,9 @@ public sealed partial class OpeningViewModel(MainViewModel main, GameServices se
         try
         {
             await _world.ChooseOpeningAsync(saveId, item.Opening.Id);
-            main.ShowPlay(saveId);
+
+            // Straight into the meeting the opening describes, rather than a map with a hint.
+            main.ShowPlay(saveId, item.Opening.MeetingPlace);
         }
         catch (Exception ex)
         {
