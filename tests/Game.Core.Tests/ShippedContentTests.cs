@@ -212,6 +212,55 @@ public class ShippedContentTests
     }
 
     [Fact]
+    public async Task The_shipped_cast_content_loads_and_fits_the_zimage_pack()
+    {
+        var content = Cast.CastContent.Load(
+            Path.Combine(RepoRoot(), "content", "temper.json"),
+            Path.Combine(RepoRoot(), "content", "wants.json"),
+            Path.Combine(RepoRoot(), "content", "contrasts.json"));
+
+        content.ValidateAgainst(await PackLoader().LoadAsync(ZImagePackId));
+
+        Assert.Equal(["bolder", "opposite", "other-life"], content.Contrasts.Select(c => c.Id));
+    }
+
+    [Theory]
+    [InlineData("female")]
+    [InlineData("male")]
+    public async Task The_zimage_pack_builds_a_full_cast_for_each_subject(string subject)
+    {
+        var pack = await PackLoader().LoadAsync(ZImagePackId);
+        var content = Cast.CastContent.Load(
+            Path.Combine(RepoRoot(), "content", "temper.json"),
+            Path.Combine(RepoRoot(), "content", "wants.json"),
+            Path.Combine(RepoRoot(), "content", "contrasts.json"));
+        var profile = pack.SubjectFor(subject);
+
+        string First(string feature) => profile.OptionsFor(feature)[0].Tag;
+
+        var appearance = new Characters.CharacterAppearance(
+            subject, 24,
+            EyeColor: First(Characters.AppearanceFeatures.EyeColor),
+            HairColor: First(Characters.AppearanceFeatures.HairColor),
+            HairStyle: First(Characters.AppearanceFeatures.HairStyle),
+            SkinTone: First(Characters.AppearanceFeatures.SkinTone),
+            Build: First(Characters.AppearanceFeatures.Build),
+            Height: First(Characters.AppearanceFeatures.Height),
+            DistinguishingFeature: "");
+
+        for (var seed = 0L; seed < 40; seed++)
+        {
+            var main = Cast.CastGenerator.PlaceholderMain(appearance, profile, content, seed);
+            var cast = Cast.CastGenerator.For(main, profile, content, seed + 1000);
+
+            Assert.Equal(3, cast.Count);
+            Assert.All(cast, m => Assert.False(string.IsNullOrEmpty(m.Aesthetic)));
+            Assert.All(cast, m => Assert.NotEmpty(profile.AestheticOutfit(m.Aesthetic)));
+            Assert.All(cast, m => Assert.NotEmpty(pack.ExpressionFor(m.RestingExpression(content))));
+        }
+    }
+
+    [Fact]
     public void An_unknown_location_names_the_ones_that_exist()
     {
         var ex = Assert.Throws<KeyNotFoundException>(() => Catalog().Get("atlantis"));

@@ -203,6 +203,61 @@ button.active {
     padding-top: 0.25rem;
 }
 
+/* Cast ---------------------------------------------------------------------- */
+
+.cast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.cast-card {
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--field-bg);
+}
+
+.cast-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.cast-card figcaption {
+    padding: 0.6rem 0.75rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.cast-question {
+    display: block;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+}
+
+.cast-card dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.6rem;
+    margin: 0;
+}
+
+.cast-card dt {
+    color: var(--muted);
+}
+
+.cast-card dd {
+    margin: 0;
+}
+
+/* Temper ends that differ from the main love interest. */
+.cast-card em {
+    font-style: normal;
+    font-weight: 600;
+}
+
 /* Composite stage ----------------------------------------------------------- */
 
 /*

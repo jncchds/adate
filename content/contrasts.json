@@ -1,0 +1,26 @@
+[
+  {
+    "id": "bolder",
+    "question": "Same heart, louder life?",
+    "look": ["hairColor", "hairStyle", "aesthetic", "feature"],
+    "temperFlips": { "axes": ["temper", "energy"] },
+    "want": "sameFamily",
+    "age": "same"
+  },
+  {
+    "id": "opposite",
+    "question": "Nothing alike?",
+    "look": ["aesthetic", "hairColor", "hairStyle", "eyeColor", "skinTone", "build"],
+    "temperFlips": { "count": 4 },
+    "want": "conflicting",
+    "age": "same"
+  },
+  {
+    "id": "other-life",
+    "question": "Different chapter?",
+    "look": ["age", "aesthetic", "hairStyle"],
+    "temperFlips": { "count": 2 },
+    "want": "differentFamily",
+    "age": "differentBand"
+  }
+]

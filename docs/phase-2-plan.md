@@ -104,7 +104,7 @@ There are three alternatives, each built from the main LI by a contrast profile
 
 | Profile | Question | Look | Inner |
 |---|---|---|---|
-| **Bolder** | Same heart, louder life? | Striking hair and style, an added feature | Same wants; energy and temper flipped |
+| **Bolder** | Same heart, louder life? | Striking hair and style, an added feature | A different want from the same family; energy and temper flipped |
 | **Opposite** | Nothing alike? | Different aesthetic, hair, eyes, build or skin tone | Opposite temper; conflicting want |
 | **Other life** | Different chapter? | Different age band, style and hair | Similar temper; different job and wants |
 
@@ -329,7 +329,9 @@ Each step ends in something that runs.
 1. **Z-Image for everything** (§1), including both measurements. The studio flow runs with ComfyUI
    stopped.
 2. **Cast generator** (§5). A debug page shows the four portraits and profiles, and the
-   distinctness measurement runs here.
+   distinctness measurement runs here. *Built: `/cast/{id}`, rules unit-tested, and two casts
+   rendered as four distinct people each (`decisions.md`). The distinctness judgement by someone
+   who hasn't seen the design is still to do.*
 3. **Settings, places and migration 003** (§2, §10).
 4. **Clock, encounters and a map screen**, with no LLM and placeholder text.
 5. **New game and the openings** (§3-4), in `big-city` first.

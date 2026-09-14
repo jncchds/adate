@@ -1,0 +1,134 @@
+@page "/cast/{CharacterId:guid}"
+@using Game.Core.Cast
+@using Game.Data.Repositories
+@using Game.Host.Services
+@inject CharacterRepository Characters
+@inject CharacterStudio Studio
+@inject CastContent Content
+@rendermode InteractiveServer
+
+<PageTitle>Cast</PageTitle>
+
+<h1>Cast</h1>
+
+<p class="lede">
+    The main love interest and the alternatives built from them, each a different person rather
+    than a recolour. Debug view: the main love interest's temper and want are placeholders until the
+    new-game flow asks for them.
+</p>
+
+@if (_error is not null)
+{
+    <div class="error">
+        <strong>Generation failed.</strong>
+        <p>@_error</p>
+        <button @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_portraits is null)
+{
+    <div class="working">
+        <p>Generating @(Content.Contrasts.Count + 1) portraits.</p>
+    </div>
+}
+else
+{
+    var main = _portraits[0].Member;
+
+    <div class="cast-grid">
+        @foreach (var portrait in _portraits)
+        {
+            var member = portrait.Member;
+            var flipped = member.FlippedAxes(main);
+
+            <figure class="cast-card">
+                <img src="@portrait.RelativePath" alt="@Title(member)" />
+                <figcaption>
+                    <strong>@Title(member)</strong>
+                    <span class="cast-question">@Question(member)</span>
+                    <dl>
+                        <dt>Age</dt>
+                        <dd>@member.Appearance.Age</dd>
+
+                        <dt>Look</dt>
+                        <dd>
+                            @if (member.IsMain)
+                            {
+                                @($"as declared; {Or(member.Aesthetic, "default outfit")}")
+                            }
+                            else
+                            {
+                                @string.Join("; ", member.LookChanges.Select(c => $"{Or(c.From, "none")} → {c.To}"))
+                            }
+                        </dd>
+
+                        <dt>Temper</dt>
+                        <dd>
+                            @foreach (var axis in Content.Temper)
+                            {
+                                var label = axis.End(member.Temper[axis.Id]).Label;
+                                @if (flipped.Contains(axis.Id))
+                                {
+                                    <em>@label</em>
+                                }
+                                else
+                                {
+                                    <span>@label</span>
+                                }
+                                @(axis == Content.Temper[^1] ? "" : ", ")
+                            }
+                        </dd>
+
+                        <dt>Wants to</dt>
+                        <dd>@Content.Want(member.WantId).Label</dd>
+                    </dl>
+                </figcaption>
+            </figure>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid CharacterId { get; set; }
+
+    private IReadOnlyList<CastPortrait>? _portraits;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _portraits = null;
+
+        try
+        {
+            var character = await Characters.GetAsync(CharacterId)
+                ?? throw new InvalidOperationException($"No character with id {CharacterId}.");
+
+            if (character.AnchorSeed is null)
+            {
+                throw new InvalidOperationException("Approve a portrait for this character first; the cast is built from it.");
+            }
+
+            _portraits = await Studio.GenerateCastAsync(character);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string Title(CastMember member) =>
+        member.IsMain
+            ? "Main love interest"
+            : string.Join(" ", member.ProfileId!.Split('-')) is var name && name.Length > 0
+                ? char.ToUpperInvariant(name[0]) + name[1..]
+                : member.ProfileId!;
+
+    private string Question(CastMember member) =>
+        member.IsMain ? "Who the player described." : Content.Contrasts.First(c => c.Id == member.ProfileId).Question;
+
+    private static string Or(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
+}

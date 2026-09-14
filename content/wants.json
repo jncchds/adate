@@ -1,0 +1,13 @@
+[
+  { "id": "open-a-bakery", "label": "open a small bakery of their own", "family": "build-something", "conflictsWith": ["leave-town"] },
+  { "id": "finish-a-novel", "label": "finish and publish the novel they keep rewriting", "family": "build-something", "conflictsWith": ["make-partner"] },
+  { "id": "restore-the-boat", "label": "restore their late grandfather's old boat", "family": "build-something", "conflictsWith": ["travel-the-world"] },
+  { "id": "leave-town", "label": "save up and leave for somewhere bigger", "family": "get-away", "conflictsWith": ["open-a-bakery", "care-for-a-parent"] },
+  { "id": "travel-the-world", "label": "travel for a year before settling anywhere", "family": "get-away", "conflictsWith": ["restore-the-boat", "start-a-family"] },
+  { "id": "make-partner", "label": "make partner at work before thirty-five", "family": "be-recognised", "conflictsWith": ["finish-a-novel", "start-a-family"] },
+  { "id": "win-the-competition", "label": "win the regional competition they lost last year", "family": "be-recognised", "conflictsWith": [] },
+  { "id": "start-a-family", "label": "settle down and start a family", "family": "belong", "conflictsWith": ["travel-the-world", "make-partner"] },
+  { "id": "reconnect-with-sibling", "label": "patch things up with an estranged sibling", "family": "belong", "conflictsWith": [] },
+  { "id": "care-for-a-parent", "label": "take proper care of an ailing parent", "family": "care-for-others", "conflictsWith": ["leave-town"] },
+  { "id": "save-the-shelter", "label": "keep the local animal shelter from closing", "family": "care-for-others", "conflictsWith": [] }
+]

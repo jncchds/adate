@@ -21,4 +21,8 @@ namespace Game.Core.Style;
 /// peach on three seeds out of three, while "dark-skinned with dark brown skin" rendered brown on
 /// all three. The player chose brown skin, and these are the words that draw it.
 /// </param>
-public sealed record FeatureOption(string Tag, IReadOnlyList<string>? Near = null, string? Prompt = null);
+/// <param name="PlayerOnly">
+/// A choice a player may declare but a generator must never pick for someone the player did not
+/// describe. Meant for build and height words near juvenile-coded vocabulary (HANDOFF 1.9).
+/// </param>
+public sealed record FeatureOption(string Tag, IReadOnlyList<string>? Near = null, string? Prompt = null, bool PlayerOnly = false);

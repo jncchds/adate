@@ -96,5 +96,29 @@ internal static class FeatureVocabularyRules
                 }
             }
         }
+
+        // Cast vocabulary is authored rather than chosen by a player, but it reaches the prompt all
+        // the same, so it meets the same bar.
+        var castPhrases = (profile.CastFeatures ?? [])
+            .Concat((profile.Aesthetics ?? new Dictionary<string, IReadOnlyList<string>>()).Values.SelectMany(static outfit => outfit));
+
+        foreach (var phrase in castPhrases)
+        {
+            if (string.IsNullOrWhiteSpace(phrase))
+            {
+                throw new InvalidOperationException(
+                    $"Subject '{subject}' in style pack '{packId}' has a blank cast feature or aesthetic outfit phrase.");
+            }
+
+            foreach (var term in alwaysNegative)
+            {
+                if (!term.StartsWith('(') && phrase.Contains(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Subject '{subject}' in style pack '{packId}' uses '{phrase}' for the cast, which contains the " +
+                        $"always-negative term '{term}'.");
+                }
+            }
+        }
     }
 }

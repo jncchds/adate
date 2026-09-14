@@ -239,13 +239,38 @@ public sealed record StylePack
 /// checkpoint-specific. Nullable only so a manifest written before choices existed still
 /// deserialises; the loader refuses a pack that omits them.
 /// </param>
+/// <param name="Aesthetics">
+/// Style aesthetics, id to outfit phrases, that dress the cast (phase-2 plan §5). Ids match the
+/// leanings in <c>content/temper.json</c>. Optional: only packs that render a cast need them.
+/// </param>
+/// <param name="CastFeatures">Distinguishing features a contrast profile may add to a variant.</param>
 public sealed record SubjectProfile(
     IReadOnlyList<string> Positive,
     IReadOnlyList<string> Negative,
     IReadOnlyList<string> Outfit,
     IReadOnlyList<AgeBand> AgeBands,
-    IReadOnlyDictionary<string, IReadOnlyList<FeatureOption>>? Features = null)
+    IReadOnlyDictionary<string, IReadOnlyList<FeatureOption>>? Features = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? Aesthetics = null,
+    IReadOnlyList<string>? CastFeatures = null)
 {
+    /// <summary>The outfit phrases for <paramref name="aesthetic"/>, or a throw naming what exists.</summary>
+    public IReadOnlyList<string> AestheticOutfit(string aesthetic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(aesthetic);
+
+        // Matched case-insensitively for the same reason as SubjectFor.
+        foreach (var (key, outfit) in Aesthetics ?? new Dictionary<string, IReadOnlyList<string>>())
+        {
+            if (string.Equals(key, aesthetic, StringComparison.OrdinalIgnoreCase))
+            {
+                return outfit;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"This subject offers no aesthetic '{aesthetic}'. Known: {string.Join(", ", (Aesthetics?.Keys ?? []).Order(StringComparer.Ordinal))}.");
+    }
+
     /// <summary>The choices for <paramref name="feature"/>, or none.</summary>
     public IReadOnlyList<FeatureOption> OptionsFor(string feature)
     {

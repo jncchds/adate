@@ -563,3 +563,54 @@ none of it depends on the model obeying a negative:
 * **The Z-Image provider refuses a non-empty negative at cfg ≤ 1.0,** the same way it refuses a
   pose skeleton. A pack cannot quietly claim a protection this provider does not apply.
 * **`alwaysNegative` stays required on every pack,** as the vocabulary guard, which is real.
+
+## The cast is generated from contrast profiles, and nothing is stored yet
+
+Phase-2 plan build step 2. The alternatives to a main LI come from `content/contrasts.json`
+(Bolder, Opposite, Other life), `content/temper.json` (five two-ended axes) and
+`content/wants.json` (wants with families and symmetric conflicts). `CastGenerator` builds one
+member per profile, deterministically from a seed.
+
+**The rules it holds, each unit-tested across 60 seeds.**
+
+* **Look budget:** at least three look changes, one of them visible in silhouette.
+* **Temper:** at least two axes flipped.
+* **Want:** different from every other member's, and related to the main LI's as the profile
+  says. Bolder takes the same family, Opposite a conflicting want and Other life a different
+  family.
+* **Subject** never changes.
+* **Age:** an adult main LI's variants stay between 18 and ten years older than them. A main LI
+  under 18 passes their exact age to every variant, so nothing generates a minor the player did
+  not describe.
+* **Player-only choices** are never picked.
+* **No two members share a moved hair colour, hair style, aesthetic or age.**
+
+The loader refuses content that could not meet the budget: an axis without exactly two ends, a
+one-sided conflict, or a profile with too few or no silhouette dimensions.
+
+**Two decisions came from measurements, not from the plan.**
+
+* **Build is not a silhouette dimension.** No build wording moved the Z-Image render, so a
+  variant relying on it would look like the main LI.
+* **Hair colour is kept distinct between members.** On the first debug render, Bolder and
+  Opposite both came out purple-haired, and the comparison blurred. Only style, aesthetic and
+  age had been kept apart.
+
+**Rendered through the real pipeline** on `/cast/{id}`, for the 24-year-old woman and the
+30-year-old man. Each main LI and variant is a portrait at its own seed, in its own aesthetic's
+outfit, with its temper's resting expression. By eye, each set is four clearly different people.
+The woman: red long hair in artsy clothes; a purple bob in a denim jacket; a blue braid with dark
+skin in sportswear; and at 29, a camel coat and red ponytail. The man: a suit and beard; blue
+cropped hair with glasses in a track jacket; a blonde ponytail with dark skin in a linen shirt;
+and at 20, a leather jacket and slicked-back hair.
+
+**Limits, stated so nothing downstream assumes otherwise.**
+
+* **Placeholders:** the main LI's temper, want and aesthetic are placeholders derived from their
+  seed, until the new-game flow asks for them (build step 5).
+* **Nothing is persisted:** the cast is rebuilt on request and served from the image cache.
+  Storing it waits for migration 003.
+* **The feature slot:** a variant's added feature replaces the main LI's distinguishing feature
+  (the man's beard became glasses), because appearance has one feature slot.
+* **Distinctness is not yet measured.** The plan's check needs someone who has not seen the
+  design, and that judgement has not been made.

@@ -37,6 +37,9 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.StylePackDirectory = ResolveContentPath(o.StylePackDirectory);
     o.LocationsFile = ResolveContentPath(o.LocationsFile);
     o.PoseDirectory = ResolveContentPath(o.PoseDirectory);
+    o.TemperFile = ResolveContentPath(o.TemperFile);
+    o.WantsFile = ResolveContentPath(o.WantsFile);
+    o.ContrastsFile = ResolveContentPath(o.ContrastsFile);
 
     // Fail at startup rather than at the first render: a game that has declared an
     // impossible age floor should not serve a single page.
@@ -56,6 +59,12 @@ builder.Services.AddSingleton<IStylePackLoader>(sp => sp.GetRequiredService<Json
 
 builder.Services.AddSingleton<ILocationCatalog>(sp =>
     new JsonLocationCatalog(sp.GetRequiredService<IOptions<StudioOptions>>().Value.LocationsFile));
+
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<IOptions<StudioOptions>>().Value;
+    return Game.Core.Cast.CastContent.Load(o.TemperFile, o.WantsFile, o.ContrastsFile);
+});
 
 // One compiler per prompt dialect; the pack's dialect picks which one runs.
 builder.Services.AddSingleton<IPromptCompiler, BooruPromptCompiler>();

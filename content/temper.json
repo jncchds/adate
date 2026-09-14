@@ -1,0 +1,42 @@
+[
+  {
+    "id": "temper",
+    "label": "Temper",
+    "ends": [
+      { "id": "calm", "label": "calm", "writing": "Speaks evenly, takes a moment before reacting, and rarely raises their voice.", "resting": "neutral", "aesthetics": ["elegant", "preppy"] },
+      { "id": "fiery", "label": "fiery", "writing": "Reacts fast and openly, argues for what they want, and cools down just as quickly.", "resting": "smile", "aesthetics": ["alternative", "sporty"] }
+    ]
+  },
+  {
+    "id": "energy",
+    "label": "Energy",
+    "ends": [
+      { "id": "reserved", "label": "reserved", "writing": "Listens more than talks, and warms up slowly in groups.", "resting": "neutral", "aesthetics": ["artsy", "preppy"] },
+      { "id": "outgoing", "label": "outgoing", "writing": "Starts conversations, fills silences, and likes a crowd.", "resting": "smile", "aesthetics": ["sporty", "alternative"] }
+    ]
+  },
+  {
+    "id": "warmth",
+    "label": "Warmth",
+    "ends": [
+      { "id": "guarded", "label": "guarded", "writing": "Keeps personal things back until trust is earned, and deflects direct questions.", "resting": "neutral", "aesthetics": ["rugged", "elegant"] },
+      { "id": "open", "label": "open", "writing": "Shares easily, asks about you, and says what they feel.", "resting": "smile", "aesthetics": ["artsy", "sporty"] }
+    ]
+  },
+  {
+    "id": "humour",
+    "label": "Humour",
+    "ends": [
+      { "id": "dry", "label": "dry", "writing": "Jokes with a straight face, understated and a little sardonic.", "resting": "neutral", "aesthetics": ["rugged", "elegant"] },
+      { "id": "playful", "label": "playful", "writing": "Teases, laughs easily, and turns small things into games.", "resting": "laughing", "aesthetics": ["artsy", "alternative"] }
+    ]
+  },
+  {
+    "id": "drive",
+    "label": "Drive",
+    "ends": [
+      { "id": "easygoing", "label": "easygoing", "writing": "Takes things as they come and is hard to rush.", "resting": "smile", "aesthetics": ["rugged", "artsy"] },
+      { "id": "ambitious", "label": "ambitious", "writing": "Plans ahead, talks about goals, and measures days by progress.", "resting": "neutral", "aesthetics": ["preppy", "elegant"] }
+    ]
+  }
+]

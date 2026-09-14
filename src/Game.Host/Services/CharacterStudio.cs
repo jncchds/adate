@@ -1,4 +1,5 @@
 using Game.Core;
+using Game.Core.Cast;
 using Game.Core.Characters;
 using Game.Core.Content;
 using Game.Core.Saves;
@@ -18,6 +19,7 @@ namespace Game.Host.Services;
 public sealed class CharacterStudio(
     IImageProvider images,
     PromptCompilers compilers,
+    CastContent cast,
     IStylePackLoader packs,
     JsonStylePackLoader packText,
     CharacterRepository characters,
@@ -302,6 +304,72 @@ public sealed class CharacterStudio(
         return image.RelativePath;
     }
 
+    // ----------------------------------------------------------------------- cast
+
+    /// <summary>
+    /// The main LI and the alternatives built from them (phase-2 plan §5), each as a portrait in
+    /// their own aesthetic. Nothing is stored: the cast is deterministic from the character, so it
+    /// is rebuilt on request and the images are served from the content-addressed cache.
+    /// </summary>
+    public Task<IReadOnlyList<CastPortrait>> GenerateCastAsync(CharacterRecord main) =>
+        jobs.RunAsync($"cast:{main.Id}", ct => GenerateCastCoreAsync(main, ct));
+
+    private async Task<IReadOnlyList<CastPortrait>> GenerateCastCoreAsync(CharacterRecord main, CancellationToken ct)
+    {
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
+        var subject = pack.SubjectFor(main.Appearance.Subject);
+
+        cast.ValidateAgainst(pack);
+
+        // Temper, want and aesthetic are not stored yet; the new-game flow will ask for them.
+        var lead = CastGenerator.PlaceholderMain(
+            main.Appearance, subject, cast, main.AnchorSeed ?? DeriveSeed(main.Id, 0));
+
+        IReadOnlyList<CastMember> members =
+            [lead, .. CastGenerator.For(lead, subject, cast, DeriveSeed(main.Id, 1000))];
+
+        var results = new List<CastPortrait>(members.Count);
+
+        foreach (var member in members)
+        {
+            // The content decision is made per member, from that member's own age.
+            var person = main with { Appearance = member.Appearance };
+
+            var outfit = member.Aesthetic.Length > 0
+                ? subject.AestheticOutfit(member.Aesthetic)
+                : subject.Outfit;
+
+            var approved = Approve(person, pack, new SceneIntent(
+                "studio",
+                TimeOfDay.Midday,
+                string.Join(", ", outfit),
+                "looking at viewer",
+                pack.ExpressionFor(member.RestingExpression(cast)),
+                Framing.Portrait));
+
+            var image = await images.GenerateAsync(
+                new ImageRequest(
+                    WorkflowId: pack.Workflows.Portrait,
+                    Positive: compiler.CompilePositive(member.Appearance, approved, pack, RenderTarget.Portrait),
+                    Negative: compiler.CompileNegative(pack, approved.Ceiling, RenderTarget.Portrait, member.Appearance.Subject),
+                    Seed: member.Seed,
+                    Width: pack.Resolutions.Portrait.Width,
+                    Height: pack.Resolutions.Portrait.Height,
+                    PackFingerprint: PackFingerprint(),
+                    AnchorImageHash: null,
+                    AnchorWeight: null,
+                    PoseImageHash: null,
+                    PoseStrength: null,
+                    Ceiling: approved.Ceiling),
+                ct).ConfigureAwait(false);
+
+            results.Add(new CastPortrait(member, image.RelativePath));
+        }
+
+        return results;
+    }
+
     // ----------------------------------------------------------------- internals
 
     private static SceneIntent PortraitIntent() =>
@@ -350,9 +418,17 @@ public sealed record Candidate(
     CharacterAppearance Appearance,
     IReadOnlyList<FeatureChange> Changes);
 
+public sealed record CastPortrait(CastMember Member, string RelativePath);
+
 public sealed class StudioOptions
 {
     public const string SectionName = "Studio";
+
+    public string TemperFile { get; set; } = Path.Combine("content", "temper.json");
+
+    public string WantsFile { get; set; } = Path.Combine("content", "wants.json");
+
+    public string ContrastsFile { get; set; } = Path.Combine("content", "contrasts.json");
 
     public string StylePackId { get; set; } = "illustrious-anime";
 

@@ -80,6 +80,21 @@
         "a white blouse",
         "a navy pleated skirt"
       ],
+      "aesthetics": {
+        "sporty": ["a fitted zip-up track jacket", "grey joggers"],
+        "preppy": ["a cream cable-knit sweater over a collared shirt", "a navy pleated skirt"],
+        "alternative": ["a black band t-shirt", "a red plaid flannel shirt worn open", "black jeans"],
+        "rugged": ["a worn denim jacket", "a plain grey t-shirt", "dark jeans"],
+        "elegant": ["a tailored camel coat", "an ivory silk blouse"],
+        "artsy": ["an oversized paint-flecked linen shirt", "wide-leg olive trousers"]
+      },
+      "castFeatures": [
+        "glasses",
+        "freckles",
+        "a small beauty mark under one eye",
+        "a small nose stud",
+        "silver hoop earrings"
+      ],
       "features": {
         "hairColor": [
           { "tag": "black hair", "near": ["dark brown hair"] },
@@ -188,6 +203,21 @@
       "outfit": [
         "a white button-up shirt",
         "black trousers"
+      ],
+      "aesthetics": {
+        "sporty": ["a navy zip-up track jacket", "grey joggers"],
+        "preppy": ["a navy cable-knit sweater over a collared shirt", "beige chinos"],
+        "alternative": ["a black band t-shirt", "a red plaid flannel shirt worn open", "black jeans"],
+        "rugged": ["a worn brown leather jacket", "a plain grey t-shirt", "dark jeans"],
+        "elegant": ["a tailored charcoal blazer", "a crisp white shirt"],
+        "artsy": ["an oversized paint-flecked linen shirt", "wide-leg olive trousers"]
+      },
+      "castFeatures": [
+        "glasses",
+        "a trimmed beard",
+        "a small scar through one eyebrow",
+        "a single silver earring",
+        "light stubble"
       ],
       "features": {
         "hairColor": [
