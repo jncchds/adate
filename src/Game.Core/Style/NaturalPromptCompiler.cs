@@ -65,7 +65,10 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
                 Add(sentences, time);
             }
 
-            // A stray figure in a cached background is permanent.
+            // A stray figure in a cached background is permanent. Kept short on purpose. Measured:
+            // spelling it out ("no pedestrians, no figures in the distance") added figures in 4 of
+            // 12 renders against about 1 in 90 for this sentence, and dropping it added some
+            // too. Naming the thing primes it.
             Add(sentences, "An empty scene with no people in it");
 
             return Join(sentences);

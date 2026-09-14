@@ -129,7 +129,7 @@
       "displayName": "Night market",
       "kind": "outdoor",
       "tags": ["night market", "market stalls", "paper lanterns", "street food stalls", "outdoors"],
-      "description": "A street night market with rows of food stalls under strings of paper lanterns",
+      "description": "A street night market set up but not yet open, with rows of empty, unattended market stalls under strings of paper lanterns",
       "details": [
         { "id": "red-lanterns", "tags": ["red lanterns"], "phrase": "rows of red paper lanterns" },
         { "id": "steam", "tags": ["steam"], "phrase": "steam rising from the food stalls" },
@@ -225,7 +225,7 @@
       "displayName": "Family shop",
       "kind": "indoor",
       "tags": ["general store", "shop interior", "shelves", "counter", "cash register"],
-      "description": "The inside of a small family-run general store with crowded shelves, a wooden counter and an old cash register",
+      "description": "The inside of a small family-run general store with tightly packed shelves, a wooden counter and an old cash register",
       "details": [
         { "id": "bell", "tags": ["door bell"], "phrase": "a brass bell above the door" },
         { "id": "candy-jars", "tags": ["candy jars"], "phrase": "glass jars of candy on the counter" },

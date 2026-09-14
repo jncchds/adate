@@ -674,3 +674,65 @@ detail, and the stored cast read back unchanged.
 
 **Not in this step:** the clock, flags and visits have tables but no behaviour (build step 4), and
 nothing yet chooses a setting or an opening (step 5).
+
+## People in backgrounds: fix the place wording, not the "no people" sentence
+
+The in-game Corner Cup background had two tiny pedestrians outside the window. A background is
+cached for the life of a save, so a stray figure is permanent. Z-Image ignores negatives, so the
+only levers are positive wording and content.
+
+The fix was measured, not assumed. There were three sweeps on Z-Image at midday. Enlarged crops
+confirmed every suspected figure.
+
+**Sweep 1: 8 street-facing place types × 3 endings × 2 seeds.**
+
+* **A** is today's sentence, "An empty scene with no people in it".
+* **B** is a strong ending: "no one inside, no one outside the windows, no pedestrians and no
+  figures in the distance".
+* **C** is B plus an early "An empty background scene with no people".
+
+| Place type | A | B | C |
+|---|---|---|---|
+| Cafe | 0/2 | 1/2 | 0/2 |
+| Main street | 0/2 | 1/2 | 1/2 |
+| Fairground | 0/2 | 0/2 | 1/2 |
+| Office, diner, bar, park | 0/2 each | 0/2 each | 0/2 each |
+| Night market | 2/2, vendors | 2/2 | 2/2 |
+
+**Sweep 2: new seeds; A against D (no sentence), and two night-market descriptions.**
+
+| Place type | A | D |
+|---|---|---|
+| Cafe | 0/3 | 1/3 |
+| Main street | 0/3 | 0/3 |
+| Fairground | 0/3 | 1/3 |
+| Night market, "rows of food stalls" | 3/3 | 3/3, crowds |
+| Night market, "after closing, shuttered, unattended" | 1/3 | |
+| Night market, "set up but not yet open, empty, unattended stalls" | 0/3 | |
+
+**Sweep 3: all 22 place types × 3 seeds** with A and the new night-market description. One person
+in 66 renders: a distant walker on the park path (seed 101), confirmed by an enlarged crop. The
+other 65 were empty, including mess hall, staff lounge and campfire circle.
+
+**What this settles.**
+
+* **Naming the thing primes it.** The spelled-out ending added figures where the short sentence
+  had none, and removing the sentence added some too. The short sentence stays, and a comment in
+  `NaturalPromptCompiler` says why.
+* **A description that implies people gets people**, whatever the sentence says. Stalls imply
+  vendors. The night-market description now says the stalls are unattended and not yet open,
+  and a content test refuses place-type wording with people-implying words (crowd, vendor,
+  customer, pedestrian, busy and others).
+* **What remains:** about 2 figures in 90 renders with today's wording: one through a cafe window
+  onto a street, and one distant walker on a park path. Both are small and far away. Wording
+  cannot remove them reliably. The dependable fix would be a person check on the server that
+  re-renders with the next seed, which needs a detection model. Not done, because it adds a model
+  download to the GPU box.
+* **The content guard caught a real case on its first run:** the family shop's "crowded shelves".
+  Harmless in the renders, but it is the kind of word that primes, so it now reads "tightly
+  packed shelves".
+* **The existing Corner Cup background** for the current save keeps its pedestrians. Its seed
+  and prompt are unchanged, so the cached image is served again.
+
+Unrelated, and noted for later: some rendered signs carry garbled or Chinese-looking lettering,
+on trail signs and bar neon.

@@ -84,6 +84,38 @@ public class ShippedContentTests
                 pack);
     }
 
+    /// <summary>
+    /// Measured on Z-Image: a background whose description implies people gets them, whatever the
+    /// "no people" sentence says. "Rows of food stalls" drew vendors in 5 of 5 renders. "Empty,
+    /// unattended stalls, set up but not yet open" drew none in 6. A background is cached for the
+    /// life of a save, so the wording is guarded here.
+    /// </summary>
+    [Fact]
+    public void No_place_type_describes_people()
+    {
+        string[] people =
+        [
+            "people", "person", "crowd", "customer", "vendor", "shopper", "pedestrian", "patron",
+            "visitor", "tourist", "camper", "worker", "children", "kids", "passerby", "passers-by",
+            "bustling", "busy",
+        ];
+
+        foreach (var type in Catalog().All())
+        {
+            IEnumerable<string> wording = [type.Description!, .. type.TimeDescriptions!.Values, .. type.Details!.Select(d => d.Phrase)];
+
+            foreach (var text in wording)
+            {
+                foreach (var word in people)
+                {
+                    Assert.False(
+                        text.Contains(word, StringComparison.OrdinalIgnoreCase),
+                        $"place type '{type.Id}': \"{text}\" mentions '{word}'");
+                }
+            }
+        }
+    }
+
     [Fact]
     public void Every_place_type_offers_details()
     {
