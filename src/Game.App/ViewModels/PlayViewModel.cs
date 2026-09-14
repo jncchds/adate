@@ -83,6 +83,10 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string? _sceneText;
 
+    /// <summary>The name of whoever the scene is about, shown on a tag above the words.</summary>
+    [ObservableProperty]
+    private string? _speaker;
+
     [ObservableProperty]
     private string? _withLine;
 
@@ -200,6 +204,7 @@ public sealed partial class PlayViewModel : PageViewModel
         WithLine = null;
         RevealLine = null;
         StageSprite = null;
+        Speaker = null;
         People.Clear();
         HasPeople = false;
         Places.Clear();
@@ -509,6 +514,7 @@ public sealed partial class PlayViewModel : PageViewModel
             Popup = null;
             Agreed = null;
             StageSprite = null;
+            Speaker = null;
             Mode = PlayMode.Scene;
             RefreshSceneControls();
             ScrollToTopRequested?.Invoke();
@@ -519,6 +525,7 @@ public sealed partial class PlayViewModel : PageViewModel
 
             // Whoever the scene is about steps in at their resting expression straight away.
             _view = await _world.PresentAsync(_saveId, outcome);
+            Speaker = _view.Name;
             StageSprite = await PictureAsync(await _world.SpriteAsync(_saveId, _view));
 
             // Written once the placeholder, background and sprite are on screen, so a slow or absent

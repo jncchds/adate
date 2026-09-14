@@ -31,20 +31,23 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ctl:StageLayout>
+    <ctl:StageLayout Tall="{Binding !IsScene}">
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" />
-            <ctl:SpriteFrame>
-                <Image Source="{Binding StageSprite}" />
-            </ctl:SpriteFrame>
             <Border Classes="caption" IsVisible="{Binding StageCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock Text="{Binding StageCaption}" />
             </Border>
             <ProgressBar Classes="busy" IsIndeterminate="True" IsVisible="{Binding Working}" />
         </Panel>
 
-        <!-- The side: the words and every choice, scrolling on their own. -->
+        <!-- The person the scene is about: at the left in landscape, over the picture in portrait. -->
+        <ctl:SpriteFrame>
+            <Image Source="{Binding StageSprite}" />
+        </ctl:SpriteFrame>
+
+        <!-- The words and every choice, in a translucent box that scrolls on its own. -->
+        <Border Classes="textbox">
         <ScrollViewer x:Name="Side">
             <StackPanel Classes="side">
                 <Button Classes="link" Content="‹ Saves" Command="{Binding HomeCommand}" />
@@ -59,7 +62,10 @@
 
                 <!-- A scene: its words, then choices, a reply of the player's own, or the reaction. -->
                 <StackPanel IsVisible="{Binding IsScene}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
+                    <TextBlock Classes="small" Text="{Binding Heading}" />
+                    <Border Classes="nametag" IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding Speaker}" />
+                    </Border>
                     <TextBlock Classes="story" Text="{Binding SceneText}" />
                     <TextBlock Classes="small" Text="{Binding WithLine}"
                                IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -202,5 +208,6 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
+        </Border>
     </ctl:StageLayout>
 </UserControl>

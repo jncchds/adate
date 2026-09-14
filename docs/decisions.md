@@ -1241,19 +1241,25 @@ The measure harness stays in the web host.
   their addresses once. Android allows cleartext HTTP, since LM Studio and Z-Image are plain HTTP
   on the LAN.
 
-**The picture never scrolls away.** The play screen is two parts in a `StageLayout` panel: the stage
-(background, sprite, caption) and the side (words and choices), which scrolls on its own.
-* Landscape, from nearly square to 20:9 phones: the side is on the right at 36% of the width,
-  clamped to 320 to 560 px and never more than half.
-* Portrait: the side stacks under a stage 45% of the height, capped at a square, so a person still
-  reads at phone size.
-* `SpriteFrame` shows a sprite from the head to about mid-thigh (62% of its height) and crops arms
-  before shrinking the face in narrow cards. The same frame draws people on the neutral backdrop in
+**The picture never scrolls away.** The play screen is three parts in a `StageLayout` panel: the
+stage (background, caption), the figure (the person) and the side (words and choices), which
+scrolls on its own.
+* Landscape, from nearly square to 20:9 phones, is laid out like a visual novel (the user's
+  proposal): the background fills the screen, the person stands in a column on the left (36% of the
+  width, at most 0.8 of the height), and the words sit in a translucent box over the lower half of
+  the rest, at least 240 px tall, capped at 880 px wide and centred beside the person. A name tag
+  above the scene text names whoever the scene is about.
+* On screens with no one standing there (the map, the ending offer, the ending) the box takes nearly
+  the full height, so cards and recaps have room; the left column still shows the place.
+* Portrait stacks instead: the picture and the person take the top, 45% of the height capped at a
+  square, and the words scroll below on a solid ground. A box over the lower half of a tall narrow
+  screen would cover the person.
+* `SpriteFrame` shows a sprite from the head down (62% of its height, more in a narrow column, where
+  it crops arms before shrinking the face). The same frame draws people on the neutral backdrop in
   the invite and ending cards.
 * On the map the stage shows the place the player was last at, at the current slot and weather;
   after a restart, the first known place. This is not saved. At the ending offer and the ending it
   shows the backdrop.
-
 **Not ported.** The cast debug page and the scene viewer stay web-only; they are tools, not play.
 
 **Solution and CI.** Adate.slnx holds what builds anywhere .NET builds, the desktop head and the UI

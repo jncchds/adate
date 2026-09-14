@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:Game.App.Controls">
 
     <!-- Pages that are forms or lists: one readable column. -->
     <Style Selector="StackPanel.page">
@@ -117,8 +118,36 @@
         <Setter Property="Padding" Value="14" />
     </Style>
 
+    <!-- The words over the picture: dark enough to read on any background, light enough to see through. -->
+    <Style Selector="Border.textbox">
+        <Setter Property="Background" Value="#C8141418" />
+        <Setter Property="BorderBrush" Value="#30FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <!-- Stacked under the picture on an upright screen, the box is simply the lower part of the page. -->
+    <Style Selector="ctl|StageLayout:stacked > Border.textbox">
+        <Setter Property="Background" Value="#121213" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.nametag">
+        <Setter Property="Background" Value="#E8C872" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Border.nametag > TextBlock">
+        <Setter Property="Foreground" Value="#1A1A1A" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style Selector="ProgressBar.busy">
-        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="MinHeight" Value="3" />
     </Style>
 </Styles>
