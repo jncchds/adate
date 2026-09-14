@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Game.App.ViewModels"
+             xmlns:play="using:Game.Play"
              xmlns:ctl="using:Game.App.Controls"
              xmlns:sys="using:System"
              x:Class="Game.App.Views.PlayView"
@@ -78,7 +79,8 @@
         <Border Classes="textbox">
             <Grid RowDefinitions="Auto,*">
                 <Grid ColumnDefinitions="*,Auto" Margin="16,12,16,6">
-                    <TextBlock Classes="title" Text="{Binding Heading}" />
+                    <!-- Ten quick taps on the title open the debug screen. -->
+                    <TextBlock x:Name="Title" Classes="title" Background="Transparent" Text="{Binding Heading}" />
                     <Border Grid.Column="1" Classes="nametag"
                             IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock Text="{Binding Speaker}" />
@@ -304,6 +306,29 @@
                 <TextBlock Text="{Binding StageCaption}" />
             </Border>
             <ProgressBar Classes="busy" IsIndeterminate="True" IsVisible="{Binding Working}" />
+
+            <!-- The hidden debug screen, over everything. -->
+            <Border Classes="debug" IsVisible="{Binding IsDebugOpen}">
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,10">
+                        <TextBlock Classes="title" Text="Debug" />
+                        <Button Content="Refresh" Command="{Binding OpenDebugCommand}" />
+                        <Button Content="Close" Command="{Binding CloseDebugCommand}" />
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding DebugSections}" Margin="12,0,12,24">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="play:DebugSection">
+                                    <Expander Header="{Binding Title}" IsExpanded="True" HorizontalAlignment="Stretch" Margin="0,0,0,6">
+                                        <SelectableTextBlock Classes="debug"
+                                                             Text="{Binding Lines, Converter={x:Static vm:DebugLines.Join}}" />
+                                    </Expander>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
         </Panel>
     </ctl:StageLayout>
 </UserControl>

@@ -234,6 +234,17 @@
         <Setter Property="Padding" Value="12,6" />
     </Style>
 
+    <!-- The hidden debug screen: opaque, monospace, everything selectable. -->
+    <Style Selector="Border.debug">
+        <Setter Property="Background" Value="#F0101012" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.debug">
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, monospace" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
     <Style Selector="ProgressBar.busy">
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="MinHeight" Value="3" />

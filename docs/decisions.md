@@ -1453,3 +1453,12 @@ does should change how the love interests see them, through traits.
   at home (`home`, per setting), overriding whatever was planned there, as a conversation whose scene
   is only their messages; it can arrange a meeting, and so a first date.
 * Only the desktop and Android app offer these so far; the web page still passes time at places.
+## A hidden debug screen
+
+User request: a debug screen with a rare trigger that shows all the game info. Ten taps on the
+screen's title within four seconds (`TapTrigger`) open an overlay on the play screen with everything
+`WorldService.DebugReportAsync` knows about the save, raw and selectable: the save and clock, the
+pending choice and scene, every person (relationship numbers, cast member, profile, where their
+schedule puts them now, rapport), the player's traits and pastimes, hints, all flags, all promises,
+known places, facts with who knows them, memories, and the scene log with its pictures and
+conversations. It reads only; it changes nothing. The same trigger works on the phone.

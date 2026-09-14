@@ -118,6 +118,9 @@ public sealed record PlayState(
     IReadOnlyList<Invitee>? Contacts = null);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
+/// <summary>One part of the debug screen: a title and its raw lines.</summary>
+public sealed record DebugSection(string Title, IReadOnlyList<string> Lines);
+
 public sealed class WorldService(
     SaveRepository saves,
     PlaceRepository places,
@@ -593,6 +596,87 @@ public sealed class WorldService(
             saveId, filled.VisitedAt, place.Id, filled.EncounterId, TurnOutcomeJson.Serialize(filled), filled.Text, ct).ConfigureAwait(false);
 
         return filled;
+    }
+
+    /// <summary>Everything the game knows about a save, for the hidden debug screen: raw, in sections.</summary>
+    public async Task<IReadOnlyList<DebugSection>> DebugReportAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
+        var promises = await story.GetPromisesAsync(saveId, openOnly: false, ct).ConfigureAwait(false);
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
+        var memories = await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false);
+        var scenes = await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false);
+        var pendingScene = await state.GetPendingSceneAsync(saveId, ct).ConfigureAwait(false);
+        string NameOf(string? id) => cast.FirstOrDefault(li => li.Id.ToString() == id || li.Ref == id || li.Key == id)?.Name ?? id ?? "-";
+
+        var sections = new List<DebugSection>
+        {
+            new("Save",
+            [
+                $"id: {saveId}",
+                $"setting: {play.Setting.Id} ({play.Setting.DisplayName}), {play.Setting.Days} days",
+                $"player: {await saves.GetPlayerNameAsync(saveId, ct).ConfigureAwait(false)} ({await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false) ?? "-"})",
+                $"narration: {await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false) ?? "English"}",
+                $"clock: day {play.Clock.Day} (weekday {CharacterSchedule.Weekday(play.Clock.Day)}), {play.Clock.Slot}",
+                $"opening: {play.Opening?.Id ?? "-"}   over: {play.Over}   ending: {(play.Ending is null ? "-" : "reached")}   offer: {(play.EndingOffer is null ? "-" : "open")}",
+                $"job: {play.Job?.Title ?? "-"}   on shift now: {play.OnShift}",
+                $"pending choice: {(play.Pending is null ? "-" : string.Join(" | ", play.Pending.Choices.Select(c => c.Id)))}",
+                $"pending scene: {(pendingScene is null ? "-" : $"{pendingScene.EncounterId} with {string.Join(", ", pendingScene.With.Select(NameOf))}, replies {pendingScene.Replies}")}",
+            ]),
+        };
+
+        var people = new List<string>();
+        foreach (var li in cast)
+        {
+            var relationship = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            people.Add($"{li.Name} [{li.Key}] {li.Id}");
+            people.Add($"  {relationship}");
+            people.Add($"  member: {JsonSerializer.Serialize(li.Member, Json)}");
+            people.Add($"  profile: {JsonSerializer.Serialize(li.Profile, Json)}");
+            people.Add($"  now at: {ScheduleFor(saveId, play.Setting, li, flags).Where(play.Clock) ?? "-"}   left: {HasLeft(flags, li)}");
+            people.Add($"  rapport now: {PlayerLife.Rapport(li.Profile.WeightOf, PlayerLife.Traits(flags), storyContent.Rules)}");
+        }
+
+        sections.Add(new("People", people));
+        sections.Add(new("Player traits",
+        [
+            .. PlayerLife.Traits(flags).OrderByDescending(t => t.Value)
+                .Select(t => $"{t.Key}: {t.Value} (level {PlayerLife.Level(t.Value, storyContent.Rules.TraitLevels)})"),
+            .. PlayerLife.Pastimes(flags, atLeast: 1).Select(p => $"did {p.TypeId}.{p.ActivityId}: {flags[$"{PlayerLife.DidPrefix}{p.TypeId}.{p.ActivityId}"]}"),
+        ]));
+        sections.Add(new("Hints", play.Hints));
+        sections.Add(new("Flags", [.. flags.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => $"{f.Key} = {f.Value}")]));
+        sections.Add(new("Promises",
+        [
+            .. promises.Select(p => $"{p.Status} {p.Kind} with {NameOf(p.CharacterId)}: made day {p.MadeDay}, due day {p.DueDay} {p.DueSlot?.ToString() ?? ""} at {p.PlaceId ?? "-"}"),
+        ]));
+        sections.Add(new("Places",
+        [
+            .. play.KnownPlaces.Select(p => $"{p.Id} ({p.TypeId}) {p.Name}"),
+        ]));
+        sections.Add(new("Facts",
+        [
+            .. facts.Select(f => $"#{f.Id} {NameOf(f.Fact.Subject)} {f.Fact.Predicate} {f.Fact.Object} [{f.Fact.Level}, day {f.Fact.Day}, {f.Fact.Source}] known by {string.Join(", ", f.Knowers.Select(NameOf))}"),
+        ]));
+        sections.Add(new("Memories",
+        [
+            .. memories.Select(m => $"#{m.Id} day {m.Day} {m.Scope}{(m.CompactedInto is null ? "" : $" (in #{m.CompactedInto})")}: {m.Summary}"),
+        ]));
+        sections.Add(new("Scenes",
+        [
+            .. scenes.AsEnumerable().Reverse().SelectMany(s => (IEnumerable<string>)
+            [
+                $"#{s.Id} day {s.Clock.Day} {s.Clock.Slot} at {s.PlaceId}: {s.EncounterId ?? "-"} with {s.Speaker ?? "-"} ({(s.Written ? "written" : "fallback")}), {s.Exchanges.Count} replies",
+                $"  background: {s.BackgroundPath ?? "-"}",
+                $"  sprite: {s.SpritePath ?? "-"} ({s.Expression ?? "-"})",
+                $"  {s.Text}",
+                .. s.Exchanges.Select(e => $"  > {e.Reply}{(e.Agreed is null ? "" : $" [agreed: {e.Agreed}]")}\n    {e.Reaction}"),
+            ]),
+        ]));
+
+        return sections;
     }
 
     /// <summary>Spends the slot texting <paramref name="key"/>, someone whose number the player has, from home.</summary>

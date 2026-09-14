@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Game.App.Controls;
 using Game.App.ViewModels;
 
 namespace Game.App.Views;
@@ -8,7 +9,19 @@ public partial class PlayView : UserControl
 {
     private PlayViewModel? _model;
 
-    public PlayView() => InitializeComponent();
+    private readonly TapTrigger _debugDoor = new();
+
+    public PlayView()
+    {
+        InitializeComponent();
+        Title.PointerPressed += (_, _) =>
+        {
+            if (_debugDoor.Tap(DateTimeOffset.UtcNow))
+            {
+                _model?.OpenDebugCommand.Execute(null);
+            }
+        };
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {

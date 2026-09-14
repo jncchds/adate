@@ -1083,6 +1083,30 @@ public sealed partial class PlayViewModel : PageViewModel
     [RelayCommand]
     private void Home() => _main.ShowHome();
 
+    /// <summary>The hidden debug screen: everything the game knows about this save.</summary>
+    [ObservableProperty]
+    private bool _isDebugOpen;
+
+    [ObservableProperty]
+    private IReadOnlyList<DebugSection> _debugSections = [];
+
+    [RelayCommand]
+    private async Task OpenDebugAsync()
+    {
+        IsDebugOpen = true;
+        try
+        {
+            DebugSections = await _world.DebugReportAsync(_saveId);
+        }
+        catch (Exception ex)
+        {
+            DebugSections = [new DebugSection("Error", [ex.ToString()])];
+        }
+    }
+
+    [RelayCommand]
+    private void CloseDebug() => IsDebugOpen = false;
+
     [RelayCommand]
     private void Opening() => _main.ShowOpening(_saveId);
 

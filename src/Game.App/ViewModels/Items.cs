@@ -24,6 +24,13 @@ public sealed record OpeningItem(SettingOpening Opening, string Where, ICommand 
 /// <summary>Doing something at a place: one of its activities, or the player's shift.</summary>
 public sealed record PlaceActivityChoice(PlaceRecord Place, string ActivityId);
 
+/// <summary>A debug section's lines as one block of text.</summary>
+public static class DebugLines
+{
+    public static Avalonia.Data.Converters.IValueConverter Join { get; } =
+        new Avalonia.Data.Converters.FuncValueConverter<IReadOnlyList<string>?, string>(lines => lines is null or { Count: 0 } ? "(none)" : string.Join('\n', lines));
+}
+
 /// <summary>Someone to act towards, such as to text.</summary>
 public sealed record PersonTarget(string Key, string Name);
 
