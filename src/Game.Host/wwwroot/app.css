@@ -258,6 +258,53 @@ button.active {
     font-weight: 600;
 }
 
+/* Map and turns ------------------------------------------------------------- */
+
+.map-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.map-slot {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.today {
+    border-left: 3px solid var(--accent);
+    background: var(--notice-bg);
+    padding: 0.4rem 0.8rem;
+}
+
+.map-places {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.6rem;
+    margin: 1rem 0;
+}
+
+.map-places button {
+    text-align: left;
+}
+
+.map-places small {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.encounter-text {
+    font-size: 1.05rem;
+    max-width: 46rem;
+}
+
+.encounter-with {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 /* Composite stage ----------------------------------------------------------- */
 
 /*

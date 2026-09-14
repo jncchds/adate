@@ -1,0 +1,28 @@
+[
+  {
+    "id": "lookout-hill-tip",
+    "place": { "id": "rosies-diner" },
+    "time": ["Morning", "Midday"],
+    "days": [2, 20],
+    "reveals": ["lookout-hill"],
+    "text": "Rosie refills your cup and says the best view of the lake is from Lookout Hill, if you do not mind the climb."
+  },
+  {
+    "id": "library-regular",
+    "place": { "id": "town-library", "aloneVisitsBefore": 2 },
+    "time": ["Afternoon"],
+    "days": [6, 28],
+    "sets": ["chance.met"],
+    "with": ["variant:chance"],
+    "priority": 60,
+    "text": "Your usual table by the arched windows has someone at it again, and this time they slide the chair out for you. (Placeholder: the chance route's first meeting.)"
+  },
+  {
+    "id": "fair-posters",
+    "place": { "id": "main-street" },
+    "time": ["Midday", "Afternoon"],
+    "days": [15, 25],
+    "reveals": ["county-fair"],
+    "text": "Posters for the Founders' Day fair have gone up on every lamp post along Main Street."
+  }
+]

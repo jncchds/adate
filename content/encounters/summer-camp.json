@@ -1,0 +1,27 @@
+[
+  {
+    "id": "ridge-trail-map",
+    "place": { "id": "staff-lounge" },
+    "time": ["Evening", "Night"],
+    "days": [2, 15],
+    "reveals": ["ridge-trail"],
+    "text": "A trail guide pins a hand-drawn map to the lounge wall: the ridge trail, best walked at sunrise before the campers are up."
+  },
+  {
+    "id": "dock-regular",
+    "place": { "id": "lake-dock", "aloneVisitsBefore": 2 },
+    "time": ["Evening"],
+    "days": [5, 21],
+    "sets": ["chance.met"],
+    "with": ["variant:chance"],
+    "priority": 60,
+    "text": "For the third evening running, someone else is sitting at the end of the dock after lights out. Tonight they wave you over. (Placeholder: the chance route's first meeting.)"
+  },
+  {
+    "id": "boathouse-roster",
+    "place": { "id": "boathouse" },
+    "time": ["Afternoon"],
+    "sets": ["boathouse.roster"],
+    "text": "The sailing instructor asks whether you would take a turn on the boathouse roster next week. You say yes before thinking about it."
+  }
+]

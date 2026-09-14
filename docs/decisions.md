@@ -736,3 +736,63 @@ other 65 were empty, including mess hall, staff lounge and campfire circle.
 
 Unrelated, and noted for later: some rendered signs carry garbled or Chinese-looking lettering,
 on trail signs and bar neon.
+
+## The clock, encounters and turns
+
+Phase-2 plan build step 4, with no LLM.
+
+**The clock** is a day and one of five slots, with Night rolling over to the next Morning. A
+setting's calendar ends after its last day. A save's clock starts at day 1, Morning, on first
+play.
+
+**Encounters are content,** in `content/encounters/{setting}.json`, plus an optional
+`common.json` shared by every setting. An encounter says where it can happen:
+
+* a place id;
+* a place held in a flag, for places decided in play such as the main LI's home place;
+* or a count of earlier solo visits to that place.
+
+It also says when: slots and a day range. It lists the flags it requires (`key`, `!key`,
+`key=value`) and whether it is once-only. It states what it sets and which places it reveals,
+and who is there (`main_li` or `variant:{route}`). Each dated setting event becomes an
+encounter at priority 100, and its place becomes known on the event day.
+
+**The engine decides; prose never does.** `EncounterEvaluator` picks the highest-priority match,
+with ties going to the lowest id, so file order never changes a pick. A once-only encounter records
+itself in a flag holding the day it fired. A slot where nothing matches gets placeholder ambient
+text. All of it is pure and unit-tested.
+
+**The loader refuses a broken reference by name:**
+
+* an unknown place;
+* a reveal of a place the setting lacks;
+* a day range outside the calendar or backwards;
+* a malformed flag expression or assignment;
+* an unknown kind of company;
+* empty text;
+* a duplicate id.
+
+It also refuses a file named after no setting, because a typo in a file name would otherwise
+drop a setting's encounters silently.
+
+**Two content tests keep the content playable.** Every place that starts unknown is revealed by
+some encounter or event, since otherwise the player could never go there. Every setting has a
+chance-route meeting, reached through solo visits.
+
+**A turn is one transaction.** It advances the clock, records the visit with who was there, sets
+flags and reveals places. The clock advances only from the slot the turn was planned at, so the
+same turn planned twice (a double click, two tabs) is applied once and the second is refused
+with nothing changed.
+
+**`/play/{saveId}`** shows the day, the slot and today's events, with one button per known place.
+A turn shows the place's background at the slot the visit happened in, the encounter or ambient
+text, and any new place. Checked in the running app on the existing save: day 1 Morning at The
+Corner Cup fired the bookshop flyer and revealed Paper Lantern Books, over a morning cafe
+background with no one in it.
+
+**Not in this step:**
+
+* Openings, the main LI's home place and the four meeting beats (step 5).
+* Relationship state and choices (step 6).
+* Endings: the play page stops at the end of the calendar (step 8).
+* Characters are named in encounters but not yet drawn in them.

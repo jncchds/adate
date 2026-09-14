@@ -36,6 +36,43 @@ public class ShippedContentTests
     private static Settings.JsonSettingCatalog SettingCatalog() =>
         new(Path.Combine(RepoRoot(), "content", "settings"), Catalog());
 
+    private static Encounters.JsonEncounterCatalog EncounterCatalog() =>
+        new(Path.Combine(RepoRoot(), "content", "encounters"), SettingCatalog());
+
+    /// <summary>
+    /// A place that starts unknown and nothing ever reveals is a place the player can never go.
+    /// Invisible in play, so it is checked here: every such place has an encounter or an event.
+    /// </summary>
+    [Fact]
+    public void Every_place_that_starts_unknown_can_become_known()
+    {
+        var encounters = EncounterCatalog();
+
+        foreach (var setting in SettingCatalog().All())
+        {
+            var revealed = encounters.For(setting.Id).SelectMany(e => e.Reveals ?? [])
+                .Concat(setting.Events.Select(e => e.Place))
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var place in setting.Places.Where(p => !p.Known))
+            {
+                Assert.True(revealed.Contains(place.Id), $"setting '{setting.Id}': nothing ever reveals '{place.Id}'");
+            }
+        }
+    }
+
+    [Fact]
+    public void Every_setting_has_a_chance_route_meeting()
+    {
+        var encounters = EncounterCatalog();
+
+        foreach (var setting in SettingCatalog().All())
+        {
+            Assert.Contains(encounters.For(setting.Id), e =>
+                e.Place.AloneVisitsBefore is > 0 && (e.With ?? []).Contains("variant:chance"));
+        }
+    }
+
     [Fact]
     public void The_three_planned_settings_load()
     {

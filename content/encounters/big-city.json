@@ -1,0 +1,44 @@
+[
+  {
+    "id": "rooftop-rumour",
+    "place": { "id": "office" },
+    "time": ["Afternoon", "Evening"],
+    "days": [2, 10],
+    "sets": ["knows.rooftop"],
+    "reveals": ["rooftop-garden"],
+    "text": "Over the coffee machine, a coworker mentions a rooftop garden a few streets away that stays open in the evenings. You make a note of it."
+  },
+  {
+    "id": "bookshop-flyer",
+    "place": { "id": "corner-cafe" },
+    "time": ["Morning"],
+    "reveals": ["paper-lantern-books"],
+    "text": "A flyer pinned by the counter advertises a reading night at Paper Lantern Books, just around the corner."
+  },
+  {
+    "id": "low-tide-tip",
+    "place": { "id": "riverside-park" },
+    "time": ["Evening", "Night"],
+    "days": [3, 28],
+    "reveals": ["low-tide"],
+    "text": "Music drifts over the water. Someone on the next bench says it comes from The Low Tide, a bar tucked under the bridge."
+  },
+  {
+    "id": "low-tide-regular",
+    "place": { "id": "low-tide", "aloneVisitsBefore": 2 },
+    "time": ["Evening", "Night"],
+    "days": [8, 28],
+    "sets": ["chance.met"],
+    "with": ["variant:chance"],
+    "priority": 60,
+    "text": "The third evening you take the end of the counter, the person on the next stool finally asks whether you are waiting for someone. (Placeholder: the chance route's first meeting.)"
+  },
+  {
+    "id": "night-market-poster",
+    "place": { "id": "home-stairwell" },
+    "time": ["Evening"],
+    "days": [17, 23],
+    "reveals": ["harbour-night-market"],
+    "text": "A neighbour taping a poster above the mailboxes tells you the lantern festival at the Harbour Night Market is next week."
+  }
+]

@@ -1,0 +1,146 @@
+@page "/play/{SaveGuid:guid}"
+@using Game.Core.Content
+@using Game.Core.Encounters
+@using Game.Core.Places
+@using Game.Core.Saves
+@using Game.Host.Services
+@inject WorldService World
+@inject CharacterStudio Studio
+@inject ILocationCatalog PlaceTypes
+@rendermode InteractiveServer
+
+<PageTitle>Play</PageTitle>
+
+@if (_error is not null)
+{
+    <h1>Play</h1>
+    <div class="error">
+        <strong>Something went wrong.</strong>
+        <p>@_error</p>
+        <button @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_state is null)
+{
+    <h1>Play</h1>
+    <div class="working"><p>Loading the save.</p></div>
+}
+else if (_outcome is not null)
+{
+    <h1>Day @_outcome.VisitedAt.Day, @_outcome.VisitedAt.Slot</h1>
+
+    <div class="stage">
+        @if (_background is not null)
+        {
+            <img class="layer background" src="@_background" alt="@_outcomePlace?.Name" />
+        }
+    </div>
+
+    <p class="encounter-text">@_outcome.Text</p>
+
+    @if (_outcome.With.Count > 0)
+    {
+        <p class="encounter-with">With: @string.Join(", ", _outcome.With)</p>
+    }
+
+    @if (_outcome.Reveals.Count > 0)
+    {
+        <p class="encounter-with">New place: @string.Join(", ", _outcome.Reveals.Select(PlaceName))</p>
+    }
+
+    <button type="button" @onclick="ContinueAsync">Continue</button>
+}
+else if (_state.Over)
+{
+    <h1>The @_state.Setting.Days days are over</h1>
+    <p class="lede">Endings arrive in a later build step. For now, this is where the calendar stops.</p>
+}
+else
+{
+    <div class="map-header">
+        <h1>Day @_state.Clock.Day of @_state.Setting.Days</h1>
+        <span class="map-slot">@_state.Clock.Slot</span>
+    </div>
+
+    <p class="lede">@_state.Setting.DisplayName. Choose where to spend the @_state.Clock.Slot.ToString().ToLowerInvariant().</p>
+
+    @foreach (var ev in _state.Today)
+    {
+        <p class="today">Today: @ev.Name at @PlaceName(ev.Place), @ev.Time.ToString().ToLowerInvariant().</p>
+    }
+
+    <div class="map-places">
+        @foreach (var place in _state.KnownPlaces)
+        {
+            <button type="button" disabled="@_working" @onclick="() => GoAsync(place)">
+                @place.Name
+                <small>@PlaceTypes.Get(place.TypeId).DisplayName</small>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid SaveGuid { get; set; }
+
+    private SaveId SaveId => new(SaveGuid);
+
+    private PlayState? _state;
+    private TurnOutcome? _outcome;
+    private PlaceRecord? _outcomePlace;
+    private string? _background;
+    private bool _working;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+
+        try
+        {
+            _state = await World.GetPlayStateAsync(SaveId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task GoAsync(PlaceRecord place)
+    {
+        _working = true;
+
+        try
+        {
+            _outcome = await World.TakeTurnAsync(SaveId, place.Id);
+            _outcomePlace = place;
+            _background = null;
+            StateHasChanged();
+
+            // Drawn at the slot the visit happened in, not the one the clock moved on to.
+            _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task ContinueAsync()
+    {
+        _outcome = null;
+        _outcomePlace = null;
+        _background = null;
+        await LoadAsync();
+    }
+
+    private string PlaceName(string placeId) =>
+        _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;
+}

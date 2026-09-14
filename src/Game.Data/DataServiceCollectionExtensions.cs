@@ -18,6 +18,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<CharacterRepository>();
         services.AddSingleton<ImageCacheRepository>();
         services.AddSingleton<PlaceRepository>();
+        services.AddSingleton<GameStateRepository>();
 
         return services;
     }

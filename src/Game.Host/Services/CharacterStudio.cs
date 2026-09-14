@@ -448,6 +448,9 @@ public sealed class StudioOptions
     /// <summary>One JSON file per setting (phase-2 plan §2).</summary>
     public string SettingsDirectory { get; set; } = Path.Combine("content", "settings");
 
+    /// <summary><c>common.json</c> plus one file per setting (phase-2 plan §7).</summary>
+    public string EncountersDirectory { get; set; } = Path.Combine("content", "encounters");
+
     /// <summary>
     /// The setting a save gets when it was created without one. Stand-in until the new-game flow
     /// asks the player (build step 5).

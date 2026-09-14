@@ -389,6 +389,95 @@ public class DatabaseTests
         Assert.Equal("big-city", await saves.SetSettingAsync(save.Id, "summer-camp"));
     }
 
+    // ------------------------------------------------------------------ turns
+
+    [Fact]
+    public async Task A_new_game_starts_on_day_one_morning_once()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+
+        Assert.Equal(Game.Core.World.ClockState.Start, await state.GetOrStartClockAsync(save.Id));
+        Assert.Equal(Game.Core.World.ClockState.Start, await state.GetOrStartClockAsync(save.Id));
+        Assert.Equal(1, db.Scalar<long>("SELECT COUNT(*) FROM game_clock;"));
+    }
+
+    private static Game.Core.Encounters.TurnOutcome Turn(
+        Game.Core.World.ClockState at,
+        string place,
+        IReadOnlyList<string>? with = null,
+        IReadOnlyList<string>? reveals = null) => new(
+        at,
+        at.Next(),
+        place,
+        "tip",
+        "A tip.",
+        new Dictionary<string, string> { ["knows.bar"] = "true", ["encounter.tip"] = at.Day.ToString() },
+        reveals ?? [],
+        with ?? [],
+        GameOver: false);
+
+    [Fact]
+    public async Task A_turn_moves_the_clock_records_the_visit_sets_flags_and_reveals_places()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "corner-cafe"), Place(save.Id, "low-tide", known: false)]);
+        var start = await state.GetOrStartClockAsync(save.Id);
+
+        await state.CommitTurnAsync(save.Id, Turn(start, "corner-cafe", reveals: ["low-tide"]));
+
+        Assert.Equal(start.Next(), await state.GetOrStartClockAsync(save.Id));
+        Assert.Equal("true", (await state.GetFlagsAsync(save.Id))["knows.bar"]);
+        Assert.True((await places.GetAsync(save.Id, "low-tide"))!.Known);
+        Assert.Equal(1, (await places.GetAsync(save.Id, "low-tide"))!.FirstDay);
+        Assert.Equal(1, await state.CountAloneVisitsAsync(save.Id, "corner-cafe"));
+    }
+
+    /// <summary>A double click, or two tabs, plans the same turn twice. It is applied once.</summary>
+    [Fact]
+    public async Task A_turn_planned_from_a_clock_that_has_moved_on_is_refused_and_changes_nothing()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "corner-cafe")]);
+        var start = await state.GetOrStartClockAsync(save.Id);
+
+        await state.CommitTurnAsync(save.Id, Turn(start, "corner-cafe"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => state.CommitTurnAsync(save.Id, Turn(start, "corner-cafe")));
+
+        Assert.Equal(1, db.Scalar<long>("SELECT COUNT(*) FROM visit;"));
+        Assert.Equal(start.Next(), await state.GetOrStartClockAsync(save.Id));
+    }
+
+    [Fact]
+    public async Task A_visit_with_company_does_not_count_as_a_solo_visit()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "low-tide")]);
+        var start = await state.GetOrStartClockAsync(save.Id);
+
+        await state.CommitTurnAsync(save.Id, Turn(start, "low-tide", with: ["main_li"]));
+
+        Assert.Equal(0, await state.CountAloneVisitsAsync(save.Id, "low-tide"));
+    }
+
     // -------------------------------------------------------------------- cast
 
     private static CastMember Lead(CharacterAppearance appearance) => new(

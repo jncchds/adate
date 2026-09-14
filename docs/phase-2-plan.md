@@ -335,7 +335,9 @@ Each step ends in something that runs.
 3. **Settings, places and migration 003** (§2, §10). *Done: 22 place types, three settings, places
    stored per save with their own seed, migration 003 with the cast rules in the schema, and the
    cast stored once built (`decisions.md`).*
-4. **Clock, encounters and a map screen**, with no LLM and placeholder text.
+4. **Clock, encounters and a map screen**, with no LLM and placeholder text. *Done: five-slot
+   clock, encounters as validated content with setting events added, atomic turns, and
+   `/play/{saveId}` (`decisions.md`).*
 5. **New game and the openings** (§3-4), in `big-city` first.
 6. **Story state with no LLM** (§6, §8), unit-tested with authored scenes:
    * facts and knowledge;
