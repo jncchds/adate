@@ -173,6 +173,9 @@ public class CastGeneratorTests
 
             var otherLife = cast[2].Appearance.Age;
             Assert.NotEqual(Subject().BandFor(age).From, Subject().BandFor(otherLife).From);
+
+            // A different chapter has to look like one: never a single year across a band boundary.
+            Assert.True(Math.Abs(otherLife - age) >= CastGenerator.MinimumAgeGap, $"seed {seed}: {age} -> {otherLife}");
         }
     }
 

@@ -417,14 +417,23 @@ public static class CastGenerator
             }
 
             var band = subject.BandFor(age).From;
-            var pool = Enumerable.Range(18, age + 10 - 18 + 1)
+            var candidates = Enumerable.Range(18, age + 10 - 18 + 1)
                 .Where(a => subject.BandFor(a).From != band && !IsTaken(LookDimensions.Age, AgeKey(a)))
                 .ToList();
 
-            if (pool.Count == 0)
+            if (candidates.Count == 0)
             {
                 return false;
             }
+
+            // Crossing a band boundary by a year changes nothing a player can see: 24 against 25
+            // read as the same person in the distinctness check. Ask for a real gap, older where
+            // the cap allows, so "a different chapter" looks like one; failing that, the widest gap.
+            var apart = candidates.Where(a => Math.Abs(a - age) >= MinimumAgeGap).ToList();
+            var older = apart.Where(a => a > age).ToList();
+            var pool = older.Count > 0 ? older
+                : apart.Count > 0 ? apart
+                : candidates.Where(a => Math.Abs(a - age) == candidates.Max(c => Math.Abs(c - age))).ToList();
 
             var chosen = rng.Pick(pool);
             Record(LookDimensions.Age, AgeKey(age), AgeKey(chosen));
@@ -460,6 +469,9 @@ public static class CastGenerator
             return -1;
         }
     }
+
+    /// <summary>The fewest years an age change moves, when the adult range and the ten-year cap allow it.</summary>
+    public const int MinimumAgeGap = 5;
 
     private static string AgeKey(int age) => age.ToString(CultureInfo.InvariantCulture);
 

@@ -1159,3 +1159,41 @@ So retrieval stays on.
 
 **Turn latency on the 12 GB profile** could not be measured here: the only card is 32 GB. It stays
 an open measure for a 12 GB machine.
+
+**Fallback rate over a scripted 28-day run.** `measure run` started a fresh big-city game (shared
+table opening) and played all 140 turns with a fixed policy: follow the opening and events, invite
+whoever an encounter would honour, answer every choice with its first option, otherwise spread
+visits.
+
+* 22 encounter scenes were written, with 0 fallbacks: a fallback rate of 0%, against a plan target
+  of under 5%.
+* 18 passed first time and 4 on the second attempt.
+* Rejections: 2 place proposals, 2 first-person narration, 4 others. The harness's buckets are
+  coarse.
+* Latency per scene: mean 7.1 s, median 6.0 s, p90 11.6 s, max 12.8 s.
+* The whole run took 2.6 minutes, since ambient turns make no model call.
+
+The policy reached every route's meeting, contact and first date, and the reveal and obstacle arcs.
+It ended `LeftAlone`: a first-option policy never reaches `dating`, so the others left.
+
+## The distinctness check
+
+Plan §5's measure, on Rin's cast from the big-city save: the four portraits, shuffled, labelled only
+A to D, shown to the user without the key.
+
+* **Four different people:** yes. This is the measure's pass condition.
+* **Nothing alike:** picked correctly (B, the opposite profile: blue hair, red eyes, dark skin, a
+  plump build, artsy).
+* **A different chapter:** picked the original (C) rather than the other-life variant (D). That
+  variant was 25 against a main LI of 24. One year crosses the 18 to 25 band boundary, so it
+  counted as a different band, but nothing in the portrait says "a different stage of life".
+* **The original:** the user didn't guess.
+
+So the cast reads as four people, and the opposite profile works, but other life does not answer its
+question. Its age now has to differ by several years, not just cross a band boundary.
+
+**Fix.** An age change still stays adult, within main+10, and in a different band. Within that it
+now keeps at least `MinimumAgeGap` (5) years from the main LI, prefers older ages, and falls back to
+the widest gap available. A main LI of 24 now gets an other-life variant aged 29 to 34. Casts already
+stored, Rin's included, keep the ages they were built with, so the check should be repeated on a new
+cast.
