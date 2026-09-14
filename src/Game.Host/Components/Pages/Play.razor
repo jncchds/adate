@@ -197,12 +197,27 @@ else if (_state.EndingOffer is { } offer)
         <div class="working"><p>Writing the ending.</p></div>
     }
 
-    <div class="choices">
+    <div class="person-cards">
         @foreach (var route in offer.Routes)
         {
-            <button type="button" disabled="@_working" @onclick="() => EndAsync(route.Key)">Stay with @route.Name</button>
+            <button type="button" class="person-card" disabled="@_working" @onclick="() => EndAsync(route.Key)">
+                <span class="person-picture" style="@(_backdrop is null ? null : $"background-image: url('{_backdrop}')")">
+                    @if (_portraits.GetValueOrDefault(route.Key) is { } portrait)
+                    {
+                        <img src="@portrait" alt="" />
+                    }
+                    else
+                    {
+                        <span class="picture-wait" aria-hidden="true"></span>
+                    }
+                </span>
+                <span class="person-name">Stay with @route.Name</span>
+            </button>
         }
-        <button type="button" disabled="@_working" @onclick="() => EndAsync(Game.Core.Story.EndingRules.AloneKey)">Leave on your own</button>
+        <button type="button" class="person-card nobody" disabled="@_working" @onclick="() => EndAsync(Game.Core.Story.EndingRules.AloneKey)">
+            <span class="person-picture"><span class="person-none">—</span></span>
+            <span class="person-name">Leave on your own</span>
+        </button>
     </div>
 }
 else if (_state.Pending is not null)
@@ -362,7 +377,10 @@ else
             _picturesFor = key;
         }
 
-        if (_backdrop is null && state.Invitees.Count > 0)
+        // Everyone the player can pick right now: along for a visit, or to stay with at the end.
+        IReadOnlyList<Invitee> people = [.. state.Invitees, .. state.EndingOffer?.Routes ?? []];
+
+        if (_backdrop is null && people.Count > 0)
         {
             try
             {
@@ -375,7 +393,7 @@ else
             }
         }
 
-        foreach (var person in state.Invitees.Where(p => !_portraits.ContainsKey(p.Key)))
+        foreach (var person in people.Where(p => !_portraits.ContainsKey(p.Key)))
         {
             try
             {

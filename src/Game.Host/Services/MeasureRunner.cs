@@ -65,22 +65,42 @@ public static class MeasureRunner
         var varied = Arg(args, "--policy") == "varied";
 
         // A new game the way the form makes one, with the first option of every feature.
-        var pack = await studio.GetPackAsync();
-        var subject = pack.SubjectFor("female");
-        string First(string feature) => subject.OptionsFor(feature).First(o => !o.PlayerOnly).Tag;
+        // --save <id> carries on an existing save instead of starting one; --stop-at-ending leaves the
+        // ending offer on screen for a person to pick, rather than taking the first route.
+        var stopAtEnding = args.Contains("--stop-at-ending");
+        SaveId saveId;
 
-        var appearance = new CharacterAppearance(
-            "female", 24,
-            First(AppearanceFeatures.EyeColor), First(AppearanceFeatures.HairColor), First(AppearanceFeatures.HairStyle),
-            First(AppearanceFeatures.SkinTone), First(AppearanceFeatures.Build), First(AppearanceFeatures.Height), "");
-        appearance.Validate();
+        if (Arg(args, "--save") is { } resume)
+        {
+            saveId = (await saves.ListAsync()).FirstOrDefault(s => s.Id.Value.ToString() == resume)?.Id
+                ?? throw new InvalidOperationException($"No save '{resume}'.");
+            var resumed = await world.GetPlayStateAsync(saveId);
+            setting = resumed.Setting;
+            opening = resumed.Opening ?? opening;
+            Console.WriteLine($"resuming save {resume} in {setting.Id} on day {resumed.Clock.Day}, {resumed.Clock.Slot}");
+        }
+        else
+        {
+            var pack = await studio.GetPackAsync();
+            var subject = pack.SubjectFor("female");
+            string First(string feature) => subject.OptionsFor(feature).First(o => !o.PlayerOnly).Tag;
 
-        var save = await saves.CreateAsync(studio.StylePackId, studio.PackFingerprint(), Ceiling.PG13, setting.Id, "Alex", "woman");
-        var created = await characters.CreateAsync(save.Id, appearance, "Rin", cast.Temper.ToDictionary(a => a.Id, a => a.Ends[0].Id));
-        await studio.EnsureCastAsync((await characters.GetAsync(created.Id))!);
-        await world.ChooseOpeningAsync(save.Id, opening.Id);
+            var appearance = new CharacterAppearance(
+                "female", 24,
+                First(AppearanceFeatures.EyeColor), First(AppearanceFeatures.HairColor), First(AppearanceFeatures.HairStyle),
+                First(AppearanceFeatures.SkinTone), First(AppearanceFeatures.Build), First(AppearanceFeatures.Height), "");
+            appearance.Validate();
 
-        Console.WriteLine($"save {save.Id.Value} in {setting.Id}, opening {opening.Id}");
+            var created = await saves.CreateAsync(studio.StylePackId, studio.PackFingerprint(), Ceiling.PG13, setting.Id, "Alex", "woman");
+            var main = await characters.CreateAsync(created.Id, appearance, "Rin", cast.Temper.ToDictionary(a => a.Id, a => a.Ends[0].Id));
+            await studio.EnsureCastAsync((await characters.GetAsync(main.Id))!);
+            await world.ChooseOpeningAsync(created.Id, opening.Id);
+            saveId = created.Id;
+
+            Console.WriteLine($"save {saveId.Value} in {setting.Id}, opening {opening.Id}");
+        }
+
+        var save = new { Id = saveId };
 
         var latencies = new List<double>();
         var turns = 0;
@@ -93,6 +113,12 @@ public static class MeasureRunner
 
             if (play.Ending is not null)
             {
+                break;
+            }
+
+            if (play.EndingOffer is not null && stopAtEnding)
+            {
+                Console.WriteLine($"day {play.Clock.Day}: stopped at the ending offer");
                 break;
             }
 
