@@ -29,6 +29,9 @@
             <TextBlock Classes="label" Text="Your gender" />
             <ComboBox ItemsSource="{Binding Genders}" SelectedItem="{Binding PlayerGender}" HorizontalAlignment="Stretch" />
             <TextBlock Classes="small" Text="How the story refers to you." />
+            <TextBlock Classes="label" Text="Narration language" />
+            <TextBox Text="{Binding NarrationLanguage}" MaxLength="40" />
+            <TextBlock Classes="small" Text="Any language, typed in. The story is written in it; menus stay English." />
 
             <TextBlock Classes="h2" Text="Who you will meet" />
             <TextBlock Classes="label" Text="Their name" />

@@ -10,6 +10,8 @@ namespace Game.Llm;
 /// <summary>Everything the epilogue may draw on. C# decided the ending; the model only tells it.</summary>
 /// <param name="PartnerTemper">How the partner is, as the scene packets describe them.</param>
 /// <param name="Memories">What happened, oldest first, as the memory summaries tell it.</param>
+/// <param name="Language">The language the story is written in; null or English for English.</param>
+/// <param name="PlayerGender">For grammatical gender, in languages that mark it.</param>
 public sealed record EpilogueRequest(
     string Setting,
     string Tone,
@@ -21,7 +23,9 @@ public sealed record EpilogueRequest(
     IReadOnlyList<string> Departures,
     IReadOnlyList<string> Memories,
     IReadOnlyList<RecapLine> Choices,
-    Ceiling Ceiling);
+    Ceiling Ceiling,
+    string? Language = null,
+    string? PlayerGender = null);
 
 public sealed record WrittenEpilogue(string Text, bool Fallback, int Attempts, IReadOnlyList<string> Rejections);
 
@@ -158,6 +162,11 @@ public sealed class EpilogueWriter(ILlmClient llm, IOptions<LlmOptions> options)
         text.AppendLine("- text: two or three short paragraphs separated by blank lines, a little while after the last day, in the second person.");
         text.AppendLine("- Recall one or two concrete moments or choices from above. Invent no new people and no events that contradict them.");
         text.AppendLine("- Keep it within the content ceiling. End on a finished sentence.");
+        foreach (var rule in NarrationLanguage.WritingRules(request.Language, request.PlayerGender))
+        {
+            text.AppendLine($"- {rule}");
+        }
+
         return text.ToString();
     }
 
@@ -175,18 +184,22 @@ public sealed class EpilogueWriter(ILlmClient llm, IOptions<LlmOptions> options)
             reasons.Add($"The epilogue is {text.Length} characters; keep it under {MaxLength}.");
         }
 
-        var firstPerson = Narration.FirstPersonOutsideDialogue(text);
+        // First person and the partner's name are checked in English only: other languages have their own
+        // pronouns, and may inflect or transliterate a name.
+        var english = NarrationLanguage.IsEnglish(request.Language);
+
+        var firstPerson = english ? Narration.FirstPersonOutsideDialogue(text) : [];
         if (firstPerson.Count >= Narration.FirstPersonTolerance)
         {
             reasons.Add($"The narration slips into the first person ({string.Join(", ", firstPerson.Distinct().Take(5))}). Write in the second person.");
         }
 
-        if (Narration.Unfinished(text))
+        if (Narration.Unfinished(text, english))
         {
             reasons.Add("The epilogue stops mid-sentence or leaves a quote open. Finish it.");
         }
 
-        if (request.Kind is EndingKind.Together && request.Partner is { } partner && !text.Contains(partner, StringComparison.Ordinal))
+        if (english && request.Kind is EndingKind.Together && request.Partner is { } partner && !text.Contains(partner, StringComparison.Ordinal))
         {
             reasons.Add($"The story ends with {partner}; name them.");
         }

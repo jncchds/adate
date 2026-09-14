@@ -160,6 +160,37 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task A_story_in_another_language_is_not_held_to_english_word_checks()
+    {
+        // Spanish "me" twice would count as English first person; German closes a quote with “.
+        var spanish = new FakeLlm(() => Answer(text: "Rin me mira y me sonríe desde la ventana."));
+        var german = new FakeLlm(() => Answer(text: "Rin sagt: „Schön, dich zu sehen.“"));
+
+        var inSpanish = await Writer(spanish).WriteAsync(Packet() with { Language = "Spanish" }, World(), "Placeholder.");
+        var inGerman = await Writer(german).WriteAsync(Packet() with { Language = "Deutsch" }, World(), "Placeholder.");
+
+        Assert.False(inSpanish.Fallback);
+        Assert.Equal(1, inSpanish.Attempts);
+        Assert.Contains("Write the prose in Spanish", spanish.Requests[0].User, StringComparison.Ordinal);
+        Assert.False(inGerman.Fallback);
+        Assert.Equal(1, inGerman.Attempts);
+    }
+
+    [Fact]
+    public async Task A_story_in_another_language_is_still_sent_back_when_it_stops_mid_sentence()
+    {
+        var llm = new FakeLlm(
+            () => Answer(text: "Рин поднимает взгляд и говорит: «Я"),
+            () => Answer(text: "Рин поднимает взгляд и говорит: «Привет.»"));
+
+        var scene = await Writer(llm).WriteAsync(Packet() with { Language = "Русский" }, World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(2, scene.Attempts);
+        Assert.Contains("stops mid-sentence", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Player_actions_are_found_outside_dialogue_and_perception_is_allowed()
     {
         Assert.Equal(["You scan", "you hesitate", "you finally sit"],

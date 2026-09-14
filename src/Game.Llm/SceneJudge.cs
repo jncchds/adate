@@ -15,7 +15,8 @@ public sealed class SceneJudge(ILlmClient llm)
     public const string SystemPrompt =
         "You check one scene of a story against facts that cannot change. List each statement in the " +
         "scene that contradicts one of the facts, quoting the statement and naming the fact. List " +
-        "nothing else. Answer with JSON matching the schema, with an empty list when nothing contradicts.";
+        "nothing else. The scene may be written in another language than the facts; compare meaning, not wording. " +
+        "Answer with JSON matching the schema, with an empty list when nothing contradicts.";
 
     private static readonly JsonObject Schema = new()
     {

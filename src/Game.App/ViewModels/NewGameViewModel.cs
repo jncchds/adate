@@ -28,6 +28,9 @@ public sealed partial class NewGameViewModel : PageViewModel
     private string? _playerGender = "woman";
 
     [ObservableProperty]
+    private string _narrationLanguage = Game.Core.Story.NarrationLanguage.Default;
+
+    [ObservableProperty]
     private string _liName = "";
 
     [ObservableProperty]
@@ -164,7 +167,8 @@ public sealed partial class NewGameViewModel : PageViewModel
                 Ceiling.PG13,
                 Setting?.Id ?? throw new ArgumentException("Choose a setting."),
                 playerName,
-                PlayerGender ?? "woman");
+                PlayerGender ?? "woman",
+                Game.Core.Story.NarrationLanguage.Normalize(NarrationLanguage));
 
             var temper = Temper.ToDictionary(t => t.Id, t => t.Selected?.Id ?? t.Ends[0].Id, StringComparer.Ordinal);
             var character = await _services.Get<CharacterRepository>().CreateAsync(save.Id, appearance, liName, temper);

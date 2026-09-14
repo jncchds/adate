@@ -547,7 +547,9 @@ public sealed class WorldService(
                 offer.Departures,
                 memories,
                 choices,
-                ceiling),
+                ceiling,
+                Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
+                PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false)),
             Fill(text, names, partner, "", play.Clock),
             ct).ConfigureAwait(false);
 
@@ -715,7 +717,8 @@ public sealed class WorldService(
             memoryLines,
             WeatherOn(saveId, setting, day).Writing,
             OffersChoices: presented.CharacterId is not null && (outcome.Choices ?? []).Count == 0,
-            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false));
+            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
+            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false));
 
         var world = new SceneWorld(
             facts,
@@ -878,7 +881,8 @@ public sealed class WorldService(
             [.. pack.Expressions.Keys],
             KnownPlaces: [.. known.Select(p => p.Name)],
             Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
-            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false));
+            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
+            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false));
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(

@@ -25,4 +25,19 @@ public class NarrationTests
         Assert.Empty(Narration.PlayerActions("Maya slides the menu over, in case you want something sweet, and waits until you decide."));
         Assert.Equal(["you sit"], Narration.PlayerActions("If you want, the seat is free. Then you sit."));
     }
+
+    [Theory]
+    [InlineData("Рин говорит: «Привет.»")]
+    [InlineData("Rin sagt: „Schön, dich zu sehen.“")]
+    [InlineData("リンは窓の外を見る。")]
+    [InlineData("「また会えたね」")]
+    public void Finished_text_in_other_languages_is_not_unfinished(string text) =>
+        Assert.False(Narration.Unfinished(text, english: false));
+
+    [Theory]
+    [InlineData("Рин говорит: «Привет")]
+    [InlineData("リンは窓の外を見て")]
+    [InlineData("「また会えた」ね、と")]
+    public void Text_cut_off_in_other_languages_is_unfinished(string text) =>
+        Assert.True(Narration.Unfinished(text, english: false));
 }

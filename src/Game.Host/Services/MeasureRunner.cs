@@ -75,6 +75,7 @@ public static class MeasureRunner
         Console.WriteLine("""
             usage: dotnet run --project src/Game.Host -- measure <run|judge|retrieval>
               run [--setting big-city] [--opening <id>]   scripted playthrough, fallback rate and latency
+                [--language <name>]                      write the new save's story in that language
               judge                                      judge accuracy on planted contradictions
               retrieval                                  hit@3 with embeddings against recency alone
               pictures --save <id>                       render the backdrop and cast portraits the cards use
@@ -125,7 +126,7 @@ public static class MeasureRunner
                 First(AppearanceFeatures.SkinTone), First(AppearanceFeatures.Build), First(AppearanceFeatures.Height), "");
             appearance.Validate();
 
-            var created = await saves.CreateAsync(studio.StylePackId, studio.PackFingerprint(), Ceiling.PG13, setting.Id, "Alex", "woman");
+            var created = await saves.CreateAsync(studio.StylePackId, studio.PackFingerprint(), Ceiling.PG13, setting.Id, "Alex", "woman", Game.Core.Story.NarrationLanguage.Normalize(Arg(args, "--language")));
             var main = await characters.CreateAsync(created.Id, appearance, "Rin", cast.Temper.ToDictionary(a => a.Id, a => a.Ends[0].Id));
             await studio.EnsureCastAsync((await characters.GetAsync(main.Id))!);
             await world.ChooseOpeningAsync(created.Id, opening.Id);

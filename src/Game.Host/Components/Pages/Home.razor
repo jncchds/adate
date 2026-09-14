@@ -69,6 +69,12 @@
             </InputSelect>
             <small>How the story refers to you.</small>
         </label>
+
+        <label>
+            Narration language
+            <InputText @bind-Value="_form.NarrationLanguage" placeholder="English" />
+            <small>Any language, typed in. The story is written in it; menus stay English.</small>
+        </label>
     </div>
 
     <h2>Who you will meet</h2>
@@ -266,7 +272,8 @@
                 Ceiling.PG13,
                 _form.SettingId,
                 playerName,
-                _form.PlayerGender);
+                _form.PlayerGender,
+                Game.Core.Story.NarrationLanguage.Normalize(_form.NarrationLanguage));
 
             var character = await Characters.CreateAsync(save.Id, appearance, liName, _form.Temper);
 
@@ -293,6 +300,7 @@
         public string SettingId { get; set; } = "";
         public string PlayerName { get; set; } = "";
         public string PlayerGender { get; set; } = "woman";
+        public string NarrationLanguage { get; set; } = Game.Core.Story.NarrationLanguage.Default;
         public string LiName { get; set; } = "";
         public string Subject { get; set; } = "female";
         public int Age { get; set; } = 24;

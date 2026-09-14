@@ -24,6 +24,26 @@ public class ScenePacketTests
         ["neutral", "smile"]);
 
     [Fact]
+    public void An_english_story_keeps_the_english_second_person_rule_and_nothing_more()
+    {
+        var text = ScenePacketBuilder.Render(Packet());
+
+        Assert.Contains("you, your. Never I, me, my", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write the prose in", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_story_in_another_language_asks_for_its_prose_there_and_keeps_ids_in_english()
+    {
+        var text = ScenePacketBuilder.Render(Packet() with { Language = "Русский", PlayerGender = "man" });
+
+        Assert.Contains("- Write the prose in Русский", text, StringComparison.Ordinal);
+        Assert.Contains("in English: JSON keys, ids, tags", text, StringComparison.Ordinal);
+        Assert.Contains("masculine forms for the player", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Never I, me, my", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_packet_follows_the_plans_order_and_uses_names_not_ids()
     {
         var text = ScenePacketBuilder.Render(Packet(presentKnow: [Fact(2, "rin-id", "an old band", "rin-id")]));

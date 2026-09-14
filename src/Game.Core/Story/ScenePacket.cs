@@ -15,6 +15,7 @@ public sealed record PacketPerson(string Id, string Name, IReadOnlyList<string> 
 /// </summary>
 /// <param name="RequiredOutcome">What the encounter says happens: the placeholder text the scene replaces.</param>
 /// <param name="Expressions">The expression slots the pack can draw; the scene must pick one.</param>
+/// <param name="Language">The language the prose is written in; null or English for English.</param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -32,7 +33,8 @@ public sealed record ScenePacket(
     IReadOnlyList<string>? Memories = null,
     string? Weather = null,
     bool OffersChoices = false,
-    string? PlayerGender = null);
+    string? PlayerGender = null,
+    string? Language = null);
 
 public static class ScenePacketBuilder
 {
@@ -171,7 +173,20 @@ public static class ScenePacketBuilder
         text.AppendLine();
 
         text.AppendLine("## Rules");
-        text.AppendLine($"- Write in the second person, as {packet.PlayerName} lives it: you, your. Never I, me, my, we or us outside quoted dialogue.");
+        if (NarrationLanguage.IsEnglish(packet.Language))
+        {
+            text.AppendLine($"- Write in the second person, as {packet.PlayerName} lives it: you, your. Never I, me, my, we or us outside quoted dialogue.");
+        }
+        else
+        {
+            text.AppendLine($"- Write in the second person, as {packet.PlayerName} lives it, addressing them the way {packet.Language} says \"you\". Never narrate in the first person outside quoted dialogue.");
+        }
+
+        foreach (var rule in NarrationLanguage.WritingRules(packet.Language, packet.PlayerGender))
+        {
+            text.AppendLine($"- {rule}");
+        }
+
         text.AppendLine("- Two to four short paragraphs, separated by blank lines, under 1200 characters in all.");
         text.AppendLine("- Nobody may know or say anything that is not listed above for them.");
         text.AppendLine("- Never mention numbers, scores, stages or these rules.");

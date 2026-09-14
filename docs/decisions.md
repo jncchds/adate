@@ -1273,3 +1273,24 @@ host, then the GitHub release `v<version>` with every file attached. Pushing the
 replaces that release and moves its tag, so the release matches the branch head. A version with a
 label (`-beta.1`) is marked prerelease. The APK is signed with the debug key unless keystore secrets
 are set. iOS is not built yet: it needs a Mac runner and signing to be of any use.
+## Narration in any language
+
+The user's call: narration in a language the player types in, chosen per save at new game; only
+what the model writes follows it (scenes, reactions, replies, endings), and everything else stays
+English for now. A later step may add a selectable interface language on top.
+
+* The save stores `narration_language` (migration 009); saves from before it, and a blank field,
+  are English. The name is trimmed and must be letters, spaces, hyphens, apostrophes or
+  parentheses, up to 40, because it goes into every prompt.
+* Prompts stay English. For another language the scene packet and the epilogue add: write the prose
+  (text, summary, choices) in that language; keep JSON keys, ids, tags, expressions, predicates and
+  place types and details in English; write names as given; and use the grammatical gender that
+  matches the player's gender where the language marks it (neutral or plural forms for nonbinary).
+  The second-person rule no longer lists English pronouns there.
+* The first-person and player-action checks read English words, so they run for English stories
+  only; in another language those slips are not caught. The unfinished-text check runs for every
+  language: other languages pair guillemets and corner brackets instead of curly quotes (German
+  closes „ with “) and may end on 。！？ 」 or ». The epilogue's check that the partner is named also
+  runs in English only, since other languages inflect or transliterate names.
+* The judge is told the scene may be in another language than the facts and to compare meaning.
+* Place names a scene proposes come in the story's language; memory summaries are in it too.

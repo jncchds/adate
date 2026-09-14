@@ -40,6 +40,28 @@ public static partial class Narration
     }
 
     /// <summary>
+    /// <see cref="Unfinished(string)"/> for a story in any language. Other languages quote differently
+    /// (German opens „ and closes “, Russian uses « », Japanese 「 」), so curly quotes are not paired;
+    /// guillemets and corner brackets are, and their closing marks and full-width stops end a sentence.
+    /// </summary>
+    public static bool Unfinished(string text, bool english)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (english)
+        {
+            return Unfinished(text);
+        }
+
+        var trimmed = text.TrimEnd();
+        return trimmed.Length == 0
+               || trimmed.Count(c => c == '"') % 2 == 1
+               || trimmed.Count(c => c == '«') != trimmed.Count(c => c == '»')
+               || trimmed.Count(c => c == '「') != trimmed.Count(c => c == '」')
+               || !".!?\"”“’‘…)*。！？」』»›".Contains(trimmed[^1]);
+    }
+
+    /// <summary>
     /// Places where the narration decides for the player: "you" followed by something the player does,
     /// says, decides, thinks or feels, outside quoted dialogue. What the player sees or hears is
     /// allowed; the scene is theirs to act in.

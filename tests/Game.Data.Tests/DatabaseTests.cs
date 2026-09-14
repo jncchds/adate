@@ -515,6 +515,19 @@ public class DatabaseTests
     }
 
     [Fact]
+    public async Task A_save_keeps_the_language_its_story_is_written_in()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+
+        var russian = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13, "big-city", "Alex", "woman", "Русский");
+        var older = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+
+        Assert.Equal("Русский", await saves.GetNarrationLanguageAsync(russian.Id));
+        Assert.Null(await saves.GetNarrationLanguageAsync(older.Id));
+    }
+
+    [Fact]
     public async Task A_choice_is_answered_once_and_only_when_it_is_open()
     {
         using var db = new TempDatabase();

@@ -163,19 +163,22 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             reasons.Add($"The reaction is {response.Text.Length} characters; keep it under {MaxLength}.");
         }
 
-        if (Narration.Unfinished(response.Text))
+        // The first-person and player-action checks read English words; other languages go without.
+        var english = NarrationLanguage.IsEnglish(packet.Language);
+
+        if (Narration.Unfinished(response.Text, english))
         {
             reasons.Add("The reaction stops mid-sentence or leaves a quote open. Finish it.");
         }
 
-        var firstPerson = Narration.FirstPersonOutsideDialogue(response.Text);
+        var firstPerson = english ? Narration.FirstPersonOutsideDialogue(response.Text) : [];
         if (firstPerson.Count >= Narration.FirstPersonTolerance)
         {
             reasons.Add($"The narration slips into the first person ({string.Join(", ", firstPerson.Distinct().Take(5))}). Write in the second person.");
         }
 
         // Restating the player's own reply is allowed; anything they did not write is not.
-        var added = Narration.PlayerActions(response.Text)
+        var added = (english ? Narration.PlayerActions(response.Text) : [])
             .Where(action => !playerWords.Contains(action.Split(' ', StringSplitOptions.RemoveEmptyEntries)[^1], StringComparison.OrdinalIgnoreCase))
             .Distinct()
             .ToList();

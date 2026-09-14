@@ -314,7 +314,10 @@ public sealed class SceneWriter(
 
         if (!string.IsNullOrWhiteSpace(response.Text))
         {
-            var firstPerson = Narration.FirstPersonOutsideDialogue(response.Text);
+            // The first-person and player-action checks read English words; other languages go without.
+            var english = NarrationLanguage.IsEnglish(packet.Language);
+
+            var firstPerson = english ? Narration.FirstPersonOutsideDialogue(response.Text) : [];
             if (firstPerson.Count >= Narration.FirstPersonTolerance)
             {
                 reasons.Add(
@@ -322,7 +325,7 @@ public sealed class SceneWriter(
                     "Outside quoted dialogue, write only in the second person: you, your.");
             }
 
-            var actions = Narration.PlayerActions(response.Text);
+            var actions = english ? Narration.PlayerActions(response.Text) : [];
             if (actions.Count > 0)
             {
                 reasons.Add(
@@ -335,7 +338,7 @@ public sealed class SceneWriter(
                 reasons.Add("The text is one block. Split it into two to four short paragraphs separated by blank lines.");
             }
 
-            if (Narration.Unfinished(response.Text))
+            if (Narration.Unfinished(response.Text, english))
             {
                 reasons.Add("The text stops mid-sentence or leaves a quote open. Finish it.");
             }
