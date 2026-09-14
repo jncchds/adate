@@ -194,9 +194,18 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
             tags.AddRange(location.Detail(detail).Tags);
         }
 
-        if (location.TimeTags.TryGetValue(intent.Time.ToString(), out var timeTags))
+        // Weather other than clear takes the sky, so the time tags must not also name one.
+        var weathered = intent.Weather is { } w && w != "clear" && location.NeutralTimeTags is not null;
+        var lighting = weathered ? location.NeutralTimeTags! : location.TimeTags;
+
+        if (lighting.TryGetValue(intent.Time.ToString(), out var timeTags))
         {
             tags.AddRange(timeTags);
+        }
+
+        if (intent.Weather is { } weather && location.WeatherTags?.TryGetValue(weather, out var weatherTags) is true)
+        {
+            tags.AddRange(weatherTags);
         }
     }
 

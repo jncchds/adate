@@ -32,6 +32,7 @@ public sealed record SettingEvent(string Id, string Name, int Day, string Place,
 /// file does.
 /// </summary>
 /// <param name="Tone">Guidance for the writing. Never enters an image prompt.</param>
+/// <param name="Weather">Weights per weather id for this setting; null uses each kind's default weight.</param>
 public sealed record SettingDefinition(
     string Id,
     string DisplayName,
@@ -41,7 +42,8 @@ public sealed record SettingDefinition(
     IReadOnlyList<SettingPlace> Places,
     IReadOnlyList<SettingOpening> Openings,
     IReadOnlyList<SettingEvent> Events,
-    IReadOnlyList<string> Occupations)
+    IReadOnlyList<string> Occupations,
+    IReadOnlyDictionary<string, int>? Weather = null)
 {
     public SettingPlace Place(string placeId) =>
         Places.FirstOrDefault(p => string.Equals(p.Id, placeId, StringComparison.Ordinal))

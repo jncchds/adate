@@ -61,7 +61,8 @@ public sealed record PlayState(
     IReadOnlyList<RelationshipView> Relationships,
     IReadOnlyDictionary<string, string> People,
     EndingOffer? EndingOffer,
-    EndingRecap? Ending);
+    EndingRecap? Ending,
+    WeatherDefinition? Weather = null);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
@@ -76,6 +77,7 @@ public sealed class WorldService(
     CastContent castContent,
     RouteContent routes,
     EndingContent endingContent,
+    WeatherContent weatherContent,
     SceneWriter sceneWriter,
     BibleWriter bibleWriter,
     MemoryRepository memoryStore,
@@ -186,8 +188,13 @@ public sealed class WorldService(
             relationships,
             people,
             offer,
-            ending);
+            ending,
+            WeatherOn(saveId, setting, clock.Day));
     }
+
+    /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
+    public WeatherDefinition WeatherOn(SaveId saveId, SettingDefinition setting, int day) =>
+        weatherContent.Get(WeatherRoll.For(saveId.ToString(), Math.Clamp(day, 1, setting.Days), weatherContent, setting));
 
     /// <summary>
     /// Records the player's opening: the clock starts at the opening's time, and its meeting, home
@@ -482,7 +489,8 @@ public sealed class WorldService(
             ceiling,
             [.. pack.Expressions.Keys],
             [.. known.Select(p => p.Name)],
-            memoryLines);
+            memoryLines,
+            WeatherOn(saveId, setting, day).Writing);
 
         var world = new SceneWorld(
             facts,

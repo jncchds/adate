@@ -1,0 +1,7 @@
+[
+  { "id": "clear", "label": "Clear", "writing": "Clear, dry weather.", "weight": 5 },
+  { "id": "cloudy", "label": "Overcast", "writing": "An overcast, grey day with a soft, even light.", "weight": 3 },
+  { "id": "rain", "label": "Rain", "writing": "It is raining on and off; the ground is wet.", "weight": 2 },
+  { "id": "storm", "label": "Storm", "writing": "A storm rolls through, with heavy rain and gusts of wind.", "weight": 1 },
+  { "id": "fog", "label": "Fog", "writing": "Thick fog hangs over everything and muffles sound.", "weight": 1 }
+]

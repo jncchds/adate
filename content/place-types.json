@@ -14,6 +14,34 @@
         "Afternoon": "Warm afternoon light slants in and casts long shadows",
         "Evening": "Warm lamps are lit and the sunset glows through the windows",
         "Night": "It is night, the room is lit by warm lamps and the windows are dark"
+      },
+      "neutralTimeTags": {
+        "Morning": ["morning", "soft light"],
+        "Midday": ["daytime", "daylight"],
+        "Afternoon": ["afternoon"],
+        "Evening": ["evening", "warm lamplight"],
+        "Night": ["night", "indoor lighting", "dark window"]
+      },
+      "neutralTimeDescriptions": {
+        "Morning": "It is morning and soft light fills the room",
+        "Midday": "It is the middle of the day",
+        "Afternoon": "It is afternoon",
+        "Evening": "It is evening and warm lamps are lit",
+        "Night": "It is night, the room is lit by warm lamps and the windows are dark"
+      },
+      "weatherTags": {
+        "clear": [],
+        "cloudy": ["overcast light through window"],
+        "rain": ["rain on window", "raindrops on glass"],
+        "storm": ["heavy rain on window", "stormy sky outside"],
+        "fog": ["foggy view through window"]
+      },
+      "weatherDescriptions": {
+        "clear": "",
+        "cloudy": "Grey, overcast light comes in through the windows",
+        "rain": "Rain streaks down the windows",
+        "storm": "Heavy rain lashes the windows under a dark, stormy sky",
+        "fog": "Thick fog hides the view outside the windows"
       }
     },
     "outdoor": {
@@ -30,6 +58,34 @@
         "Afternoon": "Afternoon sun with long shadows",
         "Evening": "Sunset with an orange sky and golden light",
         "Night": "Night time under moonlight and a starry sky"
+      },
+      "neutralTimeTags": {
+        "Morning": ["morning"],
+        "Midday": ["daytime"],
+        "Afternoon": ["afternoon"],
+        "Evening": ["evening", "dusk"],
+        "Night": ["night"]
+      },
+      "neutralTimeDescriptions": {
+        "Morning": "Early morning",
+        "Midday": "The middle of the day",
+        "Afternoon": "Afternoon",
+        "Evening": "Evening, as the light fades",
+        "Night": "Night time"
+      },
+      "weatherTags": {
+        "clear": [],
+        "cloudy": ["overcast sky", "grey clouds"],
+        "rain": ["rain", "wet ground", "puddles"],
+        "storm": ["storm", "heavy rain", "dark clouds"],
+        "fog": ["fog", "mist"]
+      },
+      "weatherDescriptions": {
+        "clear": "",
+        "cloudy": "The sky is overcast with grey clouds",
+        "rain": "It is raining and the ground is wet with puddles",
+        "storm": "A storm with heavy rain under dark clouds",
+        "fog": "Thick fog softens everything in the distance"
       }
     }
   },

@@ -59,10 +59,20 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
                 Add(sentences, $"With {string.Join(", ", details)}");
             }
 
-            if (location.TimeDescriptions is not null &&
-                location.TimeDescriptions.TryGetValue(intent.Time.ToString(), out var time))
+            // Weather other than clear takes the sky: the lighting line must not also describe one.
+            var weathered = intent.Weather is { } w && w != "clear" && location.NeutralTimeDescriptions is not null;
+            var lighting = weathered ? location.NeutralTimeDescriptions : location.TimeDescriptions;
+
+            if (lighting is not null && lighting.TryGetValue(intent.Time.ToString(), out var time))
             {
                 Add(sentences, time);
+            }
+
+            if (intent.Weather is { } weather
+                && location.WeatherDescriptions?.TryGetValue(weather, out var looks) is true
+                && !string.IsNullOrWhiteSpace(looks))
+            {
+                Add(sentences, looks);
             }
 
             // A stray figure in a cached background is permanent. Kept short on purpose. Measured:

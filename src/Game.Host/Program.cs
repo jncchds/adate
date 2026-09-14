@@ -48,6 +48,7 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.RelationshipFile = ResolveContentPath(o.RelationshipFile);
     o.RoutesFile = ResolveContentPath(o.RoutesFile);
     o.EndingsFile = ResolveContentPath(o.EndingsFile);
+    o.WeatherFile = ResolveContentPath(o.WeatherFile);
 
     // Fail at startup rather than at the first render: a game that has declared an
     // impossible age floor should not serve a single page.
@@ -102,6 +103,13 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddSingleton(sp =>
     Game.Core.Story.EndingContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.EndingsFile));
+
+builder.Services.AddSingleton(sp =>
+{
+    var weather = Game.Core.World.WeatherContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.WeatherFile);
+    weather.ValidateAgainst(sp.GetRequiredService<ILocationCatalog>(), sp.GetRequiredService<Game.Core.Settings.ISettingCatalog>());
+    return weather;
+});
 
 // One compiler per prompt dialect; the pack's dialect picks which one runs.
 builder.Services.AddSingleton<IPromptCompiler, BooruPromptCompiler>();

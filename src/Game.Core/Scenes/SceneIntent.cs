@@ -11,6 +11,7 @@ namespace Game.Core.Scenes;
 /// words: the compiler resolves them against the catalog, so a prompt is still built only from
 /// authored vocabulary.
 /// </param>
+/// <param name="Weather">A weather id; null or <c>clear</c> adds nothing to the prompt.</param>
 public sealed record SceneIntent(
     string LocationId,
     TimeOfDay Time,
@@ -18,4 +19,5 @@ public sealed record SceneIntent(
     string Pose,
     string Expression,
     Framing Framing,
-    IReadOnlyList<string>? LocationDetails = null);
+    IReadOnlyList<string>? LocationDetails = null,
+    string? Weather = null);

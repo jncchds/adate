@@ -29,7 +29,8 @@ public sealed record ScenePacket(
     Ceiling Ceiling,
     IReadOnlyList<string> Expressions,
     IReadOnlyList<string>? KnownPlaces = null,
-    IReadOnlyList<string>? Memories = null);
+    IReadOnlyList<string>? Memories = null,
+    string? Weather = null);
 
 public static class ScenePacketBuilder
 {
@@ -100,6 +101,10 @@ public static class ScenePacketBuilder
         text.AppendLine("## Where and when");
         text.AppendLine($"{packet.SettingName}. {packet.Tone}");
         text.AppendLine($"Day {packet.Clock.Day}, {packet.Clock.Slot.ToString().ToLowerInvariant()}, at {packet.PlaceName}.");
+        if (packet.Weather is { } weather)
+        {
+            text.AppendLine($"Weather: {weather}");
+        }
         if (packet.KnownPlaces is { Count: > 0 } knownPlaces)
         {
             text.AppendLine($"Places the player knows: {string.Join(", ", knownPlaces)}.");

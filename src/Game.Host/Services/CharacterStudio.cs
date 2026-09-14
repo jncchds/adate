@@ -256,20 +256,24 @@ public sealed class CharacterStudio(
 
     // ---------------------------------------------------------------- backgrounds
 
-    public Task<string> GenerateBackgroundAsync(SaveId saveId, PlaceRecord place, TimeOfDay time) =>
+    /// <param name="weather">A weather id; <c>clear</c> keeps the prompt, and so the cache, it always had.</param>
+    public Task<string> GenerateBackgroundAsync(SaveId saveId, PlaceRecord place, TimeOfDay time, string weather = "clear") =>
         jobs.RunAsync(
-            $"background:{saveId}:{place.Id}:{time}",
-            ct => GenerateBackgroundCoreAsync(saveId, place, time, ct));
+            $"background:{saveId}:{place.Id}:{time}:{weather}",
+            ct => GenerateBackgroundCoreAsync(saveId, place, time, weather, ct));
 
     private async Task<string> GenerateBackgroundCoreAsync(
         SaveId saveId,
         PlaceRecord place,
         TimeOfDay time,
+        string weather,
         CancellationToken ct)
     {
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
-        var intent = new SceneIntent(place.TypeId, time, "", "", "", Framing.FullBody, place.Details);
+        var intent = new SceneIntent(
+            place.TypeId, time, "", "", "", Framing.FullBody, place.Details,
+            weather == "clear" ? null : weather);
 
         // A background has no subject, so no age clamp applies -- only the game setting and
         // the pack. It still goes through the gate: a location is authored content, but the
@@ -300,7 +304,7 @@ public sealed class CharacterStudio(
                 Ceiling: backgroundCeiling),
             ct).ConfigureAwait(false);
 
-        await cache.RecordBackgroundAsync(image.Hash, saveId, place.Id, time, image.RelativePath, ct)
+        await cache.RecordBackgroundAsync(image.Hash, saveId, place.Id, time, image.RelativePath, weather, ct)
             .ConfigureAwait(false);
 
         return image.RelativePath;
@@ -467,6 +471,8 @@ public sealed class StudioOptions
     public string RoutesFile { get; set; } = Path.Combine("content", "routes.json");
 
     public string EndingsFile { get; set; } = Path.Combine("content", "endings.json");
+
+    public string WeatherFile { get; set; } = Path.Combine("content", "weather.json");
 
     public string StylePackId { get; set; } = "illustrious-anime";
 

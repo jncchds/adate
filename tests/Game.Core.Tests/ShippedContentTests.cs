@@ -139,7 +139,13 @@ public class ShippedContentTests
 
         foreach (var type in Catalog().All())
         {
-            IEnumerable<string> wording = [type.Description!, .. type.TimeDescriptions!.Values, .. type.Details!.Select(d => d.Phrase)];
+            IEnumerable<string> wording =
+            [
+                type.Description!,
+                .. type.TimeDescriptions!.Values,
+                .. type.Details!.Select(d => d.Phrase),
+                .. (type.WeatherDescriptions?.Values ?? []),
+            ];
 
             foreach (var text in wording)
             {

@@ -105,8 +105,28 @@ public sealed class JsonLocationCatalog : ILocationCatalog
             }
         }
 
+        if ((defaults.WeatherTags is null) != (defaults.WeatherDescriptions is null)
+            || (defaults.WeatherTags is not null
+                && !defaults.WeatherTags.Keys.Order(StringComparer.Ordinal).SequenceEqual(defaults.WeatherDescriptions!.Keys.Order(StringComparer.Ordinal))))
+        {
+            Fail($"its kind '{entry.Kind}' declares weather tags and weather descriptions for different weather.");
+        }
+
+        if (defaults.WeatherTags is not null)
+        {
+            foreach (var time in Enum.GetValues<TimeOfDay>())
+            {
+                if (defaults.NeutralTimeTags?.ContainsKey(time.ToString()) is not true
+                    || defaults.NeutralTimeDescriptions?.ContainsKey(time.ToString()) is not true)
+                {
+                    Fail($"its kind '{entry.Kind}' has weather but no weather-neutral lighting for {time}.");
+                }
+            }
+        }
+
         return new LocationDefinition(
-            entry.Id, entry.DisplayName, entry.Tags, timeTags, entry.Description, timeDescriptions, entry.Details ?? []);
+            entry.Id, entry.DisplayName, entry.Tags, timeTags, entry.Description, timeDescriptions, entry.Details ?? [],
+            defaults.WeatherTags, defaults.WeatherDescriptions, defaults.NeutralTimeTags, defaults.NeutralTimeDescriptions);
     }
 
     private sealed record CatalogDocument(
@@ -115,7 +135,11 @@ public sealed class JsonLocationCatalog : ILocationCatalog
 
     private sealed record TimeDefaults(
         IReadOnlyDictionary<string, IReadOnlyList<string>> TimeTags,
-        IReadOnlyDictionary<string, string> TimeDescriptions);
+        IReadOnlyDictionary<string, string> TimeDescriptions,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? WeatherTags = null,
+        IReadOnlyDictionary<string, string>? WeatherDescriptions = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? NeutralTimeTags = null,
+        IReadOnlyDictionary<string, string>? NeutralTimeDescriptions = null);
 
     private sealed record TypeEntry(
         string Id,

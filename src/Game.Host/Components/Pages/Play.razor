@@ -144,7 +144,7 @@ else
 {
     <div class="map-header">
         <h1>Day @_state.Clock.Day of @_state.Setting.Days</h1>
-        <span class="map-slot">@_state.Clock.Slot</span>
+        <span class="map-slot">@_state.Clock.Slot@(_state.Weather is { } weather ? $" · {weather.Label}" : "")</span>
     </div>
 
     <p class="lede">
@@ -248,7 +248,7 @@ else
             StateHasChanged();
 
             // Drawn at the slot the visit happened in, not the one the clock moved on to.
-            _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot);
+            _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot, _state?.Weather?.Id ?? "clear");
             StateHasChanged();
 
             // Written once the placeholder and background are on screen, so a slow or absent model

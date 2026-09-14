@@ -139,18 +139,20 @@ public sealed class ImageCacheRepository(Database database)
         string locationId,
         TimeOfDay time,
         string path,
+        string weather = "clear",
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hash);
         ArgumentException.ThrowIfNullOrWhiteSpace(locationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(weather);
 
         await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            INSERT INTO background_cache (hash, save_id, location_id, time_of_day, path, created_utc)
-            VALUES ($hash, $save, $location, $time, $path, $created)
+            INSERT INTO background_cache (hash, save_id, location_id, time_of_day, weather, path, created_utc)
+            VALUES ($hash, $save, $location, $time, $weather, $path, $created)
             ON CONFLICT(hash) DO NOTHING;
             """;
 
@@ -158,6 +160,7 @@ public sealed class ImageCacheRepository(Database database)
         command.Parameters.AddWithValue("$save", saveId.ToString());
         command.Parameters.AddWithValue("$location", locationId);
         command.Parameters.AddWithValue("$time", time.ToString());
+        command.Parameters.AddWithValue("$weather", weather);
         command.Parameters.AddWithValue("$path", path);
         command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
 
@@ -168,6 +171,7 @@ public sealed class ImageCacheRepository(Database database)
         SaveId saveId,
         string locationId,
         TimeOfDay time,
+        string weather = "clear",
         CancellationToken ct = default)
     {
         await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
@@ -175,13 +179,14 @@ public sealed class ImageCacheRepository(Database database)
 
         command.CommandText = """
             SELECT path FROM background_cache
-            WHERE save_id = $save AND location_id = $location AND time_of_day = $time
+            WHERE save_id = $save AND location_id = $location AND time_of_day = $time AND weather = $weather
             LIMIT 1;
             """;
 
         command.Parameters.AddWithValue("$save", saveId.ToString());
         command.Parameters.AddWithValue("$location", locationId);
         command.Parameters.AddWithValue("$time", time.ToString());
+        command.Parameters.AddWithValue("$weather", weather);
 
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }

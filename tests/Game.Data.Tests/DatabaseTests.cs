@@ -329,6 +329,14 @@ public class DatabaseTests
 
         Assert.Null(await cache.FindBackgroundPathAsync(save.Id, "cafe", TimeOfDay.Morning));
         Assert.Null(await cache.FindBackgroundPathAsync(save.Id, "park", TimeOfDay.Evening));
+
+        // Weather is part of the key: a rainy evening is a different background, and a row written
+        // without weather is a clear one.
+        Assert.Null(await cache.FindBackgroundPathAsync(save.Id, "cafe", TimeOfDay.Evening, "rain"));
+
+        await cache.RecordBackgroundAsync(new string('f', 64), save.Id, "cafe", TimeOfDay.Evening, "img/f.png", "rain");
+        Assert.Equal("img/f.png", await cache.FindBackgroundPathAsync(save.Id, "cafe", TimeOfDay.Evening, "rain"));
+        Assert.Equal("img/e.png", await cache.FindBackgroundPathAsync(save.Id, "cafe", TimeOfDay.Evening, "clear"));
     }
 
     // ------------------------------------------------------------------ places
