@@ -51,7 +51,10 @@ Each step ends in something that runs and is committed.
    kind, migration 007, and weather on the map and in the packet. Clear adds nothing, so existing
    backgrounds stay valid.*
 2. **Characters in scenes:** day outfits, cast sprites on demand, the stage showing whoever the
-   scene is about with the scene's expression.
+   scene is about with the scene's expression. *Done: full-body matted sprites per cast member and
+   expression, rendered on first use (about 6.5 s, then cached). The person shows at their resting
+   expression straight away and switches to the written one. Outfits follow each person's aesthetic.
+   Day-to-day variety is still open.*
 3. **Every turn written:** schedules, presence from schedule or encounter, quiet scenes, and the
    no-player-actions rule with a validator check.
 4. **Choices:** model-proposed options, free-form replies, interpretation into tags, reactions and

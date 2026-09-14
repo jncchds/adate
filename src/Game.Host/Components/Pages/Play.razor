@@ -34,6 +34,11 @@ else if (_outcome is not null)
         {
             <img class="layer background" src="@_background" alt="@_outcomePlace?.Name" />
         }
+
+        @if (_sprite is not null)
+        {
+            <img class="layer sprite shown" src="@_sprite" alt="@_view?.Name" />
+        }
     </div>
 
     <p class="encounter-text">@_outcome.Text</p>
@@ -209,6 +214,8 @@ else
     private TurnOutcome? _outcome;
     private PlaceRecord? _outcomePlace;
     private string? _background;
+    private string? _sprite;
+    private SceneView? _view;
     private string _invite = "";
     private bool _working;
     private string? _error;
@@ -251,11 +258,21 @@ else
             _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot, _state?.Weather?.Id ?? "clear");
             StateHasChanged();
 
-            // Written once the placeholder and background are on screen, so a slow or absent model
-            // never holds up the turn itself.
-            if (_outcome.EncounterId is not null)
+            // Whoever the scene is about steps in at their resting expression straight away.
+            _view = await World.PresentAsync(SaveId, _outcome);
+            _sprite = await World.SpriteAsync(SaveId, _view);
+            StateHasChanged();
+
+            // Written once the placeholder, background and sprite are on screen, so a slow or absent
+            // model never holds up the turn itself. The written expression replaces the resting one.
+            var written = await World.WriteSceneAsync(SaveId, _outcome);
+            _outcome = _outcome with { Text = written.Text };
+
+            if (written.Expression != _view.Expression)
             {
-                _outcome = _outcome with { Text = await World.WriteSceneAsync(SaveId, _outcome) };
+                StateHasChanged();
+                _view = written;
+                _sprite = await World.SpriteAsync(SaveId, written);
             }
         }
         catch (Exception ex)
@@ -311,6 +328,8 @@ else
         _outcome = null;
         _outcomePlace = null;
         _background = null;
+        _sprite = null;
+        _view = null;
         await LoadAsync();
     }
 

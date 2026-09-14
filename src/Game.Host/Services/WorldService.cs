@@ -20,6 +20,11 @@ public sealed record PendingChoice(string EncounterId, string Text, IReadOnlyLis
 /// <param name="Key">The invite value and flag prefix: <c>main_li</c> or a route id.</param>
 public sealed record Invitee(string Key, string Name);
 
+/// <summary>What a turn's scene shows: its text, and who stands in front wearing which expression.</summary>
+/// <param name="CharacterId">The person in front, or null when the scene is about no one in the cast.</param>
+/// <param name="Aesthetic">Their style, which picks the sprite's outfit.</param>
+public sealed record SceneView(string Text, Guid? CharacterId, string? Name, string? Aesthetic, string? Expression);
+
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
 public sealed record RelationshipView(string Name, RelationshipState State, string? Left = null);
@@ -411,18 +416,52 @@ public sealed class WorldService(
     }
 
     /// <summary>
+    /// Who a taken turn shows before anything is written: the person the scene is about, at their
+    /// temper's resting expression, so they can be on screen while the scene is still being written.
+    /// </summary>
+    public async Task<SceneView> PresentAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+
+        if (Owner(cast, outcome.With) is not { } owner)
+        {
+            return new SceneView(outcome.Text, null, null, null, null);
+        }
+
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+        var expression = ScenePresentation.Expression(null, owner.Member.RestingExpression(castContent), [.. pack.Expressions.Keys]);
+
+        return new SceneView(outcome.Text, owner.Id, owner.Name, owner.Member.Aesthetic, expression);
+    }
+
+    /// <summary>The sprite of the person a scene shows, rendered on first use. Null when it shows no one.</summary>
+    public async Task<string?> SpriteAsync(SaveId saveId, SceneView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        return view is { CharacterId: { } id, Expression: { } expression }
+            ? await studio.GenerateSceneSpriteAsync(saveId, id, view.Aesthetic ?? "", expression).ConfigureAwait(false)
+            : null;
+    }
+
+    /// <summary>
     /// Writes the scene for a turn that has been taken (plan §8), when an LLM is configured. The packet
     /// holds only what the player and the people present know; accepted facts are stored and known by
     /// everyone present; the packet and the answer are logged so the turn can be replayed. Returns the
     /// scene text, or the encounter's authored text when there is no model or no answer passed.
     /// </summary>
-    public async Task<string> WriteSceneAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
+    public async Task<SceneView> WriteSceneAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(outcome);
 
+        var presented = await PresentAsync(saveId, outcome, ct).ConfigureAwait(false);
+
         if (!llmOptions.Value.Enabled || outcome.EncounterId is null)
         {
-            return outcome.Text;
+            return presented;
         }
 
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
@@ -561,7 +600,13 @@ public sealed class WorldService(
             written.Rejections,
         }, ct).ConfigureAwait(false);
 
-        return written.Text;
+        return presented with
+        {
+            Text = written.Text,
+            Expression = presented.Expression is null
+                ? null
+                : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
+        };
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>

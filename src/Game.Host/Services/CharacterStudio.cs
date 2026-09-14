@@ -254,6 +254,68 @@ public sealed class CharacterStudio(
         return sprites;
     }
 
+    /// <summary>
+    /// One full-body standing sprite of a cast member for a scene (phase-3 plan: characters in
+    /// scenes), in their aesthetic's outfit and one expression, matted by the sprite workflow.
+    /// Rendered on first use and served from the content-addressed cache after that.
+    /// </summary>
+    /// <remarks>
+    /// Every expression of a character shares the character's seed and differs only in the
+    /// expression phrase: measured on Z-Image, that holds one person together across expressions
+    /// without a pose skeleton (86-98% silhouette overlap).
+    /// </remarks>
+    public Task<string> GenerateSceneSpriteAsync(SaveId saveId, Guid characterId, string aesthetic, string expression) =>
+        jobs.RunAsync(
+            $"scene-sprite:{characterId}:{aesthetic}:{expression}",
+            ct => GenerateSceneSpriteCoreAsync(saveId, characterId, aesthetic, expression, ct));
+
+    private async Task<string> GenerateSceneSpriteCoreAsync(
+        SaveId saveId,
+        Guid characterId,
+        string aesthetic,
+        string expression,
+        CancellationToken ct)
+    {
+        var character = await characters.GetAsync(characterId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"No character with id {characterId}.");
+
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
+        var subject = pack.SubjectFor(character.Appearance.Subject);
+
+        var outfit = aesthetic.Length > 0 ? subject.AestheticOutfit(aesthetic) : subject.Outfit;
+        var approved = Approve(character, pack, new SceneIntent(
+            "studio",
+            TimeOfDay.Midday,
+            string.Join(", ", outfit),
+            "standing",
+            pack.ExpressionFor(expression),
+            Framing.FullBody));
+
+        var image = await images.GenerateAsync(
+            new ImageRequest(
+                WorkflowId: pack.Workflows.Sprite,
+                Positive: compiler.CompilePositive(character.Appearance, approved, pack, RenderTarget.Sprite),
+                Negative: compiler.CompileNegative(pack, approved.Ceiling, RenderTarget.Sprite, character.Appearance.Subject),
+                Seed: character.AnchorSeed ?? DeriveSeed(character.Id, 0),
+                Width: pack.Resolutions.Sprite.Width,
+                Height: pack.Resolutions.Sprite.Height,
+                PackFingerprint: PackFingerprint(),
+                AnchorImageHash: null,
+                AnchorWeight: null,
+                PoseImageHash: null,
+                PoseStrength: null,
+                Ceiling: approved.Ceiling),
+            ct).ConfigureAwait(false);
+
+        await cache.RecordSpriteAsync(
+            image.Hash, saveId, character.Id,
+            aesthetic.Length > 0 ? aesthetic : "default", "standing-full", expression, approved.Ceiling, image.RelativePath, ct)
+            .ConfigureAwait(false);
+
+        return image.RelativePath;
+    }
+
     // ---------------------------------------------------------------- backgrounds
 
     /// <param name="weather">A weather id; <c>clear</c> keeps the prompt, and so the cache, it always had.</param>
