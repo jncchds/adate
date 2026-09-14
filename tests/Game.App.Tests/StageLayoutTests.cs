@@ -92,6 +92,25 @@ public class StageLayoutTests
         }
     }
 
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void Children_after_the_side_overlay_the_whole_area()
+    {
+        var layout = new StageLayout();
+        Avalonia.Controls.Border[] children = [new(), new(), new(), new()];
+        layout.Children.AddRange(children);
+
+        layout.Measure(new Size(1280, 720));
+        layout.Arrange(new Rect(0, 0, 1280, 720));
+
+        // Layout rounds to whole pixels, so the side is compared within one.
+        var regions = StageLayout.Split(new Size(1280, 720), tall: false);
+        Assert.Equal(regions.Side.X, children[2].Bounds.X, 0.51);
+        Assert.Equal(regions.Side.Y, children[2].Bounds.Y, 0.51);
+        Assert.Equal(regions.Side.Width, children[2].Bounds.Width, 1.01);
+        Assert.Equal(regions.Side.Height, children[2].Bounds.Height, 1.01);
+        Assert.Equal(new Rect(0, 0, 1280, 720), children[3].Bounds);
+    }
+
     [Fact]
     public void A_sprite_is_framed_from_the_head_and_centred()
     {

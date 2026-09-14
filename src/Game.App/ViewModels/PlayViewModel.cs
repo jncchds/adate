@@ -679,6 +679,8 @@ public sealed partial class PlayViewModel : PageViewModel
     private void ShowError(Exception ex)
     {
         Error = ex.Message;
+        Heading = "Something went wrong";
+        Speaker = null;
         Mode = PlayMode.Error;
     }
 

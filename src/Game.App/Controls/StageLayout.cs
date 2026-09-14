@@ -12,7 +12,8 @@ public readonly record struct StageRegions(Rect Stage, Rect Figure, Rect Side, b
 
 /// <summary>
 /// Keeps the picture on screen whatever the shape of the window. Children, in order: the stage, the
-/// figure and the side.
+/// figure and the side; any further children are overlays across the whole area, drawn above the rest
+/// (the back button, the caption), so the person never covers them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -103,9 +104,9 @@ public sealed class StageLayout : Panel
 
         var regions = Split(size, Tall);
         Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
-        for (var i = 0; i < Children.Count && i < rects.Length; i++)
+        for (var i = 0; i < Children.Count; i++)
         {
-            Children[i].Measure(rects[i].Size);
+            Children[i].Measure(i < rects.Length ? rects[i].Size : size);
         }
 
         return size;
@@ -115,9 +116,9 @@ public sealed class StageLayout : Panel
     {
         var regions = Split(finalSize, Tall);
         Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
-        for (var i = 0; i < Children.Count && i < rects.Length; i++)
+        for (var i = 0; i < Children.Count; i++)
         {
-            Children[i].Arrange(rects[i]);
+            Children[i].Arrange(i < rects.Length ? rects[i] : new Rect(finalSize));
         }
 
         IsStacked = regions.Stacked;

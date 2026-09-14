@@ -10,7 +10,7 @@
     </Style>
 
     <Style Selector="StackPanel.side">
-        <Setter Property="Margin" Value="16,12,16,28" />
+        <Setter Property="Margin" Value="16,4,16,24" />
         <Setter Property="Spacing" Value="12" />
     </Style>
 
@@ -98,18 +98,37 @@
         <Setter Property="Background" Value="#101012" />
     </Style>
 
+    <!-- The place's name, top right: the back button has the top left. -->
     <Style Selector="Border.caption">
         <Setter Property="Background" Value="#A0000000" />
-        <Setter Property="CornerRadius" Value="0,0,8,0" />
+        <Setter Property="CornerRadius" Value="0,0,0,8" />
         <Setter Property="Padding" Value="12,6" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
-    <!-- In landscape the person stands at the left, so the place's name moves out of their way. -->
-    <Style Selector="ctl|StageLayout:not(:stacked) Border.caption">
-        <Setter Property="HorizontalAlignment" Value="Right" />
-        <Setter Property="CornerRadius" Value="0,0,0,8" />
+    <!-- A small round back button in the screen's top left corner. -->
+    <Style Selector="Button.back">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Margin" Value="10" />
+        <Setter Property="Padding" Value="0,0,2,3" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Background" Value="#A0000000" />
+    </Style>
+
+    <!-- The text box's header: the screen's title at the left, the name tag at the right. -->
+    <Style Selector="TextBlock.title">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Border.popup">
@@ -144,7 +163,8 @@
         <Setter Property="Background" Value="#E8C872" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="10,3" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Margin" Value="12,0,0,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Border.nametag > TextBlock">

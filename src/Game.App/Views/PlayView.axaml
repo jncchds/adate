@@ -35,10 +35,6 @@
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" />
-            <Border Classes="caption" IsVisible="{Binding StageCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <TextBlock Text="{Binding StageCaption}" />
-            </Border>
-            <ProgressBar Classes="busy" IsIndeterminate="True" IsVisible="{Binding Working}" />
         </Panel>
 
         <!-- The person the scene is about: at the left in landscape, over the picture in portrait. -->
@@ -46,168 +42,176 @@
             <Image Source="{Binding StageSprite}" />
         </ctl:SpriteFrame>
 
-        <!-- The words and every choice, in a translucent box that scrolls on its own. -->
+        <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->
         <Border Classes="textbox">
-        <ScrollViewer x:Name="Side">
-            <StackPanel Classes="side">
-                <Button Classes="link" Content="‹ Saves" Command="{Binding HomeCommand}" />
-
-                <TextBlock Classes="lede" Text="Loading the save." IsVisible="{Binding IsLoading}" />
-
-                <StackPanel IsVisible="{Binding IsError}" Spacing="10">
-                    <TextBlock Classes="h1" Text="Something went wrong." />
-                    <TextBlock Classes="error" Text="{Binding Error}" />
-                    <Button Classes="accent" Content="Try again" Command="{Binding RetryCommand}" />
-                </StackPanel>
-
-                <!-- A scene: its words, then choices, a reply of the player's own, or the reaction. -->
-                <StackPanel IsVisible="{Binding IsScene}" Spacing="12">
-                    <TextBlock Classes="small" Text="{Binding Heading}" />
-                    <Border Classes="nametag" IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid RowDefinitions="Auto,*">
+                <Grid ColumnDefinitions="*,Auto" Margin="16,12,16,6">
+                    <TextBlock Classes="title" Text="{Binding Heading}" />
+                    <Border Grid.Column="1" Classes="nametag"
+                            IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock Text="{Binding Speaker}" />
                     </Border>
-                    <TextBlock Classes="story" Text="{Binding SceneText}" />
-                    <TextBlock Classes="small" Text="{Binding WithLine}"
-                               IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Classes="small" Text="{Binding RevealLine}"
-                               IsVisible="{Binding RevealLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </Grid>
 
-                    <ItemsControl ItemsSource="{Binding Choices}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ChoiceItem">
-                                <Button Classes="choice" Command="{Binding Command}" CommandParameter="{Binding Parameter}">
-                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                <ScrollViewer Grid.Row="1" x:Name="Side">
+                    <StackPanel Classes="side">
+                        <TextBlock Classes="lede" Text="Loading the save." IsVisible="{Binding IsLoading}" />
 
-                    <StackPanel IsVisible="{Binding CanReply}" Spacing="8">
-                        <TextBox Text="{Binding ReplyText}" MaxLength="300" TextWrapping="Wrap"
-                                 PlaceholderText="Or say or do something else…">
-                            <TextBox.KeyBindings>
-                                <KeyBinding Gesture="Enter" Command="{Binding ReplyCommand}" />
-                            </TextBox.KeyBindings>
-                        </TextBox>
-                        <Button Content="Reply" Command="{Binding ReplyCommand}" />
+                        <StackPanel IsVisible="{Binding IsError}" Spacing="10">
+                            <TextBlock Classes="error" Text="{Binding Error}" />
+                            <Button Classes="accent" Content="Try again" Command="{Binding RetryCommand}" />
+                        </StackPanel>
+
+                        <!-- A scene: its words, then choices, a reply of the player's own, or the reaction. -->
+                        <StackPanel IsVisible="{Binding IsScene}" Spacing="12">
+                            <TextBlock Classes="story" Text="{Binding SceneText}" />
+                            <TextBlock Classes="small" Text="{Binding WithLine}"
+                                       IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Classes="small" Text="{Binding RevealLine}"
+                                       IsVisible="{Binding RevealLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                            <ItemsControl ItemsSource="{Binding Choices}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ChoiceItem">
+                                        <Button Classes="choice" Command="{Binding Command}" CommandParameter="{Binding Parameter}">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <StackPanel IsVisible="{Binding CanReply}" Spacing="8">
+                                <TextBox Text="{Binding ReplyText}" MaxLength="300" TextWrapping="Wrap"
+                                         PlaceholderText="Or say or do something else…">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding ReplyCommand}" />
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <Button Content="Reply" Command="{Binding ReplyCommand}" />
+                            </StackPanel>
+
+                            <TextBlock Classes="story reaction" Text="{Binding Reaction}"
+                                       IsVisible="{Binding Reaction, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <Border Classes="popup" IsVisible="{Binding Popup, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding Popup}" TextWrapping="Wrap" />
+                            </Border>
+                            <TextBlock Classes="note" Text="{Binding Agreed}"
+                                       IsVisible="{Binding Agreed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <Button Classes="accent" Content="Continue" IsVisible="{Binding ShowContinue}" Command="{Binding ContinueCommand}" />
+                        </StackPanel>
+
+                        <!-- The map: who comes along, and where to go. -->
+                        <StackPanel IsVisible="{Binding IsMap}" Spacing="12">
+                            <TextBlock Classes="lede" Text="{Binding Lede}" />
+                            <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
+
+                            <StackPanel IsVisible="{Binding HasPeople}" Spacing="8">
+                                <TextBlock Classes="h2" Text="Bring someone along" />
+                                <ItemsControl ItemsSource="{Binding People}" ItemTemplate="{StaticResource PersonCard}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel ItemWidth="128" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <TextBlock Classes="h2" Text="Where to" />
+                            <ItemsControl ItemsSource="{Binding Places}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemWidth="172" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PlaceCardViewModel">
+                                        <Button Classes="card" Command="{Binding Command}" CommandParameter="{Binding}">
+                                            <StackPanel Spacing="4">
+                                                <Panel Height="90" ClipToBounds="True">
+                                                    <Border Classes="wait" />
+                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                                </Panel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                <TextBlock Classes="small" Text="{Binding TypeName}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- The ending offer: who to stay with. -->
+                        <StackPanel IsVisible="{Binding IsEndingOffer}" Spacing="12">
+                            <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
+                            <TextBlock Classes="lede" Text="{Binding Lede}" />
+                            <ItemsControl ItemsSource="{Binding People}" ItemTemplate="{StaticResource PersonCard}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemWidth="128" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- The ending, and what the player's choices did. -->
+                        <StackPanel IsVisible="{Binding IsEnding}" Spacing="12">
+                            <TextBlock Classes="story" Text="{Binding SceneText}" />
+
+                            <TextBlock Classes="h2" Text="Who walked away" IsVisible="{Binding HasNotes}" />
+                            <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
+
+                            <TextBlock Classes="h2" Text="Who you passed over"
+                                       IsVisible="{Binding PassedOver, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Classes="lede" Text="{Binding PassedOver}"
+                                       IsVisible="{Binding PassedOver, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                            <TextBlock Classes="h2" Text="Your choices" IsVisible="{Binding HasRecap}" />
+                            <ItemsControl ItemsSource="{Binding Recap}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RecapItem">
+                                        <StackPanel Spacing="2" Margin="0,0,0,10">
+                                            <TextBlock Classes="small" Text="{Binding When}" />
+                                            <TextBlock Text="{Binding Words}" TextWrapping="Wrap" />
+                                            <TextBlock Classes="note" Text="{Binding Influence}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Classes="h2" Text="{Binding ProfileOf}"
+                                       IsVisible="{Binding ProfileOf, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <ItemsControl ItemsSource="{Binding Profile}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="sys:String">
+                                        <TextBlock Classes="lede" Text="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Classes="accent" Content="Start another story" Command="{Binding HomeCommand}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding IsNoOpening}" Spacing="12">
+                            <TextBlock Classes="lede" Text="{Binding Lede}" />
+                            <Button Classes="accent" Content="Choose an opening" Command="{Binding OpeningCommand}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding IsOver}" Spacing="12">
+                            <TextBlock Classes="lede" Text="{Binding Lede}" />
+                        </StackPanel>
                     </StackPanel>
-
-                    <TextBlock Classes="story reaction" Text="{Binding Reaction}"
-                               IsVisible="{Binding Reaction, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <Border Classes="popup" IsVisible="{Binding Popup, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Text="{Binding Popup}" TextWrapping="Wrap" />
-                    </Border>
-                    <TextBlock Classes="note" Text="{Binding Agreed}"
-                               IsVisible="{Binding Agreed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <Button Classes="accent" Content="Continue" IsVisible="{Binding ShowContinue}" Command="{Binding ContinueCommand}" />
-                </StackPanel>
-
-                <!-- The map: who comes along, and where to go. -->
-                <StackPanel IsVisible="{Binding IsMap}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
-                    <TextBlock Classes="lede" Text="{Binding Lede}" />
-                    <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
-
-                    <StackPanel IsVisible="{Binding HasPeople}" Spacing="8">
-                        <TextBlock Classes="h2" Text="Bring someone along" />
-                        <ItemsControl ItemsSource="{Binding People}" ItemTemplate="{StaticResource PersonCard}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel ItemWidth="128" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </StackPanel>
-
-                    <TextBlock Classes="h2" Text="Where to" />
-                    <ItemsControl ItemsSource="{Binding Places}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel ItemWidth="172" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PlaceCardViewModel">
-                                <Button Classes="card" Command="{Binding Command}" CommandParameter="{Binding}">
-                                    <StackPanel Spacing="4">
-                                        <Panel Height="90" ClipToBounds="True">
-                                            <Border Classes="wait" />
-                                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                                        </Panel>
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <TextBlock Classes="small" Text="{Binding TypeName}" />
-                                    </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-                <!-- The ending offer: who to stay with. -->
-                <StackPanel IsVisible="{Binding IsEndingOffer}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
-                    <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
-                    <TextBlock Classes="lede" Text="{Binding Lede}" />
-                    <ItemsControl ItemsSource="{Binding People}" ItemTemplate="{StaticResource PersonCard}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel ItemWidth="128" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </StackPanel>
-
-                <!-- The ending, and what the player's choices did. -->
-                <StackPanel IsVisible="{Binding IsEnding}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
-                    <TextBlock Classes="story" Text="{Binding SceneText}" />
-
-                    <TextBlock Classes="h2" Text="Who walked away" IsVisible="{Binding HasNotes}" />
-                    <ItemsControl ItemsSource="{Binding Notes}" ItemTemplate="{StaticResource Note}" />
-
-                    <TextBlock Classes="h2" Text="Who you passed over"
-                               IsVisible="{Binding PassedOver, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Classes="lede" Text="{Binding PassedOver}"
-                               IsVisible="{Binding PassedOver, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-
-                    <TextBlock Classes="h2" Text="Your choices" IsVisible="{Binding HasRecap}" />
-                    <ItemsControl ItemsSource="{Binding Recap}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:RecapItem">
-                                <StackPanel Spacing="2" Margin="0,0,0,10">
-                                    <TextBlock Classes="small" Text="{Binding When}" />
-                                    <TextBlock Text="{Binding Words}" TextWrapping="Wrap" />
-                                    <TextBlock Classes="note" Text="{Binding Influence}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <TextBlock Classes="h2" Text="{Binding ProfileOf}"
-                               IsVisible="{Binding ProfileOf, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <ItemsControl ItemsSource="{Binding Profile}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="sys:String">
-                                <TextBlock Classes="lede" Text="{Binding}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <Button Classes="accent" Content="Start another story" Command="{Binding HomeCommand}" />
-                </StackPanel>
-
-                <StackPanel IsVisible="{Binding IsNoOpening}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
-                    <TextBlock Classes="lede" Text="{Binding Lede}" />
-                    <Button Classes="accent" Content="Choose an opening" Command="{Binding OpeningCommand}" />
-                </StackPanel>
-
-                <StackPanel IsVisible="{Binding IsOver}" Spacing="12">
-                    <TextBlock Classes="h1" Text="{Binding Heading}" />
-                    <TextBlock Classes="lede" Text="{Binding Lede}" />
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
+                </ScrollViewer>
+            </Grid>
         </Border>
+
+        <!-- Overlays, above the person: back to the saves, the place's name, and the busy line. -->
+        <Panel>
+            <Button Classes="back" Content="‹" Command="{Binding HomeCommand}"
+                    ToolTip.Tip="Saves" AutomationProperties.Name="Saves" />
+            <Border Classes="caption" IsVisible="{Binding StageCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding StageCaption}" />
+            </Border>
+            <ProgressBar Classes="busy" IsIndeterminate="True" IsVisible="{Binding Working}" />
+        </Panel>
     </ctl:StageLayout>
 </UserControl>

@@ -1247,8 +1247,11 @@ scrolls on its own.
 * Landscape, from nearly square to 20:9 phones, is laid out like a visual novel (the user's
   proposal): the background fills the screen, the person stands in a column on the left (36% of the
   width, at most 0.8 of the height), and the words sit in a translucent box over the lower half of
-  the rest, at least 240 px tall, capped at 880 px wide and centred beside the person. A name tag
-  above the scene text names whoever the scene is about.
+  the rest, at least 240 px tall, capped at 880 px wide and centred beside the person.
+* The box has a fixed header (the user's layout): the screen's title at the top left and a name tag
+  for whoever the scene is about at the top right; the words and choices fill the rest and scroll.
+  A small round back button to the saves sits in the screen's top left corner and the place's
+  name in the top right, as overlays drawn above the person so they stay clickable and uncovered.
 * On screens with no one standing there (the map, the ending offer, the ending) the box takes nearly
   the full height, so cards and recaps have room; the left column still shows the place.
 * Portrait stacks instead: the picture and the person take the top, 45% of the height capped at a
