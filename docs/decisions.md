@@ -1396,3 +1396,30 @@ person should be larger, cut off below the knees.
 * **The frame** now shows 72% of the sprite's height, down to the knees, and may reach 1.7 times past
   a narrow column's sides before shrinking: the figure fills well under half the sprite's width, so
   that crops empty space and at most the arms.
+## Numbers are swapped in conversation, and a date is a meeting agreed on
+
+User feedback on a Ukrainian summer-camp save: on day 2 a scene claimed "the midday the two of you
+agreed on" when nothing had been agreed, its text fell back to the authored line, the outfit was a
+floral date dress with a raincoat on the camp waterfront, and the fixed "Ask for their number" / "Let
+the moment pass" choice felt fake; the model should decide that and report it.
+
+* **Why it fell back:** two attempts tagged all three replies helps/hinders (stripping the extra tags
+  then dropped the replies left untagged, leaving too few), and one was cut off mid-JSON at 1500
+  tokens: Ukrainian takes several tokens a word. A reply that loses its extra want tag now stays,
+  scoring nothing; scenes and reactions in other languages may use 2500 and 1400 tokens.
+* **Numbers are the model's to report.** The contact beats no longer carry fixed choices: the
+  recognise scene and a route's "talk properly" scene (now once, `{route}.talked`) are conversations
+  with proposed replies. A reaction answers `numbers: true` only when the other person actually gives
+  their number or the two swap, which is theirs to decide; C# then sets `{key}.contact` for the person
+  the scene is about, once, and the scene notes it ("You have Ася's number now."). There are no tool
+  calls in this game: like `meet`, it is a field of the reaction's JSON schema that C# validates.
+  A save stopped at an old contact choice simply has nothing left to answer.
+* **A first date is an agreed meeting.** The first-date beats no longer answer an invitation. They
+  need a transient `date.agreed` flag, set only when an open meeting promise (made by a reaction's
+  `meet`) puts that person at this place and slot, they have the number and no first date yet. So
+  "the two of you agreed on" is true. Invitations still bring people to the introduction and the
+  crisis. The map lists agreed meetings, and the hint says to arrange one.
+* **Clothes.** A new `waterfront` code (the camp waterfront, the small town's lake pier): modest
+  swimwear with a shirt or shorts over it, or shorts and a tank top. Camp outfits are now summer
+  shorts and t-shirts. A date dresses up only at casual and evening places; elsewhere the place's own
+  clothes win.

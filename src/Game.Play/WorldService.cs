@@ -211,7 +211,9 @@ public sealed class WorldService(
             var placeId = encounter.Place.Id ?? (encounter.Place.PlaceFlag is { } placeFlag ? flags.GetValueOrDefault(placeFlag) : null);
             var owner = Owner(cast, encounter.With ?? []);
 
-            pending = new PendingChoice(
+            // An encounter that no longer offers choices (the contact beats became conversations) leaves nothing
+            // to answer, even in a save that stopped at it.
+            pending = (encounter.Choices ?? []).Count == 0 ? null : new PendingChoice(
                 encounter.Id,
                 Fill(encounter.Text, names, owner, PlaceName(setting, known, placeId), clock),
                 [.. (encounter.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, owner, "", clock) })]);
@@ -235,6 +237,17 @@ public sealed class WorldService(
 
         var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
         people.TryAdd(JsonEncounterCatalog.MainLiRef, names.MainLi);
+
+        // Meetings the player agreed to, so an arrangement made in conversation is never forgotten.
+        IReadOnlyList<string> promised =
+        [
+            .. (await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false))
+                .Where(p => p.Kind is PromiseKind.Meet)
+                .Select(p => (Promise: p, Person: cast.FirstOrDefault(li => li.Id.ToString() == p.CharacterId), Place: known.FirstOrDefault(k => k.Id == p.PlaceId)))
+                .Where(m => m.Person is not null && m.Place is not null)
+                .Select(m => $"You agreed to meet {m.Person!.Name} at {m.Place!.Name} on day {m.Promise.DueDay}" +
+                             (m.Promise.DueSlot is { } due ? $", {due.ToString().ToLowerInvariant()}." : ".")),
+        ];
 
         // Everyone met who is still around, in cast order: the map's lineup.
         IReadOnlyList<Invitee> met = [.. cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li)).Select(li => new Invitee(li.Key, li.Name))];
@@ -263,7 +276,7 @@ public sealed class WorldService(
             names.MainLiId,
             names.MainLi,
             opening,
-            [.. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
+            [.. promised, .. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
             pending,
             invitees,
             relationships,
@@ -345,6 +358,18 @@ public sealed class WorldService(
 
         var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
 
+        // A meeting the two agreed on, turned up to once the player has their number, is the first date, and it
+        // is the only way one happens (user feedback: bringing someone along the next day was called a date).
+        var openPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
+        if (openPromises.FirstOrDefault(p => Promises.PutsThere(p, play.Clock, place.Id)) is { } agreedMeeting
+            && cast.FirstOrDefault(li => li.Id.ToString() == agreedMeeting.CharacterId && !HasLeft(flags, li)) is { } dateWith
+            && EncounterEvaluator.Holds(flags, $"{dateWith.Key}.contact")
+            && !EncounterEvaluator.Holds(flags, $"{dateWith.Key}.first_date"))
+        {
+            // Transient, like an invitation: it shapes this turn's pick and is never stored.
+            flags[JsonEncounterCatalog.DateAgreedKey] = dateWith.Key;
+        }
+
         var context = new TurnContext(
             play.Clock,
             place.Id,
@@ -360,7 +385,6 @@ public sealed class WorldService(
 
         // A meeting the player agreed to happens when they turn up for it, whatever else was planned
         // for a quiet turn.
-        var openPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
         if (outcome.EncounterId is null
             && openPromises.FirstOrDefault(p => Promises.PutsThere(p, play.Clock, place.Id)) is { } meeting
             && cast.FirstOrDefault(li => li.Id.ToString() == meeting.CharacterId && !HasLeft(flags, li)) is { } waitingFor)
@@ -411,6 +435,7 @@ public sealed class WorldService(
 
         var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
         after.Remove(EncounterEvaluator.InviteKey);
+        after.Remove(JsonEncounterCatalog.DateAgreedKey);
         foreach (var (key, value) in outcome.FlagsToSet)
         {
             after[key] = value;
@@ -787,7 +812,10 @@ public sealed class WorldService(
         var firstDate = scene.EncounterId is { } encounterId
             && (await CastAsync(saveId, setting, ct).ConfigureAwait(false)).Any(li => JsonEncounterCatalog.FirstDateIdFor(li.Key) == encounterId);
 
-        return (firstDate ? DressCode.Date : type.Dress, type.OutfitLayers?.GetValueOrDefault(weather));
+        // A date dresses up where people dress up anyway; at the office, at home, at camp or by the water the
+        // place's own clothes still suit it (user feedback: a flowery dress on the camp's waterfront was wrong).
+        var dressesUp = firstDate && type.Dress is DressCode.Casual or DressCode.Evening;
+        return (dressesUp ? DressCode.Date : type.Dress, type.OutfitLayers?.GetValueOrDefault(weather));
     }
 
     /// <summary>
@@ -1107,6 +1135,15 @@ public sealed class WorldService(
             relationships[li.Id] = Advance(li, _engine.Apply(before[li.Id], delta, scene.Clock.Day), after, toSet);
         }
 
+        // Swapped numbers are the model's to report and C#'s to record: only with the person the scene is about,
+        // and only once (user feedback: a fixed "ask for their number" choice felt fake).
+        string? swapped = null;
+        if (reaction.ExchangedNumbers && owner is not null && !EncounterEvaluator.Holds(flags, $"{owner.Key}.contact"))
+        {
+            toSet[$"{owner.Key}.contact"] = "true";
+            swapped = $"You have {owner.Name}'s number now.";
+        }
+
         await state.ResolvePendingSceneAsync(saveId, relationships, toSet, ct).ConfigureAwait(false);
 
         // The conversation goes on while the answer offers the player something to say next, up to a limit;
@@ -1158,6 +1195,8 @@ public sealed class WorldService(
             var placeName = known.First(p => p.Id == promise.PlaceId).Name;
             agreed = $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
         }
+
+        agreed = swapped is null ? agreed : agreed is null ? swapped : $"{swapped} {agreed}";
 
         if (await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false) is { } open)
         {
@@ -1555,7 +1594,7 @@ public sealed class WorldService(
 
         if (Has("main_li.contact") && !Has("main_li.first_date"))
         {
-            return [$"You have {mainLi}'s number. Bring them along somewhere for a first date."];
+            return [$"You have {mainLi}'s number. Ask them to meet you somewhere: the meeting you agree on is your first date."];
         }
 
         return [];

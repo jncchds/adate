@@ -12,7 +12,8 @@ public sealed record ReactionResponse(
     IReadOnlyList<string>? Tags,
     ProposedMeeting? Meet = null,
     bool? Ends = null,
-    IReadOnlyList<SceneResponseChoice>? Choices = null);
+    IReadOnlyList<SceneResponseChoice>? Choices = null,
+    bool? Numbers = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
@@ -25,7 +26,8 @@ public sealed record WrittenReaction(
     IReadOnlyList<string> Rejections,
     ProposedMeeting? Meet = null,
     bool Ends = true,
-    IReadOnlyList<ProposedChoice>? Choices = null);
+    IReadOnlyList<ProposedChoice>? Choices = null,
+    bool ExchangedNumbers = false);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -40,6 +42,9 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
 
     /// <summary>About twice what a 1000-character reaction and its tags take.</summary>
     public const int MaxTokens = 700;
+
+    /// <summary>Other scripts take several tokens a word, as for scenes.</summary>
+    public const int MaxTokensOtherLanguages = 1400;
 
     public const string SystemPrompt =
         "You continue one scene of a first-person dating sim after the player has replied. Write only how " +
@@ -80,6 +85,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 : "- tags: an empty list.\n")
             + "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
               $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
+            + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
+              "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
             + Conversation(replyNumber, maxReplies);
 
         var schema = Schema(packet);
@@ -97,7 +104,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             ReactionResponse? response;
             try
             {
-                var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema, MaxTokens), ct).ConfigureAwait(false);
+                var maxTokens = NarrationLanguage.IsEnglish(packet.Language) ? MaxTokens : MaxTokensOtherLanguages;
+                var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
                 response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json);
             }
             catch (JsonException ex)
@@ -147,7 +155,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
 
                 return new WrittenReaction(
                     response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet,
-                    Ends: !goesOn, Choices: goesOn ? next : []);
+                    Ends: !goesOn, Choices: goesOn ? next : [], ExchangedNumbers: response.Numbers is true);
             }
 
             lastReasons = reasons;
@@ -170,6 +178,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
                 ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
                 ["ends"] = new JsonObject { ["type"] = "boolean" },
+                ["numbers"] = new JsonObject { ["type"] = "boolean" },
                 ["choices"] = new JsonObject
                 {
                     ["type"] = "array",
@@ -198,7 +207,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     ["additionalProperties"] = false,
                 },
             },
-            ["required"] = Strings(["text", "expression", "tags", "meet", "ends", "choices"]),
+            ["required"] = Strings(["text", "expression", "tags", "meet", "numbers", "ends", "choices"]),
             ["additionalProperties"] = false,
         };
     }

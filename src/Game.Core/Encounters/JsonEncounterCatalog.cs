@@ -45,6 +45,12 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>The first date with the main LI, whichever opening led to it.</summary>
     public const string FirstDateId = "beat.first-date";
 
+    /// <summary>
+    /// A transient flag, never stored, naming who the player turned up to an agreed meeting with. A first date
+    /// needs it: only a meeting the two agreed on is a date, never simply bringing someone along.
+    /// </summary>
+    public const string DateAgreedKey = "date.agreed";
+
     /// <summary>The first day a first date can happen (plan §1: week 2 opens the relationship).</summary>
     // Was 5: a player with the number on day 3 had two days of nothing to do (user feedback). A first date
     // can now follow as soon as the player has the number; the invite still has to be made on a later turn.
@@ -139,17 +145,11 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>
     /// The four beats of meeting the main LI (plan §4), the same shape for every opening so the
     /// systems under them are tested once: meet, recognise at the home place (re-armed once at a
-    /// second place), a contact choice inside the recognise scene, and a first date, once the player has
-    /// the number, that the player invites the main LI to.
+    /// second place), a conversation in which the two may swap numbers (the reaction says so; there is no
+    /// fixed choice), and a first date at a meeting the two agree on once the player has the number.
     /// </summary>
     private static IEnumerable<EncounterDefinition> OpeningBeats(SettingDefinition setting)
     {
-        EncounterChoice[] contact =
-        [
-            new("swap-numbers", "Ask for their number", ["main_li.contact"], ["adventure"]),
-            new("let-it-go", "Let the moment pass", ["main_li.contact_declined"], ["independence"]),
-        ];
-
         foreach (var opening in setting.Openings)
         {
             var chosen = $"opening={opening.Id}";
@@ -173,8 +173,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: ["main_li.recognised"],
                 With: ["main_li"],
                 Priority: OpeningPriority - 5,
-                Text: $"{{main_li}} is at {{place}} again, {opening.HomeWindow}, just as they said, and they recognise you straight away.",
-                Choices: contact);
+                Text: $"{{main_li}} is at {{place}} again, {opening.HomeWindow}, just as they said, and they recognise you straight away.");
 
             if (opening.SecondPlace is { } second)
             {
@@ -186,8 +185,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Sets: ["main_li.recognised", "main_li.recognised_late"],
                     With: ["main_li"],
                     Priority: OpeningPriority - 5,
-                    Text: "{main_li} is at {place}, one of the places they mentioned. It takes them a second, and then they smile.",
-                    Choices: contact);
+                    Text: "{main_li} is at {place}, one of the places they mentioned. It takes them a second, and then they smile.");
             }
         }
 
@@ -197,7 +195,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 FirstDateId,
                 new EncounterPlace(),
                 Days: [FirstDateDay, setting.Days],
-                Requires: ["main_li.contact", "!main_li.first_date", $"{EncounterEvaluator.InviteKey}=main_li"],
+                Requires: ["main_li.contact", "!main_li.first_date", $"{DateAgreedKey}=main_li"],
                 Sets: ["main_li.first_date"],
                 With: ["main_li"],
                 Priority: OpeningPriority + 5,
@@ -247,21 +245,17 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
             yield return new EncounterDefinition(
                 $"route.{route}.contact",
                 new EncounterPlace(PlaceFlag: $"{route}.place"),
-                Requires: [$"{route}.met", $"!{route}.contact", $"!{route}.contact_declined"],
+                Requires: [$"{route}.met", $"!{route}.contact", $"!{route}.talked"],
+                Sets: [$"{route}.talked"],
                 With: [who],
                 Priority: 70,
-                Text: "{who} is at {place} again, and this time the two of you talk properly.",
-                Choices:
-                [
-                    new("swap-numbers", "Ask for their number", [$"{route}.contact"], ["adventure"]),
-                    new("let-it-go", "Keep it friendly", [$"{route}.contact_declined"], ["independence"]),
-                ]);
+                Text: "{who} is at {place} again, and this time the two of you talk properly.");
 
             yield return new EncounterDefinition(
                 FirstDateIdFor(route),
                 new EncounterPlace(),
                 Days: [FirstDateDay, setting.Days],
-                Requires: [$"{route}.contact", $"!{route}.first_date", $"{EncounterEvaluator.InviteKey}={route}"],
+                Requires: [$"{route}.contact", $"!{route}.first_date", $"{DateAgreedKey}={route}"],
                 Sets: [$"{route}.first_date"],
                 With: [who],
                 Priority: OpeningPriority + 5,

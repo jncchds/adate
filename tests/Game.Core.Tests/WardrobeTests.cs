@@ -44,6 +44,8 @@ public class WardrobeTests
         Assert.Equal(DressCode.Work, places.Get("office").Dress);
         Assert.Equal(DressCode.Evening, places.Get("bar").Dress);
         Assert.Equal(DressCode.Camp, places.Get("campfire-circle").Dress);
+        Assert.Equal(DressCode.Waterfront, places.Get("lake-dock").Dress);
+        Assert.Equal(DressCode.Waterfront, places.Get("lake-pier").Dress);
         Assert.Equal(DressCode.Casual, places.Get("park").Dress);
         Assert.False(string.IsNullOrWhiteSpace(places.Get("park").OutfitLayers?["rain"]));
         Assert.Null(places.Get("cafe").OutfitLayers?.GetValueOrDefault("rain"));

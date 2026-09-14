@@ -18,13 +18,16 @@ public static class DressCode
     /// <summary>Around the home, relaxed.</summary>
     public const string Home = "home";
 
-    /// <summary>Outdoors at a summer camp.</summary>
+    /// <summary>Outdoors at a summer camp: shorts and t-shirts.</summary>
     public const string Camp = "camp";
 
-    /// <summary>Dressed up a little for a date.</summary>
+    /// <summary>By the water in summer: swimwear with something over it, or shorts and a tank top.</summary>
+    public const string Waterfront = "waterfront";
+
+    /// <summary>Dressed up a little for a date, where people dress up anyway (casual and evening places).</summary>
     public const string Date = "date";
 
-    public static readonly IReadOnlyList<string> All = [Casual, Work, Evening, Home, Camp, Date];
+    public static readonly IReadOnlyList<string> All = [Casual, Work, Evening, Home, Camp, Waterfront, Date];
 
     public static bool IsKnown(string? code) => code is not null && All.Contains(code, StringComparer.OrdinalIgnoreCase);
 }

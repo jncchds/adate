@@ -123,16 +123,17 @@ public class SceneWriterTests
     }
 
     [Fact]
-    public async Task Only_one_choice_may_touch_their_want()
+    public async Task Only_one_choice_keeps_a_want_tag_and_a_reply_left_without_tags_stays_neutral()
     {
         var llm = new FakeLlm(
-            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["helps:{want}"] }, { "text": "Mention the rain", "tags": ["helps:{want}"] }]"""),
-            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["attentiveness"] }, { "text": "Mention the rain", "tags": ["humour"] }]"""));
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["helps:{want}"] }, { "text": "Mention the rain", "tags": ["helps:{want}"] }]"""));
 
         var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", wantChoices: true);
 
         Assert.False(scene.Fallback);
-        Assert.Contains("2 choices are tagged helps or hinders", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Equal(1, scene.Attempts);
+        Assert.Equal(["helps:{want}"], scene.Choices![0].Tags);
+        Assert.Empty(scene.Choices[1].Tags);
     }
 
     [Fact]

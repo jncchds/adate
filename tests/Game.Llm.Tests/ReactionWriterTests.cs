@@ -97,6 +97,20 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task Swapped_numbers_are_reported_only_when_the_reaction_says_so()
+    {
+        var gave = new FakeLlm(() => """{ "text": "Maya scribbles her number on a napkin and slides it across.", "expression": "smile", "tags": [], "numbers": true }""");
+        var notYet = new FakeLlm(() => """{ "text": "Maya laughs and says maybe next time.", "expression": "smile", "tags": [], "numbers": false }""");
+
+        var given = await Writer(gave).WriteAsync(Packet(), "Maya looks up.", "Ask for her number", ["adventure"], "Maya takes that in.");
+        var declined = await Writer(notYet).WriteAsync(Packet(), "Maya looks up.", "Ask for her number", ["adventure"], "Maya takes that in.");
+
+        Assert.True(given.ExchangedNumbers);
+        Assert.False(declined.ExchangedNumbers);
+        Assert.Contains("numbers: true only if", gave.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_proposed_choice_keeps_its_own_tags()
     {
         var llm = new FakeLlm(() => Answer("Maya laughs and pushes the planner across the desk.", tags: """["dishonesty"]"""));

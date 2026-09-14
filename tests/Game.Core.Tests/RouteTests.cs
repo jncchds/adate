@@ -49,12 +49,18 @@ public class RouteTests
         ClockState clock,
         string place,
         int alone = 0,
-        string? invite = null)
+        string? invite = null,
+        string? agreed = null)
     {
         var context = new Dictionary<string, string>(flags, StringComparer.Ordinal);
         if (invite is not null)
         {
             context[EncounterEvaluator.InviteKey] = invite;
+        }
+
+        if (agreed is not null)
+        {
+            context[JsonEncounterCatalog.DateAgreedKey] = agreed;
         }
 
         var outcome = TurnPlanner.Plan(setting, encounters.For(setting.Id), new TurnContext(clock, place, context, alone), place);
@@ -176,9 +182,13 @@ public class RouteTests
 
         var contact = Turn(setting, encounters, flags, new ClockState(3, TimeOfDay.Midday), place);
         Assert.Equal("route.routine.contact", contact.EncounterId);
-        Answer(flags, contact, "swap-numbers");
+        Assert.Empty(contact.Choices ?? []);
 
-        var date = Turn(setting, encounters, flags, new ClockState(5, TimeOfDay.Morning), place, invite: "routine");
+        // The talk happens once; the numbers come from the conversation, and the date from a meeting agreed in it.
+        Assert.NotEqual("route.routine.contact", Turn(setting, encounters, flags, new ClockState(3, TimeOfDay.Afternoon), place).EncounterId);
+        flags["routine.contact"] = "true";
+
+        var date = Turn(setting, encounters, flags, new ClockState(5, TimeOfDay.Morning), place, agreed: "routine");
         Assert.Equal("beat.first-date.routine", date.EncounterId);
         Assert.Equal("true", flags["routine.first_date"]);
     }
@@ -224,16 +234,15 @@ public class RouteTests
     }
 
     [Fact]
-    public void Declining_contact_closes_a_routes_dates()
+    public void Without_their_number_even_an_agreed_meeting_is_not_a_first_date()
     {
         var (settings, encounters) = Content();
         var setting = settings.All()[0];
         var flags = new Dictionary<string, string> { ["routine.met"] = "true", ["routine.place"] = setting.RoutinePlace };
 
-        var contact = Turn(setting, encounters, flags, new ClockState(4, TimeOfDay.Midday), setting.RoutinePlace);
-        Answer(flags, contact, "let-it-go");
+        Assert.Equal("route.routine.contact", Turn(setting, encounters, flags, new ClockState(4, TimeOfDay.Midday), setting.RoutinePlace).EncounterId);
 
-        Assert.NotEqual("route.routine.contact", Turn(setting, encounters, flags, new ClockState(4, TimeOfDay.Afternoon), setting.RoutinePlace).EncounterId);
-        Assert.NotEqual("beat.first-date.routine", Turn(setting, encounters, flags, new ClockState(6, TimeOfDay.Morning), setting.RoutinePlace, invite: "routine").EncounterId);
+        Assert.NotEqual("beat.first-date.routine", Turn(setting, encounters, flags, new ClockState(6, TimeOfDay.Morning), setting.RoutinePlace, agreed: "routine").EncounterId);
+        Assert.NotEqual("beat.first-date.routine", Turn(setting, encounters, flags, new ClockState(6, TimeOfDay.Midday), setting.RoutinePlace, invite: "routine").EncounterId);
     }
 }

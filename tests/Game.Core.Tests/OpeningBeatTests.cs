@@ -51,12 +51,18 @@ public class OpeningBeatTests
         int day,
         TimeOfDay slot,
         string place,
-        bool invite = false)
+        bool invite = false,
+        bool agreed = false)
     {
         var context = new Dictionary<string, string>(flags, StringComparer.Ordinal);
         if (invite)
         {
             context[EncounterEvaluator.InviteKey] = "main_li";
+        }
+
+        if (agreed)
+        {
+            context[JsonEncounterCatalog.DateAgreedKey] = "main_li";
         }
 
         var outcome = TurnPlanner.Plan(setting, encounters.For(setting.Id), new TurnContext(new ClockState(day, slot), place, context, 0), place);
@@ -84,28 +90,25 @@ public class OpeningBeatTests
         Assert.Equal(["main_li"], meet.With);
         Assert.Contains(opening.Hook, meet.Text, StringComparison.Ordinal);
 
-        // 2. Recognise, at the home place in its window, with the contact choice.
+        // 2. Recognise, at the home place in its window: a conversation, with no fixed choice.
         var recognise = Turn(setting, encounters, flags, 2, opening.Time, opening.HomePlace);
         Assert.Equal($"opening.{opening.Id}.recognise", recognise.EncounterId);
-        Assert.Equal(["swap-numbers", "let-it-go"], recognise.Choices!.Select(c => c.Id));
-        Assert.Equal(recognise.EncounterId, flags[EncounterEvaluator.PendingChoiceKey]);
+        Assert.Empty(recognise.Choices ?? []);
 
-        // 3. Contact: the player asks for their number.
-        foreach (var (key, value) in TurnPlanner.Assignments(recognise.Choices![0].Sets ?? []))
-        {
-            flags[key] = value;
-        }
+        // 3. Contact: in that conversation the two swap numbers, as the reaction reports it.
+        flags["main_li.contact"] = "true";
 
-        flags[EncounterEvaluator.PendingChoiceKey] = "false";
+        // 4. Bringing them along is not a date...
+        var along = Turn(setting, encounters, flags, 3, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        Assert.NotEqual("beat.first-date", along.EncounterId);
 
-        // 4. First date, as soon as the next day, at a place the player picks, when they invite them along:
-        //    no days of waiting with nothing to do.
-        var date = Turn(setting, encounters, flags, 3, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        // ...turning up to a meeting the two agreed on is.
+        var date = Turn(setting, encounters, flags, 3, TimeOfDay.Evening, setting.RoutinePlace, agreed: true);
         Assert.Equal("beat.first-date", date.EncounterId);
-        Assert.DoesNotContain(EncounterEvaluator.InviteKey, date.FlagsToSet.Keys);
+        Assert.DoesNotContain(JsonEncounterCatalog.DateAgreedKey, date.FlagsToSet.Keys);
 
         // And it happens once.
-        var again = Turn(setting, encounters, flags, 4, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        var again = Turn(setting, encounters, flags, 4, TimeOfDay.Evening, setting.RoutinePlace, agreed: true);
         Assert.NotEqual("beat.first-date", again.EncounterId);
     }
 
@@ -122,7 +125,7 @@ public class OpeningBeatTests
 
         Assert.Equal($"opening.{opening.Id}.recognise-late", late.EncounterId);
         Assert.Equal("true", flags["main_li.recognised_late"]);
-        Assert.NotEmpty(late.Choices!);
+        Assert.Empty(late.Choices ?? []);
 
         var missed = Turn(setting, encounters, new Dictionary<string, string> { ["opening"] = opening.Id, ["main_li.met"] = "true" }, 8, TimeOfDay.Midday, opening.SecondPlace!);
         Assert.NotEqual($"opening.{opening.Id}.recognise-late", missed.EncounterId);
@@ -141,7 +144,7 @@ public class OpeningBeatTests
             ["main_li.contact_declined"] = "true",
         };
 
-        var date = Turn(setting, encounters, flags, 6, TimeOfDay.Evening, setting.RoutinePlace, invite: true);
+        var date = Turn(setting, encounters, flags, 6, TimeOfDay.Evening, setting.RoutinePlace, agreed: true);
 
         Assert.NotEqual("beat.first-date", date.EncounterId);
     }

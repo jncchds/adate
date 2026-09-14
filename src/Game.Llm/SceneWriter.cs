@@ -65,6 +65,12 @@ public sealed class SceneWriter(
     /// <summary>A 1500-character scene with its facts, places, summary, tags and choices, with room to spare.</summary>
     public const int MaxTokens = 1500;
 
+    /// <summary>
+    /// Cyrillic and most other scripts take several tokens a word, and a Ukrainian scene was cut off mid-JSON
+    /// at <see cref="MaxTokens"/>. Still well inside the 10K context beside a 3K packet.
+    /// </summary>
+    public const int MaxTokensOtherLanguages = 2500;
+
     public const int MinChoices = 2;
     public const int MaxChoices = 3;
     public const int MaxChoiceLength = 90;
@@ -104,7 +110,8 @@ public sealed class SceneWriter(
             string raw;
             try
             {
-                raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "scene", schema, MaxTokens), ct).ConfigureAwait(false);
+                var maxTokens = NarrationLanguage.IsEnglish(packet.Language) ? MaxTokens : MaxTokensOtherLanguages;
+                raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "scene", schema, maxTokens), ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -284,14 +291,12 @@ public sealed class SceneWriter(
 
         // Touching their want is the exception, not a default tag for any friendly line. Gemma tags most
         // friendly replies with it, and sending the scene back for that alone cost whole scenes to the
-        // authored text. So C# settles it: the first reply that touches the want keeps the tag, the others
-        // lose it, and a reply left with no tags is dropped. Only too few replies left sends it back.
+        // authored text. So C# settles it: the first reply that touches the want keeps the tag, and the others
+        // lose it. A reply left with no tags stays, and simply scores nothing.
         static bool TouchesWant(string tag) =>
             tag.StartsWith(StoryContent.HelpsPrefix, StringComparison.Ordinal) || tag.StartsWith(StoryContent.HindersPrefix, StringComparison.Ordinal);
 
-        var wantTagged = offered.Count(c => (c.Tags ?? []).Any(TouchesWant));
         var wantKept = false;
-        var dropped = 0;
 
         var choices = new List<ProposedChoice>();
         foreach (var choice in offered)
@@ -299,16 +304,13 @@ public sealed class SceneWriter(
             var text = choice.Text?.Trim() ?? "";
             var tags = (choice.Tags ?? []).Distinct(StringComparer.Ordinal).ToList();
 
+            var stripped = false;
             if (tags.Any(TouchesWant))
             {
                 if (wantKept)
                 {
                     tags.RemoveAll(TouchesWant);
-                    if (tags.Count == 0)
-                    {
-                        dropped++;
-                        continue;
-                    }
+                    stripped = true;
                 }
 
                 wantKept = true;
@@ -322,7 +324,7 @@ public sealed class SceneWriter(
             {
                 reasons.Add($"The choice '{text}' is offered twice.");
             }
-            else if (tags.Count == 0 || tags.Any(t => !story.IsKnownTag(t, cast)))
+            else if ((tags.Count == 0 && !stripped) || tags.Any(t => !story.IsKnownTag(t, cast)))
             {
                 reasons.Add($"The choice '{text}' needs tags from the list; it has [{string.Join(", ", tags)}].");
             }
@@ -330,11 +332,6 @@ public sealed class SceneWriter(
             {
                 choices.Add(new ProposedChoice(text, tags));
             }
-        }
-
-        if (dropped > 0 && choices.Count < MinChoices)
-        {
-            reasons.Add($"{wantTagged} choices are tagged helps or hinders; only a choice that really touches their want may be, at most one. Tag the others with the quality they show.");
         }
 
         return choices;

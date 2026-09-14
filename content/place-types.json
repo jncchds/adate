@@ -251,6 +251,7 @@
     },
     {
       "id": "lake-pier",
+      "dress": "waterfront",
       "displayName": "Lake pier",
       "kind": "outdoor",
       "tags": ["lake", "wooden pier", "water", "trees", "outdoors"],
@@ -312,7 +313,7 @@
     },
     {
       "id": "lake-dock",
-      "dress": "camp",
+      "dress": "waterfront",
       "displayName": "Lake dock",
       "kind": "outdoor",
       "tags": ["lake", "dock", "canoes", "water", "pine trees", "outdoors"],
