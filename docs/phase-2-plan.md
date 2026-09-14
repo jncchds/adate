@@ -331,9 +331,9 @@ Each step ends in something that runs.
    stopped.
 2. **Cast generator** (§5). A debug page shows the four portraits and profiles, and the
    distinctness measurement runs here. *Built: `/cast/{id}`, rules unit-tested, and two casts
-   rendered as four distinct people each (`decisions.md`). Distinctness judged on one cast: four
-   different people, and the opposite was recognised, but other life was not, because its age
-   moved by a single year (`decisions.md`).*
+   rendered as four distinct people each (`decisions.md`). Distinctness passed on two casts:
+   four different people each time, and the opposite recognised both times. Other life reads
+   through its life story, not a visibly older face, by decision (`decisions.md`).*
 3. **Settings, places and migration 003** (§2, §10). *Done: 22 place types, three settings, places
    stored per save with their own seed, migration 003 with the cast rules in the schema, and the
    cast stored once built (`decisions.md`).*

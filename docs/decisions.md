@@ -1168,8 +1168,11 @@ visits.
 * 22 encounter scenes were written, with 0 fallbacks: a fallback rate of 0%, against a plan target
   of under 5%.
 * 18 passed first time and 4 on the second attempt.
-* Rejections: 2 place proposals, 2 first-person narration, 4 others. The harness's buckets are
-  coarse.
+* Rejections: 8, all fixed on the next attempt.
+  * 6 came from two scenes about a newly revealed place (the rooftop garden, The Low Tide). The
+    model proposed the place its own encounter had just revealed. It also wrote free-text details
+    such as "under the bridge" and "stays open in the evenings" instead of the type's detail ids.
+  * 2 were first-person narration.
 * Latency per scene: mean 7.1 s, median 6.0 s, p90 11.6 s, max 12.8 s.
 * The whole run took 2.6 minutes, since ambient turns make no model call.
 
@@ -1197,3 +1200,22 @@ now keeps at least `MinimumAgeGap` (5) years from the main LI, prefers older age
 the widest gap available. A main LI of 24 now gets an other-life variant aged 29 to 34. Casts already
 stored, Rin's included, keep the ages they were built with, so the check should be repeated on a new
 cast.
+
+**Second check, after the fix.** The cast was Kai (male), shuffled and unlabelled.
+
+* Four different people: yes.
+* Nothing alike: picked correctly.
+* A different chapter: the user picked the bolder variant over the other-life variant, who was 33
+  against a main LI of 24. The bolder variant's added feature came out as a goatee, and the opposite
+  variant came out grey-haired, so both read older than the 33-year-old did.
+
+**Decision: visual age is not a goal.** One man on one seed was rendered at 24, and at 33 with
+today's wording ("in his late twenties or thirties, mature masculine features") and two stronger
+wordings (faint lines and stubble; a settled look with grey temples). Only the stronger wordings
+showed age, and they would age every portrait in the 25 to 39 band. The user's call: small age gaps
+don't matter for this game.
+
+So the band wording stays as it is. The other-life variant is told apart by its life story (age,
+want, temper, style), not by looking older. The five-year gap stays because it gives the story a
+real difference. The measure passes on its own condition: four different people. The opposite
+variant is recognisable in both casts.
