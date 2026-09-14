@@ -277,6 +277,24 @@ public sealed class WorldService(
             throw new InvalidOperationException($"Nothing at {place.Name} would bring them along.");
         }
 
+        // No encounter: the turn is still a scene (phase-3 plan). Someone whose schedule puts them
+        // here is present, the one the player is closest to first; otherwise it is the place itself.
+        if (outcome.EncounterId is null)
+        {
+            var here = new List<(LoveInterest Person, int Affection)>();
+            foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li)))
+            {
+                if (ScheduleFor(saveId, play.Setting, li, flags).Where(play.Clock) == place.Id)
+                {
+                    here.Add((li, (await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false)).Affection));
+                }
+            }
+
+            outcome = here.OrderByDescending(h => h.Affection).Select(h => h.Person).FirstOrDefault() is { } company
+                ? outcome with { EncounterId = JsonEncounterCatalog.QuietCompanyId, With = [company.Ref], Text = $"{company.Name} is at {place.Name} too." }
+                : outcome with { EncounterId = JsonEncounterCatalog.QuietAloneId };
+        }
+
         var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
         after.Remove(EncounterEvaluator.InviteKey);
         foreach (var (key, value) in outcome.FlagsToSet)
@@ -524,7 +542,14 @@ public sealed class WorldService(
             present,
             [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
             [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
-            outcome.Text,
+            outcome.EncounterId switch
+            {
+                JsonEncounterCatalog.QuietCompanyId =>
+                    $"{presented.Name} happens to be at {place?.Name ?? outcome.PlaceId}. Show a short, ordinary moment: what they are doing, how they react on noticing the player, maybe a line of dialogue. Nothing important happens.",
+                JsonEncounterCatalog.QuietAloneId =>
+                    $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}. Show the place at this time of day and in this weather, and one small thing going on around, without inventing anyone the player could get to know.",
+                _ => outcome.Text,
+            },
             ceiling,
             [.. pack.Expressions.Keys],
             [.. known.Select(p => p.Name)],
@@ -533,7 +558,7 @@ public sealed class WorldService(
 
         var world = new SceneWorld(
             facts,
-            await story.GetSchedulesAsync(saveId, ct).ConfigureAwait(false),
+            cast.ToDictionary(li => li.Id.ToString(), li => ScheduleFor(saveId, setting, li, flags), StringComparer.Ordinal),
             await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false),
             stages,
             Summoned: presentIds);
@@ -834,6 +859,36 @@ public sealed class WorldService(
         }
 
         return interests;
+    }
+
+    /// <summary>
+    /// A love interest's week, anchored where the story put them: the main LI at their home place in
+    /// the opening's slot, the routine variant at the routine place in the mornings, the others where
+    /// they were met in the evenings.
+    /// </summary>
+    private static CharacterSchedule ScheduleFor(SaveId saveId, SettingDefinition setting, LoveInterest li, IReadOnlyDictionary<string, string> flags)
+    {
+        string? place;
+        TimeOfDay? slot;
+
+        if (li.Key == JsonEncounterCatalog.MainLiRef)
+        {
+            place = flags.GetValueOrDefault("main_li.home_place");
+            slot = setting.Openings.FirstOrDefault(o => o.Id == flags.GetValueOrDefault("opening"))?.Time;
+        }
+        else if (li.Key == "routine")
+        {
+            place = setting.RoutinePlace;
+            slot = TimeOfDay.Morning;
+        }
+        else
+        {
+            place = flags.GetValueOrDefault($"{li.Key}.place");
+            slot = TimeOfDay.Evening;
+        }
+
+        var id = li.Id.ToString();
+        return ScheduleGenerator.For(id, setting, place, slot, ScheduleGenerator.SeedFor(saveId, id));
     }
 
     private static string RefFor(string key) =>

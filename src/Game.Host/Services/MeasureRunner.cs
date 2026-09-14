@@ -221,6 +221,7 @@ public static class MeasureRunner
     private static string Category(string reason) =>
         reason.Contains("could not answer", StringComparison.Ordinal) ? "unreachable"
         : reason.Contains("first person", StringComparison.Ordinal) ? "first person"
+        : reason.Contains("decides for the player", StringComparison.Ordinal) ? "player action"
         : reason.Contains("one block", StringComparison.Ordinal) ? "no paragraphs"
         : reason.Contains("characters; keep it under", StringComparison.Ordinal) ? "too long"
         : reason.Contains("expression", StringComparison.Ordinal) ? "expression"

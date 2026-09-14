@@ -74,7 +74,7 @@ public class SceneWriterTests
         new Dictionary<string, RelationshipStage> { [Rin] = RelationshipStage.Acquaintance },
         [Rin]);
 
-    private static string Answer(string text = "You sit down across from Rin.", string expression = "smile", string facts = "[]", string places = "[]", string tags = "[]") =>
+    private static string Answer(string text = "Rin looks up from a book by the window.", string expression = "smile", string facts = "[]", string places = "[]", string tags = "[]") =>
         $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}}, "places": {{places}}, "summary": "Coffee with Rin.", "tags": {{tags}} }""";
 
     [Fact]
@@ -91,14 +91,37 @@ public class SceneWriterTests
     {
         var llm = new FakeLlm(
             () => Answer(text: "I find Rin by the window and we talk for a while about my week."),
-            () => Answer(text: "You find Rin by the window. \\\"I missed you,\\\" they say, and we both know it."),
-            () => Answer(text: "You find Rin by the window. \\\"I missed you,\\\" they say."));
+            () => Answer(text: "Rin waits by the window. \\\"I missed you,\\\" they say, and we both know it."),
+            () => Answer(text: "Rin waits by the window. \\\"I missed you,\\\" they say."));
 
         var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
 
         Assert.False(scene.Fallback);
         Assert.Equal(2, scene.Attempts);
         Assert.Contains("first person", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Narration_that_decides_for_the_player_is_sent_back()
+    {
+        var llm = new FakeLlm(
+            () => Answer(text: "You scan the room and hesitate before you sit down across from Rin."),
+            () => Answer(text: "Rin looks up as the door opens. You notice the rain on the window."));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.Equal(2, scene.Attempts);
+        Assert.Contains("decides for the player", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Player_actions_are_found_outside_dialogue_and_perception_is_allowed()
+    {
+        Assert.Equal(["You scan", "you hesitate", "you finally sit"],
+            Narration.PlayerActions("You scan the room, you hesitate, and you finally sit."));
+
+        Assert.Empty(Narration.PlayerActions("Rin waves you over. You notice the rain and hear the kettle."));
+        Assert.Empty(Narration.PlayerActions("\"You take the window seat,\" Rin says, and asks whether you are staying."));
     }
 
     [Fact]
@@ -201,7 +224,7 @@ public class SceneWriterTests
         var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
 
         Assert.False(scene.Fallback);
-        Assert.Equal("You sit down across from Rin.", scene.Text);
+        Assert.Equal("Rin looks up from a book by the window.", scene.Text);
         Assert.Equal("smile", scene.Expression);
         var fact = Assert.Single(scene.Facts);
         Assert.Equal("rainy mornings", fact.Fact.Object);

@@ -6,7 +6,7 @@
     "days": [2, 10],
     "sets": ["knows.rooftop"],
     "reveals": ["rooftop-garden"],
-    "text": "Over the coffee machine, a coworker mentions a rooftop garden a few streets away that stays open in the evenings. You make a note of it."
+    "text": "Over the coffee machine, a coworker mentions a rooftop garden a few streets away that stays open in the evenings."
   },
   {
     "id": "bookshop-flyer",
@@ -31,7 +31,7 @@
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,
-    "text": "The third evening you take the end of the counter, the person on the next stool finally asks whether you are waiting for someone. (Placeholder: the chance route's first meeting.)"
+    "text": "The same person as on your last two evenings sits at the end of the counter, and tonight they ask whether you are waiting for someone. (Placeholder: the chance route's first meeting.)"
   },
   {
     "id": "night-market-poster",

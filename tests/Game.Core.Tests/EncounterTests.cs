@@ -133,7 +133,10 @@ public class EncounterTests
         var outcome = TurnPlanner.Plan(Setting(), [E("elsewhere", place: "park-1")], At(slot: TimeOfDay.Afternoon), "Cafe");
 
         Assert.Null(outcome.EncounterId);
-        Assert.Contains("afternoon at Cafe", outcome.Text, StringComparison.Ordinal);
+        Assert.StartsWith("Afternoon at Cafe.", outcome.Text, StringComparison.Ordinal);
+
+        // The narrator never decides for the player, even in the placeholder.
+        Assert.DoesNotContain("You ", outcome.Text, StringComparison.Ordinal);
         Assert.Empty(outcome.FlagsToSet);
         Assert.Empty(outcome.Reveals);
         Assert.Equal(new ClockState(1, TimeOfDay.Evening), outcome.Next);

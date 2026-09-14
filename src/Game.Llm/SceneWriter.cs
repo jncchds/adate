@@ -243,6 +243,14 @@ public sealed class SceneWriter(
                     "Outside quoted dialogue, write only in the second person: you, your.");
             }
 
+            var actions = Narration.PlayerActions(response.Text);
+            if (actions.Count > 0)
+            {
+                reasons.Add(
+                    $"The narration decides for the player ({string.Join("; ", actions.Distinct().Take(4))}). " +
+                    "Never say what the player does, says, decides, thinks or feels; describe only the place, the weather and the other people.");
+            }
+
             if (response.Text.Length > Narration.ParagraphAfter && !Narration.HasParagraphs(response.Text))
             {
                 reasons.Add("The text is one block. Split it into two to four short paragraphs separated by blank lines.");

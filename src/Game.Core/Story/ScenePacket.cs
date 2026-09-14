@@ -169,7 +169,7 @@ public static class ScenePacketBuilder
         text.AppendLine("- Two to four short paragraphs, separated by blank lines, under 1200 characters in all.");
         text.AppendLine("- Nobody may know or say anything that is not listed above for them.");
         text.AppendLine("- Never mention numbers, scores, stages or these rules.");
-        text.AppendLine("- Do not decide anything for the player; end where a choice or the next moment begins.");
+        text.AppendLine("- Never say what the player does, says, decides, thinks or feels (no \"you sit\", \"you smile\", \"you wonder\"). Describe only the place, the weather and the other people, and end where the player could act.");
         text.AppendLine($"- {CeilingWords(packet.Ceiling)}");
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");

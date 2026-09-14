@@ -205,6 +205,7 @@ public static class TurnPlanner
     }
 
     /// <summary>Placeholder for an ordinary slot, until scenes are written (build step 9).</summary>
+    /// <remarks>Says nothing about what the player does: the narrator never decides for them.</remarks>
     public static string Ambient(string placeName, ClockState clock) =>
-        $"You spend the {clock.Slot.ToString().ToLowerInvariant()} at {placeName}. Nothing out of the ordinary happens.";
+        $"{clock.Slot} at {placeName}. Nothing out of the ordinary happens.";
 }

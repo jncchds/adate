@@ -25,10 +25,37 @@ public static partial class Narration
 
     public static bool HasParagraphs(string text) => text.Trim().Contains('\n');
 
+    /// <summary>
+    /// Places where the narration decides for the player: "you" followed by something the player does,
+    /// says, decides, thinks or feels, outside quoted dialogue. What the player sees or hears is
+    /// allowed; the scene is theirs to act in.
+    /// </summary>
+    public static IReadOnlyList<string> PlayerActions(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var narration = Dialogue().Replace(text, " ");
+        return [.. PlayerAction().Matches(narration).Select(m => m.Value.Trim())];
+    }
+
     // Straight and curly double quotes. Single quotes double as apostrophes, so they are left alone.
     [GeneratedRegex("\"[^\"]*\"|“[^”]*”")]
     private static partial Regex Dialogue();
 
     [GeneratedRegex(@"\b(I|I'm|I've|I'd|I'll|me|my|mine|myself|we|we're|we've|us|our|ours|ourselves)\b|\b(Me|My|We|Us|Our)\b")]
     private static partial Regex FirstPerson();
+
+    // "you" as the subject of an action, speech, decision, thought or feeling, allowing a softening
+    // adverb in between ("you finally sit"). Perception (see, hear, notice) is deliberately absent.
+    [GeneratedRegex(
+        @"\byou(?:'re|'ve|'d|'ll)?\s+(?:just\s+|finally\s+|quickly\s+|slowly\s+|both\s+|also\s+|then\s+|carefully\s+|quietly\s+)?" +
+        @"(?:walk(?:ed)?|scan(?:ned)?|hesitate[ds]?|sit|sat|stand|stood|take|took|order(?:ed)?|say|said|reply|replied|ask(?:ed)?|answer(?:ed)?|" +
+        @"decide[ds]?|choose|chose|smile[ds]?|nod(?:ded)?|laugh(?:ed)?|grin(?:ned)?|shrug(?:ged)?|lean(?:ed)?|reach(?:ed)?|pull(?:ed)?|grab(?:bed)?|" +
+        @"pick(?:ed)?|feel|felt|think|thought|wonder(?:ed)?|reali[sz]e[ds]?|remember(?:ed)?|want(?:ed)?|hope[ds]?|agree[ds]?|sip(?:ped)?|wave[ds]?|" +
+        @"step(?:ped)?|head(?:ed)?|turn(?:ed)?|glance[ds]?|offer(?:ed)?|tell|told|promise[ds]?|blush(?:ed)?|sigh(?:ed)?|find|found|make|made|" +
+        @"settle[ds]?|slide|slid|approach(?:ed)?|move[ds]?|hand(?:ed)?|hold|held|keep|kept|joke[ds]?|tease[ds]?|admit(?:ted)?|apologi[sz]e[ds]?|" +
+        @"thank(?:ed)?|greet(?:ed)?|introduce[ds]?|follow(?:ed)?|join(?:ed)?|return(?:ed)?|spend|spent|enjoy(?:ed)?|relax(?:ed)?|hurr(?:y|ied)|" +
+        @"run|ran|dance[ds]?|kiss(?:ed)?|hug(?:ged)?|touch(?:ed)?|squeeze[ds]?|pause[ds]?|linger(?:ed)?|catch|caught\s+(?:your|their|his|her)\s+breath)\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex PlayerAction();
 }

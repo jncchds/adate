@@ -56,7 +56,9 @@ Each step ends in something that runs and is committed.
    expression straight away and switches to the written one. Outfits follow each person's aesthetic.
    Day-to-day variety is still open.*
 3. **Every turn written:** schedules, presence from schedule or encounter, quiet scenes, and the
-   no-player-actions rule with a validator check.
+   no-player-actions rule with a validator check. *Built: schedules derived per person and anchored
+   where the story put them, quiet scenes with company or of the place, player-action narration
+   rejected, and authored texts rewritten.*
 4. **Choices:** model-proposed options, free-form replies, interpretation into tags, reactions and
    the popup.
 5. **Initiative and temper:** initiative events and temper-scaled leaving.

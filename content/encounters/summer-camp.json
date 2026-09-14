@@ -22,6 +22,6 @@
     "place": { "id": "boathouse" },
     "time": ["Afternoon"],
     "sets": ["boathouse.roster"],
-    "text": "The sailing instructor asks whether you would take a turn on the boathouse roster next week. You say yes before thinking about it."
+    "text": "The sailing instructor asks whether you would take a turn on the boathouse roster next week, and pencils your name in with a hopeful question mark."
   }
 ]

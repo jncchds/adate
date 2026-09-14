@@ -27,6 +27,15 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>Priority of the opening's beats: above ordinary encounters, below events.</summary>
     public const int OpeningPriority = 90;
 
+    /// <summary>
+    /// A turn with no encounter where someone's schedule puts them at the place (phase-3 plan: every
+    /// turn is written). Not a catalog entry: the world service sets it on the outcome.
+    /// </summary>
+    public const string QuietCompanyId = "quiet.company";
+
+    /// <summary>A turn with no encounter and nobody the player knows at the place.</summary>
+    public const string QuietAloneId = "quiet.alone";
+
     /// <summary>The first date with the main LI, whichever opening led to it.</summary>
     public const string FirstDateId = "beat.first-date";
 
@@ -169,7 +178,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Sets: ["main_li.recognised", "main_li.recognised_late"],
                     With: ["main_li"],
                     Priority: OpeningPriority - 5,
-                    Text: "You run into {main_li} at {place}, one of the places they mentioned. It takes them a second, and then they smile. (Placeholder: the second chance.)",
+                    Text: "{main_li} is at {place}, one of the places they mentioned. It takes them a second, and then they smile. (Placeholder: the second chance.)",
                     Choices: contact);
             }
         }
@@ -184,7 +193,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: ["main_li.first_date"],
                 With: ["main_li"],
                 Priority: OpeningPriority + 5,
-                Text: "You and {main_li} spend the {slot} at {place}. Neither of you calls it a date, and both of you know it is one. (Placeholder: the first date.)");
+                Text: "{main_li} is already at {place} for the {slot} the two of you agreed on. Neither of you calls it a date, and both of you know it is one. (Placeholder: the first date.)");
         }
     }
 
@@ -248,7 +257,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: [$"{route}.first_date"],
                 With: [who],
                 Priority: OpeningPriority + 5,
-                Text: "You and {who} spend the {slot} at {place}. (Placeholder: a first date with {who}.)");
+                Text: "{who} is already at {place} for the {slot} the two of you agreed on. (Placeholder: a first date with {who}.)");
         }
     }
 
