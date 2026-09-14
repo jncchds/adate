@@ -41,6 +41,12 @@ choices have no aftermath. This plan makes it a game. Decisions come first, then
 * Relationship tuning is measured with a varied policy, not only the first option.
 * Small town and summer camp are played live, not only in tests.
 * The cast debug page's stale note.
+* A proposed place differing only by case or a leading "The" is added again (live: "The rooftop
+  garden" and "rooftop garden" both on the map).
+* Scenes still hand the player things ("the book in your hands"); the player-action check only sees
+  verbs.
+* The measure's first-option policy rarely finds company (most turns quiet and alone), so choices
+  and reactions get few samples; the varied policy should seek people out.
 
 ## Build order
 
@@ -60,7 +66,21 @@ Each step ends in something that runs and is committed.
    where the story put them, quiet scenes with company or of the place, player-action narration
    rejected, and authored texts rewritten.*
 4. **Choices:** model-proposed options, free-form replies, interpretation into tags, reactions and
-   the popup.
+   the popup. *Built: a written scene with someone present (and no authored choices) must end with
+   two or three short replies, each tagged from the scoring vocabulary (desires, dealbreaker tags,
+   helps/hinders:{want}); at most one may touch the want, because Gemma otherwise tags every friendly
+   line helps:{want} (seen in the first measure: every reply scored only the want). The scene waits
+   in `pending_scene` and turns are refused until it is answered. A reply is a proposed choice (its
+   own tags) or free text (the reaction writer reads tags, unknown ones dropped). The reaction may
+   restate the player's reply but add no other player action; text cut off mid-sentence or with an
+   open quote is sent back, in scenes and reactions alike. Tags are scored for everyone present and
+   committed with closing the scene in one transaction. The popup shows when affection or trust moves
+   by 4 or more, or a dealbreaker trips; the map no longer shows relationship numbers.*
+   *Measured (28 days, Gemma 12B QAT, every turn written, before the want-tag and unfinished-text
+   rules): 157 scenes, 155 written, 2 fallbacks (1.3%), first try 138, mean 6.9 s, median 4.2 s,
+   max 92.4 s; rejections: other 22, player action 11, judge 4, json 4, place 3, unreachable 2;
+   25 choices answered, reactions written first try. The step-3 commit did not build (a missing
+   using), so its earlier measure had run the old binaries.*
 5. **Initiative and temper:** initiative events and temper-scaled leaving.
 6. **Endings:** the commitment ask, the written epilogue and the choice recap.
 7. **Fixes and tuning:** gender, places, promises, tuning measure, live play in the other settings.

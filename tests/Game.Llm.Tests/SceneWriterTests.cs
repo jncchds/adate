@@ -50,7 +50,7 @@ public class SceneWriterTests
     private static readonly ILocationCatalog PlaceTypes = new JsonLocationCatalog(ContentPath("place-types.json"));
 
     private static SceneWriter Writer(ILlmClient llm, bool enabled = true, bool judge = false) =>
-        new(llm, new SceneValidator(Story, Cast), Story, PlaceTypes, new SceneJudge(llm),
+        new(llm, new SceneValidator(Story, Cast), Story, Cast, PlaceTypes, new SceneJudge(llm),
             Options.Create(new LlmOptions { Enabled = enabled, MaxRetries = 2, UseJudge = judge }));
 
     private static ScenePacket Packet() => new(
@@ -99,6 +99,51 @@ public class SceneWriterTests
         Assert.False(scene.Fallback);
         Assert.Equal(2, scene.Attempts);
         Assert.Contains("first person", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    private static string WithChoices(string choices) =>
+        Answer().TrimEnd().TrimEnd('}') + $$""", "choices": {{choices}} }""";
+
+    [Fact]
+    public async Task A_scene_with_someone_present_ends_with_two_or_three_tagged_replies()
+    {
+        var llm = new FakeLlm(
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["attentiveness"] }]"""),
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["attentiveness"] }, { "text": "Flirt", "tags": ["charm"] }]"""),
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["attentiveness"] }, { "text": "Tease them about the rain", "tags": ["humour", "helps:{want}"] }]"""));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", wantChoices: true);
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(3, scene.Attempts);
+        Assert.Contains("offers 1 choices", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Contains("needs tags from the list", llm.Requests[2].User, StringComparison.Ordinal);
+        Assert.Equal(["Ask about the book", "Tease them about the rain"], scene.Choices!.Select(c => c.Text));
+        Assert.Equal(["humour", "helps:{want}"], scene.Choices![1].Tags);
+    }
+
+    [Fact]
+    public async Task Only_one_choice_may_touch_their_want()
+    {
+        var llm = new FakeLlm(
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["helps:{want}"] }, { "text": "Mention the rain", "tags": ["helps:{want}"] }]"""),
+            () => WithChoices("""[{ "text": "Ask about the book", "tags": ["attentiveness"] }, { "text": "Mention the rain", "tags": ["humour"] }]"""));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", wantChoices: true);
+
+        Assert.False(scene.Fallback);
+        Assert.Contains("2 choices are tagged helps or hinders", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Choices_are_ignored_when_the_scene_does_not_ask_for_them()
+    {
+        var llm = new FakeLlm(() => WithChoices("""[{ "text": "Wave", "tags": ["charm"] }]"""));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Empty(scene.Choices ?? []);
     }
 
     [Fact]

@@ -26,6 +26,20 @@ public static partial class Narration
     public static bool HasParagraphs(string text) => text.Trim().Contains('\n');
 
     /// <summary>
+    /// Text the model stopped writing in the middle of: an open quote, or no closing punctuation.
+    /// </summary>
+    public static bool Unfinished(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var trimmed = text.TrimEnd();
+        return trimmed.Length == 0
+               || trimmed.Count(c => c == '"') % 2 == 1
+               || trimmed.Count(c => c == '“') != trimmed.Count(c => c == '”')
+               || !".!?\"”’…)*".Contains(trimmed[^1]);
+    }
+
+    /// <summary>
     /// Places where the narration decides for the player: "you" followed by something the player does,
     /// says, decides, thinks or feels, outside quoted dialogue. What the player sees or hears is
     /// allowed; the scene is theirs to act in.

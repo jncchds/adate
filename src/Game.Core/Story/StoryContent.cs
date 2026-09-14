@@ -96,6 +96,18 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
             .Aggregate(1.0, (scale, m) => scale * pick(m));
     }
 
+    /// <summary>
+    /// Every tag a proposed or interpreted choice may carry: desires, dealbreaker tags, and helping or
+    /// hindering the want of the person the scene is about.
+    /// </summary>
+    public IReadOnlyList<string> ChoiceTags() =>
+    [
+        .. Values.Desires.Select(d => d.Id),
+        .. Values.Dealbreakers.Select(d => d.Tag),
+        HelpsPrefix + WantToken,
+        HindersPrefix + WantToken,
+    ];
+
     public PredicateDefinition? Predicate(string id) =>
         Predicates.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
 

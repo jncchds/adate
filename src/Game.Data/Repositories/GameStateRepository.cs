@@ -212,6 +212,90 @@ public sealed class GameStateRepository(Database database)
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>Stores the scene waiting for the player's reply, replacing any earlier one.</summary>
+    public async Task SavePendingSceneAsync(SaveId saveId, PendingScene scene, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            INSERT INTO pending_scene (save_id, day, slot, place_id, encounter_id, with_json, text, choices_json, created_utc)
+            VALUES ($save, $day, $slot, $place, $encounter, $with, $text, $choices, $created)
+            ON CONFLICT(save_id) DO UPDATE SET
+                day = excluded.day, slot = excluded.slot, place_id = excluded.place_id,
+                encounter_id = excluded.encounter_id, with_json = excluded.with_json, text = excluded.text,
+                choices_json = excluded.choices_json, created_utc = excluded.created_utc;
+            """;
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+        command.Parameters.AddWithValue("$day", scene.Clock.Day);
+        command.Parameters.AddWithValue("$slot", scene.Clock.Slot.ToString());
+        command.Parameters.AddWithValue("$place", scene.PlaceId);
+        command.Parameters.AddWithValue("$encounter", (object?)scene.EncounterId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$with", JsonSerializer.Serialize(scene.With, Json));
+        command.Parameters.AddWithValue("$text", scene.Text);
+        command.Parameters.AddWithValue("$choices", JsonSerializer.Serialize(scene.Choices, Json));
+        command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<PendingScene?> GetPendingSceneAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT day, slot, place_id, encounter_id, with_json, text, choices_json
+            FROM pending_scene WHERE save_id = $save;
+            """;
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false)
+            ? new PendingScene(
+                new ClockState(reader.GetInt32(0), Enum.Parse<TimeOfDay>(reader.GetString(1))),
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                JsonSerializer.Deserialize<List<string>>(reader.GetString(4), Json)!,
+                reader.GetString(5),
+                JsonSerializer.Deserialize<List<ProposedChoice>>(reader.GetString(6), Json)!)
+            : null;
+    }
+
+    /// <summary>
+    /// Answers the waiting scene in one transaction: removes it, sets the reply's flags and writes the
+    /// relationship changes. Refused when nothing is waiting, so a reply is applied once.
+    /// </summary>
+    public async Task ResolvePendingSceneAsync(
+        SaveId saveId,
+        IReadOnlyDictionary<Guid, RelationshipState> relationships,
+        IReadOnlyDictionary<string, string> flags,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(relationships);
+        ArgumentNullException.ThrowIfNull(flags);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await using (var remove = connection.CreateCommand())
+        {
+            remove.Transaction = transaction;
+            remove.CommandText = "DELETE FROM pending_scene WHERE save_id = $save;";
+            remove.Parameters.AddWithValue("$save", saveId.ToString());
+
+            if (await remove.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
+            {
+                throw new InvalidOperationException($"Save '{saveId}' has no scene waiting for a reply.");
+            }
+        }
+
+        await UpsertFlagsAsync(connection, transaction, saveId, flags, ct).ConfigureAwait(false);
+        await WriteRelationshipsAsync(connection, transaction, saveId, relationships, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
     private static async Task WriteRelationshipsAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,

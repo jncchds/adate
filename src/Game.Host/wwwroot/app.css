@@ -302,6 +302,38 @@ button.active {
     margin: 1rem 0;
 }
 
+.encounter-text.reaction {
+    border-left: 3px solid var(--accent);
+    padding-left: 0.75rem;
+}
+
+.popup {
+    display: inline-block;
+    margin: 0.5rem 0 1rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--bg, #fff);
+    font-weight: 600;
+    animation: popup-in 220ms ease-out;
+}
+
+@keyframes popup-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+.reply-form {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0 1rem;
+    max-width: 46rem;
+}
+
+.reply-form input {
+    flex: 1;
+}
+
 .relationship small {
     color: var(--muted);
     margin-left: 0.5rem;

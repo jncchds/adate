@@ -31,7 +31,7 @@ public class DatabaseTests
                      "save", "character", "sprite_cache", "background_cache",
                      "place", "character_outfit", "game_clock", "flag", "visit",
                      "fact", "fact_knowledge", "rel_state", "schedule", "promise", "turn_log",
-                     "player_profile", "memory",
+                     "player_profile", "memory", "pending_scene",
                  })
         {
             var count = db.Scalar<long>(

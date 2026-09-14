@@ -103,6 +103,14 @@ public static class MeasureRunner
                 continue;
             }
 
+            if (play.PendingScene is not null)
+            {
+                // The first proposed reply, like the first answer to an authored choice.
+                await world.RespondAsync(save.Id, 0, null);
+                choices++;
+                continue;
+            }
+
             if (play.Pending is { } pending)
             {
                 // Always the first answer: the warmer one in every authored and generated choice.
@@ -129,7 +137,7 @@ public static class MeasureRunner
             visits[place] = visits.GetValueOrDefault(place) + 1;
             turns++;
 
-            if (outcome.EncounterId is not null)
+            // Every turn is written now; quiet turns carry their own encounter ids.
             {
                 var clock = Stopwatch.StartNew();
                 await world.WriteSceneAsync(save.Id, outcome);

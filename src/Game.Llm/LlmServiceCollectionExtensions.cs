@@ -40,6 +40,7 @@ public static class LlmServiceCollectionExtensions
         services.AddTransient<SceneJudge>();
         services.AddTransient<BibleWriter>();
         services.AddTransient<SceneWriter>();
+        services.AddTransient<ReactionWriter>();
 
         return services;
     }

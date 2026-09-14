@@ -11,6 +11,8 @@ public sealed record SceneResponseFact(string Subject, string Predicate, string 
 
 public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details);
 
+public sealed record SceneResponseChoice(string Text, IReadOnlyList<string>? Tags);
+
 /// <summary>The JSON half of a written scene.</summary>
 public sealed record SceneResponse(
     string Text,
@@ -18,7 +20,8 @@ public sealed record SceneResponse(
     IReadOnlyList<SceneResponseFact>? Facts,
     IReadOnlyList<SceneResponsePlace>? Places = null,
     string? Summary = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    IReadOnlyList<SceneResponseChoice>? Choices = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -34,7 +37,8 @@ public sealed record WrittenScene(
     int Attempts,
     IReadOnlyList<string> Rejections,
     string? Summary = null,
-    IReadOnlyList<string>? Tags = null);
+    IReadOnlyList<string>? Tags = null,
+    IReadOnlyList<ProposedChoice>? Choices = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -46,6 +50,7 @@ public sealed class SceneWriter(
     ILlmClient llm,
     SceneValidator validator,
     StoryContent story,
+    Game.Core.Cast.CastContent cast,
     ILocationCatalog placeTypes,
     SceneJudge judge,
     IOptions<LlmOptions> options)
@@ -57,12 +62,18 @@ public sealed class SceneWriter(
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    public const int MinChoices = 2;
+    public const int MaxChoices = 3;
+    public const int MaxChoiceLength = 90;
+
     /// <param name="knownPlaces">Places the player knows. A proposal may not repeat one of their names.</param>
+    /// <param name="wantChoices">Whether the scene must end with two or three tagged replies for the player.</param>
     public async Task<WrittenScene> WriteAsync(
         ScenePacket packet,
         SceneWorld world,
         string fallbackText,
         IReadOnlyList<string>? knownPlaces = null,
+        bool wantChoices = false,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
@@ -115,6 +126,9 @@ public sealed class SceneWriter(
             if (response is not null)
             {
                 var (facts, places, reasons) = Check(response, packet, world, knownPlaces ?? [], settings);
+                var choiceReasons = new List<string>();
+                var choices = wantChoices ? CheckChoices(response, choiceReasons) : [];
+                reasons = [.. reasons, .. choiceReasons];
 
                 if (reasons.Count == 0 && settings.UseJudge)
                 {
@@ -133,7 +147,8 @@ public sealed class SceneWriter(
                         attempts,
                         rejections,
                         string.IsNullOrWhiteSpace(response.Summary) ? null : response.Summary.Trim(),
-                        [.. (response.Tags ?? []).Where(t => MemoryTags.All.Contains(t, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal)]);
+                        [.. (response.Tags ?? []).Where(t => MemoryTags.All.Contains(t, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal)],
+                        choices);
                 }
 
                 lastReasons = reasons;
@@ -176,6 +191,21 @@ public sealed class SceneWriter(
                         ["additionalProperties"] = false,
                     },
                 },
+                ["choices"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["text"] = new JsonObject { ["type"] = "string" },
+                            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                        },
+                        ["required"] = Strings(["text", "tags"]),
+                        ["additionalProperties"] = false,
+                    },
+                },
                 ["summary"] = new JsonObject { ["type"] = "string" },
                 ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(MemoryTags.All) } },
                 ["places"] = new JsonObject
@@ -195,9 +225,55 @@ public sealed class SceneWriter(
                     },
                 },
             },
-            ["required"] = Strings(["text", "expression", "facts", "places", "summary", "tags"]),
+            ["required"] = Strings(["text", "expression", "facts", "places", "summary", "tags", "choices"]),
             ["additionalProperties"] = false,
         };
+    }
+
+    /// <summary>Two or three distinct replies, short, each carrying at least one tag the story can score.</summary>
+    private IReadOnlyList<ProposedChoice> CheckChoices(SceneResponse response, List<string> reasons)
+    {
+        var offered = response.Choices ?? [];
+
+        if (offered.Count is < MinChoices or > MaxChoices)
+        {
+            reasons.Add($"The scene offers {offered.Count} choices; offer {MinChoices} or {MaxChoices} things the player could say or do next.");
+            return [];
+        }
+
+        // Touching their want is the exception, not a default tag for any friendly line.
+        var wantTagged = offered.Count(c => (c.Tags ?? []).Any(t =>
+            t.StartsWith(StoryContent.HelpsPrefix, StringComparison.Ordinal) || t.StartsWith(StoryContent.HindersPrefix, StringComparison.Ordinal)));
+        if (wantTagged > 1)
+        {
+            reasons.Add($"{wantTagged} choices are tagged helps or hinders; only a choice that really touches their want may be, at most one. Tag the others with the quality they show.");
+        }
+
+        var choices = new List<ProposedChoice>();
+        foreach (var choice in offered)
+        {
+            var text = choice.Text?.Trim() ?? "";
+            var tags = (choice.Tags ?? []).Distinct(StringComparer.Ordinal).ToList();
+
+            if (text.Length is 0 or > MaxChoiceLength)
+            {
+                reasons.Add($"The choice '{text}' needs to be 1 to {MaxChoiceLength} characters.");
+            }
+            else if (choices.Any(c => string.Equals(c.Text, text, StringComparison.OrdinalIgnoreCase)))
+            {
+                reasons.Add($"The choice '{text}' is offered twice.");
+            }
+            else if (tags.Count == 0 || tags.Any(t => !story.IsKnownTag(t, cast)))
+            {
+                reasons.Add($"The choice '{text}' needs tags from the list; it has [{string.Join(", ", tags)}].");
+            }
+            else
+            {
+                choices.Add(new ProposedChoice(text, tags));
+            }
+        }
+
+        return choices;
     }
 
     private static WrittenScene Fallback(string text, int attempts, IReadOnlyList<string> rejections) =>
@@ -254,6 +330,11 @@ public sealed class SceneWriter(
             if (response.Text.Length > Narration.ParagraphAfter && !Narration.HasParagraphs(response.Text))
             {
                 reasons.Add("The text is one block. Split it into two to four short paragraphs separated by blank lines.");
+            }
+
+            if (Narration.Unfinished(response.Text))
+            {
+                reasons.Add("The text stops mid-sentence or leaves a quote open. Finish it.");
             }
         }
 

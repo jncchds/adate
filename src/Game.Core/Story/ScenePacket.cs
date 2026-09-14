@@ -30,7 +30,8 @@ public sealed record ScenePacket(
     IReadOnlyList<string> Expressions,
     IReadOnlyList<string>? KnownPlaces = null,
     IReadOnlyList<string>? Memories = null,
-    string? Weather = null);
+    string? Weather = null,
+    bool OffersChoices = false);
 
 public static class ScenePacketBuilder
 {
@@ -176,6 +177,9 @@ public static class ScenePacketBuilder
         text.AppendLine("- places: only a place someone names that is not one the player knows, with a place type and up to three details of that type; otherwise an empty list.");
         text.AppendLine("- summary: one sentence a friend would use to remind the player what happened in this scene.");
         text.AppendLine("- tags: why it matters, if it does; first for a first time, conflict for a falling-out.");
+        text.AppendLine(packet.OffersChoices
+            ? "- choices: two or three short, different things the player could say or do next, in the player's own voice (\"Ask about the book\", \"Tease them about the rain\"). Tag each with what it shows about the player, from the list: a quality the other person may value, a dealbreaker when it would hurt, or helps:{want} / hinders:{want} when it touches their want. End the scene open for them."
+            : "- choices: an empty list.");
 
         return text.ToString();
     }

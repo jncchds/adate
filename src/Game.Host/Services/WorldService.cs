@@ -4,6 +4,7 @@ using Game.Core.Cast;
 using Game.Core.Encounters;
 using Game.Core.Places;
 using Game.Core.Saves;
+using Game.Core.Scenes;
 using Game.Core.Settings;
 using Game.Core.Story;
 using Game.Core.World;
@@ -23,7 +24,17 @@ public sealed record Invitee(string Key, string Name);
 /// <summary>What a turn's scene shows: its text, and who stands in front wearing which expression.</summary>
 /// <param name="CharacterId">The person in front, or null when the scene is about no one in the cast.</param>
 /// <param name="Aesthetic">Their style, which picks the sprite's outfit.</param>
-public sealed record SceneView(string Text, Guid? CharacterId, string? Name, string? Aesthetic, string? Expression);
+/// <param name="Choices">Replies the player may give, when the scene waits for one.</param>
+public sealed record SceneView(
+    string Text,
+    Guid? CharacterId,
+    string? Name,
+    string? Aesthetic,
+    string? Expression,
+    IReadOnlyList<ProposedChoice>? Choices = null);
+
+/// <summary>The other people's reaction to a reply, and a popup when the reaction was considerable.</summary>
+public sealed record ReactionResult(SceneView View, string? Popup);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
@@ -67,7 +78,8 @@ public sealed record PlayState(
     IReadOnlyDictionary<string, string> People,
     EndingOffer? EndingOffer,
     EndingRecap? Ending,
-    WeatherDefinition? Weather = null);
+    WeatherDefinition? Weather = null,
+    PendingScene? PendingScene = null);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
@@ -84,6 +96,7 @@ public sealed class WorldService(
     EndingContent endingContent,
     WeatherContent weatherContent,
     SceneWriter sceneWriter,
+    ReactionWriter reactionWriter,
     BibleWriter bibleWriter,
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
@@ -161,8 +174,9 @@ public sealed class WorldService(
         }
 
         var over = clock.IsPast(setting.Days);
+        var pendingScene = await state.GetPendingSceneAsync(saveId, ct).ConfigureAwait(false);
 
-        IReadOnlyList<Invitee> invitees = over || pending is not null || offer is not null || ending is not null
+        IReadOnlyList<Invitee> invitees = over || pending is not null || pendingScene is not null || offer is not null || ending is not null
             ? []
             : [.. cast.Where(li => !HasLeft(flags, li) && CanInvite(setting, cast, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
 
@@ -194,7 +208,8 @@ public sealed class WorldService(
             people,
             offer,
             ending,
-            WeatherOn(saveId, setting, clock.Day));
+            WeatherOn(saveId, setting, clock.Day),
+            pendingScene);
     }
 
     /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
@@ -242,7 +257,7 @@ public sealed class WorldService(
             throw new InvalidOperationException($"The {play.Setting.Days} days of this save are over.");
         }
 
-        if (play.Pending is not null)
+        if (play.Pending is not null || play.PendingScene is not null)
         {
             throw new InvalidOperationException("Answer the open choice before taking another turn.");
         }
@@ -554,7 +569,8 @@ public sealed class WorldService(
             [.. pack.Expressions.Keys],
             [.. known.Select(p => p.Name)],
             memoryLines,
-            WeatherOn(saveId, setting, day).Writing);
+            WeatherOn(saveId, setting, day).Writing,
+            OffersChoices: presented.CharacterId is not null && (outcome.Choices ?? []).Count == 0);
 
         var world = new SceneWorld(
             facts,
@@ -563,7 +579,7 @@ public sealed class WorldService(
             stages,
             Summoned: presentIds);
 
-        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], ct).ConfigureAwait(false);
+        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], packet.OffersChoices, ct).ConfigureAwait(false);
 
         foreach (var fact in written.Facts)
         {
@@ -621,9 +637,20 @@ public sealed class WorldService(
             written.Tags,
             Memories = memoryLines,
             Places = written.Places.Select(p => $"{p.Type}: {p.Name}"),
+            written.Choices,
             written.Attempts,
             written.Rejections,
         }, ct).ConfigureAwait(false);
+
+        // A scene with someone present waits for the player's reply before the next turn.
+        IReadOnlyList<ProposedChoice> choices = !written.Fallback && packet.OffersChoices ? written.Choices ?? [] : [];
+        if (choices.Count > 0)
+        {
+            await state.SavePendingSceneAsync(
+                saveId,
+                new PendingScene(outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, outcome.With, written.Text, choices),
+                ct).ConfigureAwait(false);
+        }
 
         return presented with
         {
@@ -631,7 +658,121 @@ public sealed class WorldService(
             Expression = presented.Expression is null
                 ? null
                 : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
+            Choices = choices,
         };
+    }
+
+    /// <summary>
+    /// Answers the scene waiting for a reply (phase-3 plan: choices): a proposed choice by index, or the
+    /// player's own words. The reaction is written, the reply's tags are scored for everyone present
+    /// and committed with closing the scene, and a popup is returned only for a considerable reaction.
+    /// </summary>
+    public async Task<ReactionResult> RespondAsync(SaveId saveId, int? choiceIndex, string? freeText, CancellationToken ct = default)
+    {
+        var scene = await state.GetPendingSceneAsync(saveId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("No scene is waiting for a reply.");
+
+        string words;
+        IReadOnlyList<string>? chosenTags;
+        if (choiceIndex is { } index)
+        {
+            var choice = scene.Choices.ElementAtOrDefault(index)
+                ?? throw new InvalidOperationException($"There is no choice {index}.");
+            words = choice.Text;
+            chosenTags = choice.Tags;
+        }
+        else
+        {
+            words = freeText?.Trim() ?? "";
+            if (words.Length is 0 or > ReactionWriter.MaxReplyLength)
+            {
+                throw new InvalidOperationException($"A reply needs 1 to {ReactionWriter.MaxReplyLength} characters.");
+            }
+
+            chosenTags = null;
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
+        var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
+
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var presentPeople = cast.Where(li => scene.With.Contains(li.Ref)).ToList();
+        var present = new List<PacketPerson>();
+        var before = new Dictionary<Guid, RelationshipState>();
+        foreach (var li in presentPeople)
+        {
+            before[li.Id] = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            present.Add(new PacketPerson(
+                li.Id.ToString(),
+                li.Name,
+                [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
+                before[li.Id].Stage,
+                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null));
+        }
+
+        var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var place = known.FirstOrDefault(p => p.Id == scene.PlaceId);
+        var packet = new ScenePacket(
+            setting.DisplayName,
+            setting.Tone,
+            scene.Clock,
+            scene.PlaceId,
+            place?.Name ?? scene.PlaceId,
+            names.Player,
+            present,
+            [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
+            [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
+            "The player has just replied; see below.",
+            ceiling,
+            [.. pack.Expressions.Keys],
+            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing);
+
+        var owner = Owner(cast, scene.With);
+        var reaction = await reactionWriter.WriteAsync(
+            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", ct).ConfigureAwait(false);
+
+        // "{want}" in a tag means the want of the person the scene is about.
+        var tags = reaction.Tags.Select(t => t.Replace(StoryContent.WantToken, owner?.Member.WantId ?? "", StringComparison.Ordinal)).ToList();
+
+        var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
+        var toSet = new Dictionary<string, string>(StringComparer.Ordinal);
+        var relationships = new Dictionary<Guid, RelationshipState>();
+        foreach (var li in presentPeople)
+        {
+            var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, tags);
+            relationships[li.Id] = Advance(li, _engine.Apply(before[li.Id], delta, scene.Clock.Day), after, toSet);
+        }
+
+        await state.ResolvePendingSceneAsync(saveId, relationships, toSet, ct).ConfigureAwait(false);
+
+        await story.LogTurnAsync(saveId, scene.Clock, reaction.Fallback ? "reaction-fallback" : "reaction", new
+        {
+            Reply = words,
+            Chosen = choiceIndex,
+            Tags = tags,
+            reaction.Text,
+            reaction.Expression,
+            reaction.Attempts,
+            reaction.Rejections,
+        }, ct).ConfigureAwait(false);
+
+        var popup = owner is not null && relationships.TryGetValue(owner.Id, out var changed)
+            ? ReactionPopup.For(owner.Name, before[owner.Id], changed)
+            : null;
+
+        var expression = owner is null
+            ? null
+            : ScenePresentation.Expression(reaction.Expression, owner.Member.RestingExpression(castContent), [.. pack.Expressions.Keys]);
+
+        return new ReactionResult(
+            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression),
+            popup);
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>

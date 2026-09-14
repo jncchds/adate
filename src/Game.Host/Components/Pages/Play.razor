@@ -62,9 +62,61 @@ else if (_outcome is not null)
             }
         </div>
     }
+    else if (_reaction is not null)
+    {
+        <p class="encounter-text reaction">@_reaction</p>
+        @if (_popup is not null)
+        {
+            <div class="popup" role="status">@_popup</div>
+        }
+        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
+    }
+    else if (_view?.Choices is { Count: > 0 } offered)
+    {
+        <div class="choices">
+            @for (var i = 0; i < offered.Count; i++)
+            {
+                var index = i;
+                <button type="button" disabled="@_working" @onclick="() => RespondAsync(index)">@offered[index].Text</button>
+            }
+        </div>
+        <form class="reply-form" @onsubmit="() => RespondAsync(null)">
+            <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
+            <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Reply</button>
+        </form>
+    }
     else
     {
-        <button type="button" @onclick="ContinueAsync">Continue</button>
+        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
+    }
+}
+else if (_state.PendingScene is { } waiting)
+{
+    <h1>Day @waiting.Clock.Day, @waiting.Clock.Slot</h1>
+    <p class="encounter-text">@waiting.Text</p>
+
+    @if (_reaction is not null)
+    {
+        <p class="encounter-text reaction">@_reaction</p>
+        @if (_popup is not null)
+        {
+            <div class="popup" role="status">@_popup</div>
+        }
+        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
+    }
+    else
+    {
+        <div class="choices">
+            @for (var i = 0; i < waiting.Choices.Count; i++)
+            {
+                var index = i;
+                <button type="button" disabled="@_working" @onclick="() => RespondAsync(index)">@waiting.Choices[index].Text</button>
+            }
+        </div>
+        <form class="reply-form" @onsubmit="() => RespondAsync(null)">
+            <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
+            <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Reply</button>
+        </form>
     }
 }
 else if (_state.Ending is { } ending)
@@ -170,14 +222,6 @@ else
         <p class="today">@hint</p>
     }
 
-    @foreach (var relationship in _state.Relationships ?? [])
-    {
-        <p class="relationship">
-            @relationship.Name: @(relationship.Left is null ? relationship.State.Stage.ToString().ToLowerInvariant() : "gone")
-            <small>affection @relationship.State.Affection · trust @relationship.State.Trust · attraction @relationship.State.Attraction</small>
-        </p>
-    }
-
     @if (_state.Invitees.Count > 0)
     {
         <label class="invite">
@@ -216,6 +260,9 @@ else
     private string? _background;
     private string? _sprite;
     private SceneView? _view;
+    private string? _reaction;
+    private string? _popup;
+    private string _reply = "";
     private string _invite = "";
     private bool _working;
     private string? _error;
@@ -268,10 +315,12 @@ else
             var written = await World.WriteSceneAsync(SaveId, _outcome);
             _outcome = _outcome with { Text = written.Text };
 
-            if (written.Expression != _view.Expression)
+            var expressionChanged = written.Expression != _view.Expression;
+            _view = written;
+            StateHasChanged();
+
+            if (expressionChanged)
             {
-                StateHasChanged();
-                _view = written;
                 _sprite = await World.SpriteAsync(SaveId, written);
             }
         }
@@ -293,6 +342,40 @@ else
         {
             await World.ChooseAsync(SaveId, choice.Id);
             await ContinueAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    /// <summary>A proposed reply by index, or the typed one when <paramref name="index"/> is null.</summary>
+    private async Task RespondAsync(int? index)
+    {
+        if (index is null && string.IsNullOrWhiteSpace(_reply))
+        {
+            return;
+        }
+
+        _working = true;
+
+        try
+        {
+            var result = await World.RespondAsync(SaveId, index, index is null ? _reply : null);
+            _reaction = result.View.Text;
+            _popup = result.Popup;
+            _reply = "";
+            StateHasChanged();
+
+            if (_outcome is not null && result.View.CharacterId is not null && result.View.Expression != _view?.Expression)
+            {
+                _view = result.View;
+                _sprite = await World.SpriteAsync(SaveId, result.View);
+            }
         }
         catch (Exception ex)
         {
@@ -330,6 +413,9 @@ else
         _background = null;
         _sprite = null;
         _view = null;
+        _reaction = null;
+        _popup = null;
+        _reply = "";
         await LoadAsync();
     }
 
