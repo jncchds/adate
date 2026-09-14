@@ -16,6 +16,8 @@ public sealed record TurnContext(
 /// <param name="Next">Where the clock moves to.</param>
 /// <param name="EncounterId">The encounter that fired, or null for an ordinary slot.</param>
 /// <param name="GameOver">Whether this was the last slot of the calendar.</param>
+/// <param name="Activity">What the player came to do, as the writer is told it; null for simply passing time.</param>
+/// <param name="Note">Something the player should know about the turn itself, such as a missed shift.</param>
 public sealed record TurnOutcome(
     ClockState VisitedAt,
     ClockState Next,
@@ -26,7 +28,9 @@ public sealed record TurnOutcome(
     IReadOnlyList<string> Reveals,
     IReadOnlyList<string> With,
     bool GameOver,
-    IReadOnlyList<EncounterChoice>? Choices = null);
+    IReadOnlyList<EncounterChoice>? Choices = null,
+    string? Activity = null,
+    string? Note = null);
 
 /// <summary>Picks the encounter for a turn. Pure: the same state always picks the same encounter.</summary>
 public static class EncounterEvaluator

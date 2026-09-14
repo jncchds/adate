@@ -33,6 +33,8 @@ public sealed record SettingEvent(string Id, string Name, int Day, string Place,
 /// </summary>
 /// <param name="Tone">Guidance for the writing. Never enters an image prompt.</param>
 /// <param name="Weather">Weights per weather id for this setting; null uses each kind's default weight.</param>
+/// <param name="Job">The player's job here, with its shifts; null for a setting where the player has none.</param>
+/// <param name="Home">Where the player lives, a place known from the start: where texting happens. Null uses the routine place.</param>
 public sealed record SettingDefinition(
     string Id,
     string DisplayName,
@@ -43,7 +45,9 @@ public sealed record SettingDefinition(
     IReadOnlyList<SettingOpening> Openings,
     IReadOnlyList<SettingEvent> Events,
     IReadOnlyList<string> Occupations,
-    IReadOnlyDictionary<string, int>? Weather = null)
+    IReadOnlyDictionary<string, int>? Weather = null,
+    PlayerJob? Job = null,
+    string? Home = null)
 {
     public SettingPlace Place(string placeId) =>
         Places.FirstOrDefault(p => string.Equals(p.Id, placeId, StringComparison.Ordinal))

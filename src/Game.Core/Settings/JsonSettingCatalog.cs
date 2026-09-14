@@ -168,5 +168,28 @@ public sealed class JsonSettingCatalog : ISettingCatalog
         {
             Fail("has no occupations for its characters.");
         }
+
+        if (setting.Job is { } job)
+        {
+            if (!Exists(job.Place) || !Known(job.Place))
+            {
+                Fail($"the player's job is at '{job.Place}', which must be one of its places, known from the start.");
+            }
+
+            if (job.Slots.Count == 0 || job.Weekdays.Count == 0 || job.Weekdays.Any(d => d is < 0 or > 6))
+            {
+                Fail("the player's job needs at least one shift slot and weekdays between 0 and 6.");
+            }
+
+            if (new[] { job.Title, job.Trait, job.Scene, job.Habit }.Any(string.IsNullOrWhiteSpace))
+            {
+                Fail("the player's job needs a title, a trait, a scene and a habit.");
+            }
+        }
+
+        if (setting.Home is { } home && (!Exists(home) || !Known(home)))
+        {
+            Fail($"the player's home '{home}' must be one of its places, known from the start.");
+        }
     }
 }

@@ -24,6 +24,16 @@ public class ScenePacketTests
         ["neutral", "smile"]);
 
     [Fact]
+    public void The_writer_is_told_what_the_player_does_with_their_life()
+    {
+        var text = ScenePacketBuilder.Render(Packet() with { PlayerLife = ["Alex works as a junior analyst.", "Alex often swims in the lake."] });
+
+        Assert.Contains("Alex works as a junior analyst.", text, StringComparison.Ordinal);
+        Assert.Contains("Alex often swims in the lake.", text, StringComparison.Ordinal);
+        Assert.True(text.IndexOf("Alex often swims", StringComparison.Ordinal) < text.IndexOf("## What Alex knows", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void An_english_story_keeps_the_english_second_person_rule_and_nothing_more()
     {
         var text = ScenePacketBuilder.Render(Packet());

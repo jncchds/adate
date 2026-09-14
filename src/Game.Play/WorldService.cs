@@ -112,7 +112,10 @@ public sealed record PlayState(
     CurrentScene? Scene = null,
     string? LastPlaceId = null,
     IReadOnlyList<Invitee>? Met = null,
-    int CastSize = 0);
+    int CastSize = 0,
+    PlayerJob? Job = null,
+    bool OnShift = false,
+    IReadOnlyList<Invitee>? Contacts = null);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 public sealed class WorldService(
@@ -238,6 +241,28 @@ public sealed class WorldService(
         var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
         people.TryAdd(JsonEncounterCatalog.MainLiRef, names.MainLi);
 
+        // The player's own life: a shift that is now, people they can text, and the traits they are building.
+        var onShift = PlayerLife.OnShift(setting.Job, clock);
+        IReadOnlyList<Invitee> contacts =
+        [
+            .. cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li)).Select(li => new Invitee(li.Key, li.Name)),
+        ];
+        var building = PlayerLife.Traits(flags)
+            .Where(t => PlayerLife.Level(t.Value, storyContent.Rules.TraitLevels) > 0)
+            .Select(t => t.Key)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        var life = new List<string>();
+        if (onShift && setting.Job is { } shift)
+        {
+            life.Add($"Your shift at {PlaceName(setting, known, shift.Place)} is now. Skipping it costs you.");
+        }
+
+        if (building.Count > 0)
+        {
+            life.Add($"What you do is shaping you: {string.Join(", ", building)}.");
+        }
+
         // Meetings the player agreed to, so an arrangement made in conversation is never forgotten.
         IReadOnlyList<string> promised =
         [
@@ -276,7 +301,7 @@ public sealed class WorldService(
             names.MainLiId,
             names.MainLi,
             opening,
-            [.. promised, .. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
+            [.. life, .. promised, .. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
             pending,
             invitees,
             relationships,
@@ -288,7 +313,10 @@ public sealed class WorldService(
             scene,
             lastPlaceId,
             met,
-            cast.Count);
+            cast.Count,
+            setting.Job,
+            onShift,
+            contacts);
     }
 
     /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
@@ -322,7 +350,10 @@ public sealed class WorldService(
     /// optionally bringing someone along by their <see cref="Invitee.Key"/>. When the turn ends a day,
     /// anyone the leaving rules now apply to walks away, in the same transaction.
     /// </summary>
-    public async Task<TurnOutcome> TakeTurnAsync(SaveId saveId, string placeId, string? invite = null, CancellationToken ct = default)
+    /// <param name="activityId">Something to do there, from the place type's activities, or <see cref="PlayerLife.ShiftId"/> for the player's shift.</param>
+    /// <param name="textWith">Spend the slot texting this person instead (see <see cref="TextAsync"/>).</param>
+    public async Task<TurnOutcome> TakeTurnAsync(
+        SaveId saveId, string placeId, string? invite = null, string? activityId = null, string? textWith = null, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
 
@@ -377,6 +408,29 @@ public sealed class WorldService(
             await state.CountAloneVisitsAsync(saveId, place.Id, ct).ConfigureAwait(false));
 
         var outcome = TurnPlanner.Plan(play.Setting, Available(play.Setting, cast, flags), context, place.Name);
+
+        // Texting takes the slot at home, with whoever the player messages, whatever else was planned there.
+        if (textWith is not null)
+        {
+            var texted = cast.FirstOrDefault(li => li.Key == textWith && EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li))
+                ?? throw new InvalidOperationException($"'{textWith}' is not someone the player can message.");
+
+            outcome = outcome with
+            {
+                EncounterId = JsonEncounterCatalog.PhoneId,
+                With = [texted.Ref],
+                Text = $"{texted.Name} and you are texting.",
+                FlagsToSet = new Dictionary<string, string>(StringComparer.Ordinal),
+                Reveals = [],
+                Choices = null,
+            };
+        }
+
+        var activity = textWith is null ? ActivityFor(play, place, activityId) : null;
+        if (activity is not null)
+        {
+            outcome = outcome with { Activity = activity.Scene };
+        }
 
         if (invite is not null && !outcome.With.Contains(RefFor(invite)))
         {
@@ -446,6 +500,19 @@ public sealed class WorldService(
         var toSet = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal);
         var relationships = new Dictionary<Guid, RelationshipState>();
 
+        // What the player does with the slot builds who they are; a shift they skip costs a little.
+        var traits = PlayerLife.Traits(flags);
+        if (activity is not null)
+        {
+            PlayerLife.Record(toSet, flags, activity.Id == PlayerLife.ShiftId ? PlayerLife.JobTypeId : place.TypeId, activity);
+        }
+
+        if (PlayerLife.OnShift(play.Setting.Job, play.Clock) && activity?.Id != PlayerLife.ShiftId)
+        {
+            PlayerLife.MissShift(toSet, flags);
+            outcome = outcome with { Note = $"You skipped your shift at {PlaceName(play.Setting, play.KnownPlaces, play.Setting.Job!.Place)}." };
+        }
+
         // How much the player leads with each person, which leaves them less room to take the lead.
         if (invite is not null)
         {
@@ -459,6 +526,15 @@ public sealed class WorldService(
             if (outcome.EncounterId == JsonEncounterCatalog.FirstDateIdFor(li.Key))
             {
                 current = _engine.DateAt(current, li.Profile, place.TypeId, play.Clock.Day);
+            }
+
+            // Seeing the player do something they value, and who the player has become, warms them a little.
+            IReadOnlyList<string> seen = activity is null ? [] : [activity.Trait];
+            var shown = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, seen);
+            var rapport = PlayerLife.Rapport(li.Profile.WeightOf, traits, storyContent.Rules);
+            if (shown.Affection != 0 || rapport != 0)
+            {
+                current = _engine.Apply(current, shown with { Affection = shown.Affection + rapport }, play.Clock.Day);
             }
 
             relationships[li.Id] = Advance(li, current, after, toSet);
@@ -517,6 +593,55 @@ public sealed class WorldService(
             saveId, filled.VisitedAt, place.Id, filled.EncounterId, TurnOutcomeJson.Serialize(filled), filled.Text, ct).ConfigureAwait(false);
 
         return filled;
+    }
+
+    /// <summary>Spends the slot texting <paramref name="key"/>, someone whose number the player has, from home.</summary>
+    public async Task<TurnOutcome> TextAsync(SaveId saveId, string key, CancellationToken ct = default)
+    {
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
+        var home = known.FirstOrDefault(p => p.Id == (setting.Home ?? setting.RoutinePlace)) ?? known[0];
+
+        return await TakeTurnAsync(saveId, home.Id, invite: null, activityId: null, textWith: key, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Something to do at <paramref name="place"/>: one of its type's activities, or the player's shift when it is now.</summary>
+    private Game.Core.Content.PlaceActivity? ActivityFor(PlayState play, PlaceRecord place, string? activityId)
+    {
+        if (activityId is null)
+        {
+            return null;
+        }
+
+        if (activityId == PlayerLife.ShiftId)
+        {
+            return play.Setting.Job is { } job && job.Place == place.Id && PlayerLife.OnShift(job, play.Clock)
+                ? PlayerLife.ShiftActivity(job)
+                : throw new InvalidOperationException("There is no shift to work here now.");
+        }
+
+        return (placeTypes.Get(place.TypeId).Activities ?? []).FirstOrDefault(a => a.Id == activityId)
+            ?? throw new InvalidOperationException($"'{activityId}' is not something to do at {place.Name}.");
+    }
+
+    /// <summary>What the writer is told about the player's life: their job, and what they do most.</summary>
+    private IReadOnlyList<string> PlayerLifeLines(SettingDefinition setting, IReadOnlyDictionary<string, string> flags, string player)
+    {
+        var lines = new List<string>();
+        if (setting.Job is { } job)
+        {
+            lines.Add($"{player} {job.Habit}.");
+        }
+
+        foreach (var (typeId, activityId) in PlayerLife.Pastimes(flags).Where(p => p.TypeId != PlayerLife.JobTypeId).Take(3))
+        {
+            if (placeTypes.All().FirstOrDefault(t => t.Id == typeId)?.Activities?.FirstOrDefault(a => a.Id == activityId) is { } pastime)
+            {
+                lines.Add($"{player} often {pastime.Habit}.");
+            }
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -907,7 +1032,7 @@ public sealed class WorldService(
             present,
             [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
             [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
-            outcome.EncounterId switch
+            (outcome.EncounterId switch
             {
                 JsonEncounterCatalog.QuietCompanyId =>
                     $"{presented.Name} happens to be at {place?.Name ?? outcome.PlaceId}. Show a short, ordinary moment: what they are doing, how they react on noticing the player, maybe a line of dialogue. Nothing important happens.",
@@ -915,10 +1040,16 @@ public sealed class WorldService(
                     $"{presented.Name} is at {place?.Name ?? outcome.PlaceId} because the two of them agreed to meet here now. Show them arriving or already waiting, glad or relieved the player came, and pick up where they left off.",
                 JsonEncounterCatalog.InitiativeId =>
                     $"{presented.Name} has come to {place?.Name ?? outcome.PlaceId} looking for the player, of their own accord, after not seeing them for a while. They take the lead in a way that fits their temper and where things stand between them: say why they came, and ask or suggest something the player can answer. Do not decide the player's answer.",
+                JsonEncounterCatalog.QuietAloneId when outcome.Activity is { } alone =>
+                    $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}; the player came here to {alone}. Show that time through the place, the weather and what happens around it, without saying what the player does, thinks or feels, and without inventing anyone the player could get to know.",
                 JsonEncounterCatalog.QuietAloneId =>
                     $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}. Show the place at this time of day and in this weather, and one small thing going on around, without inventing anyone the player could get to know.",
+                JsonEncounterCatalog.PhoneId =>
+                    $"{presented.Name} and the player are texting. Write only {presented.Name}'s messages: a few short text messages in quotes, what prompted them and what they want to say. Describe no place. End on something the player can answer.",
                 _ => outcome.Text,
-            },
+            }) + (outcome.Activity is { } came && outcome.EncounterId is not (JsonEncounterCatalog.QuietAloneId or JsonEncounterCatalog.PhoneId)
+                ? $" The player came here to {came}."
+                : ""),
             ceiling,
             [.. pack.Expressions.Keys],
             [.. known.Select(p => p.Name)],
@@ -926,7 +1057,8 @@ public sealed class WorldService(
             WeatherOn(saveId, setting, day).Writing,
             OffersChoices: presented.CharacterId is not null && (outcome.Choices ?? []).Count == 0,
             PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
-            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false));
+            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
+            PlayerLife: PlayerLifeLines(setting, flags, names.Player));
 
         var world = new SceneWorld(
             facts,
@@ -1117,7 +1249,8 @@ public sealed class WorldService(
             KnownPlaces: [.. known.Select(p => p.Name)],
             Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
             PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
-            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false));
+            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
+            PlayerLife: PlayerLifeLines(setting, flags, names.Player));
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(

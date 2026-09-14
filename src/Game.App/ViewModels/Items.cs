@@ -21,6 +21,12 @@ public sealed record TemperEndOption(string Id, string Label);
 
 public sealed record OpeningItem(SettingOpening Opening, string Where, ICommand Command);
 
+/// <summary>Doing something at a place: one of its activities, or the player's shift.</summary>
+public sealed record PlaceActivityChoice(PlaceRecord Place, string ActivityId);
+
+/// <summary>Someone to act towards, such as to text.</summary>
+public sealed record PersonTarget(string Key, string Name);
+
 /// <summary>One temper axis in the new-game form, with the writing of whichever end is picked.</summary>
 public sealed partial class TemperAxisItem : ObservableObject
 {
@@ -125,12 +131,16 @@ public sealed partial class PersonCardViewModel(string key, string label, bool i
 }
 
 /// <summary>A place to go, with its background at this slot and weather.</summary>
-public sealed partial class PlaceCardViewModel(PlaceRecord place, string typeName, ICommand command) : ObservableObject
+public sealed partial class PlaceCardViewModel(PlaceRecord place, string typeName, ICommand command, IReadOnlyList<ChoiceItem>? activities = null)
+    : ObservableObject
 {
     [ObservableProperty]
     private Bitmap? _thumbnail;
 
     public PlaceRecord Place { get; } = place;
+
+    /// <summary>What there is to do there besides passing time: the player's shift when it is now, then the place's activities.</summary>
+    public IReadOnlyList<ChoiceItem> Activities { get; } = activities ?? [];
 
     public string Name => Place.Name;
 

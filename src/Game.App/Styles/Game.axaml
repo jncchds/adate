@@ -70,6 +70,14 @@
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
 
+    <!-- Small buttons: something to do at a place, someone to text. -->
+    <Style Selector="Button.chip">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Margin" Value="0,0,4,4" />
+        <Setter Property="CornerRadius" Value="10" />
+    </Style>
+
     <Style Selector="Button.link">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="0,4" />

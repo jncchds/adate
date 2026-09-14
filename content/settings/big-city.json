@@ -4,6 +4,8 @@
   "days": 28,
   "tone": "Contemporary city life: busy weekdays, small moments stolen between work and the commute, warm and a little wistful.",
   "routinePlace": "office",
+  "home": "home-stairwell",
+  "job": {"title":"a junior analyst at Meridian \u0026 Co.","place":"office","slots":["Midday","Afternoon"],"weekdays":[0,1,2,3,4],"trait":"ambition","scene":"work a shift as a junior analyst: reports, a deadline and colleagues at the next desks","habit":"works as a junior analyst at Meridian \u0026 Co."},
   "places": [
     { "id": "office", "type": "office", "name": "Meridian & Co. offices", "details": ["city-view"] },
     { "id": "corner-cafe", "type": "cafe", "name": "The Corner Cup", "details": ["window-seats"] },

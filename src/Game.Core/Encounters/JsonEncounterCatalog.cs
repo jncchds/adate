@@ -51,6 +51,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// </summary>
     public const string DateAgreedKey = "date.agreed";
 
+    /// <summary>A slot spent texting someone whose number the player has: a conversation, from home.</summary>
+    public const string PhoneId = "phone.message";
+
     /// <summary>The first day a first date can happen (plan §1: week 2 opens the relationship).</summary>
     // Was 5: a player with the number on day 3 had two days of nothing to do (user feedback). A first date
     // can now follow as soon as the player has the number; the invite still has to be made on a later turn.

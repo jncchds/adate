@@ -112,6 +112,15 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string? _revealLine;
 
+    /// <summary>Something about the turn itself, such as a missed shift.</summary>
+    [ObservableProperty]
+    private string? _noteLine;
+
+    /// <summary>People whose number the player has, to text from the map.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContacts))]
+    private IReadOnlyList<ChoiceItem> _contacts = [];
+
     [ObservableProperty]
     private IReadOnlyList<ChoiceItem> _choices = [];
 
@@ -186,6 +195,8 @@ public sealed partial class PlayViewModel : PageViewModel
 
     public bool HasNotes => Notes.Count > 0;
 
+    public bool HasContacts => Contacts.Count > 0;
+
     public bool HasRecap => Recap.Count > 0;
 
     /// <summary>Who to bring along on the map, or who to stay with at the end.</summary>
@@ -251,6 +262,8 @@ public sealed partial class PlayViewModel : PageViewModel
         HasPeople = false;
         Places.Clear();
         Lineup.Clear();
+        Contacts = [];
+        NoteLine = null;
 
         if (state.Scene is { } scene)
         {
@@ -345,8 +358,19 @@ public sealed partial class PlayViewModel : PageViewModel
 
             foreach (var place in state.KnownPlaces)
             {
-                Places.Add(new PlaceCardViewModel(place, _placeTypes.Get(place.TypeId).DisplayName, GoCommand));
+                // What there is to do there: the player's shift first when it is now, then the place's own activities.
+                var things = new List<ChoiceItem>();
+                if (state.OnShift && state.Job?.Place == place.Id)
+                {
+                    things.Add(new ChoiceItem("Work your shift", DoCommand, new PlaceActivityChoice(place, PlayerLife.ShiftId)));
+                }
+
+                var type = _placeTypes.Get(place.TypeId);
+                things.AddRange((type.Activities ?? []).Select(a => new ChoiceItem(a.Label, DoCommand, new PlaceActivityChoice(place, a.Id))));
+                Places.Add(new PlaceCardViewModel(place, type.DisplayName, GoCommand, things));
             }
+
+            Contacts = [.. (state.Contacts ?? []).Select(c => new ChoiceItem($"Text {c.Name}", TextCommand, new PersonTarget(c.Key, c.Name)))];
 
             // Everyone met so far stands on the backdrop, left to right, in one slot for each person the
             // story has; the row fills the stage once all of them are met.
@@ -386,6 +410,7 @@ public sealed partial class PlayViewModel : PageViewModel
         WritingText = "Writing the scene…";
         WithLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
         RevealLine = outcome.Reveals.Count > 0 ? $"New place: {string.Join(", ", outcome.Reveals.Select(PlaceName))}" : null;
+        NoteLine = outcome.Note;
         Speaker = scene.Speaker;
         foreach (var exchange in scene.Exchanges)
         {
@@ -693,17 +718,34 @@ public sealed partial class PlayViewModel : PageViewModel
         _invite = card.Key;
     }
 
+    /// <summary>Passing time at a place.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
-    private async Task GoAsync(PlaceCardViewModel? card)
-    {
-        if (card is null)
-        {
-            return;
-        }
+    private Task GoAsync(PlaceCardViewModel? card) =>
+        card is null
+            ? Task.CompletedTask
+            : TurnAsync(card.Place.Name, card.Place, () => _world.TakeTurnAsync(_saveId, card.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite));
 
+    /// <summary>Doing something at a place: one of its activities, or the player's shift.</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private Task DoAsync(object? parameter) =>
+        parameter is PlaceActivityChoice choice
+            ? TurnAsync(choice.Place.Name, choice.Place, () => _world.TakeTurnAsync(
+                _saveId, choice.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite, choice.ActivityId))
+            : Task.CompletedTask;
+
+    /// <summary>Spending the slot texting someone whose number the player has.</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private Task TextAsync(object? parameter) =>
+        parameter is PersonTarget target
+            ? TurnAsync($"Messages · {target.Name}", null, () => _world.TextAsync(_saveId, target.Key))
+            : Task.CompletedTask;
+
+    /// <param name="caption">What the stage says: the place, or the conversation.</param>
+    /// <param name="place">Where the turn is spent, remembered for the map; null for texting.</param>
+    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take)
+    {
         Working = true;
         var token = ++_scene;
-        var place = card.Place;
 
         try
         {
@@ -717,23 +759,28 @@ public sealed partial class PlayViewModel : PageViewModel
             Exchanges.Clear();
             WithLine = null;
             RevealLine = null;
+            NoteLine = null;
             SceneText = null;
-            StageCaption = place.Name;
-            StageLoadingText = $"Drawing {place.Name}…";
+            StageCaption = caption;
+            StageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
             WritingText = "Writing the scene…";
             IsWriting = true;
             Mode = PlayMode.Scene;
             RefreshSceneControls();
             ScrollToTopRequested?.Invoke();
 
-            var outcome = await _world.TakeTurnAsync(_saveId, place.Id, string.IsNullOrEmpty(_invite) ? null : _invite);
+            var outcome = await take();
             _invite = "";
             _outcome = outcome;
-            _stagePlace = place;
+            if (place is not null)
+            {
+                _stagePlace = place;
+            }
 
             Heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
             WithLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
             RevealLine = outcome.Reveals.Count > 0 ? $"New place: {string.Join(", ", outcome.Reveals.Select(PlaceName))}" : null;
+            NoteLine = outcome.Note;
 
             // Whoever the scene is about steps in at their resting expression.
             var presented = await _world.PresentAsync(_saveId, outcome);

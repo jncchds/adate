@@ -16,6 +16,7 @@ public sealed record PacketPerson(string Id, string Name, IReadOnlyList<string> 
 /// <param name="RequiredOutcome">What the encounter says happens: the placeholder text the scene replaces.</param>
 /// <param name="Expressions">The expression slots the pack can draw; the scene must pick one.</param>
 /// <param name="Language">The language the prose is written in; null or English for English.</param>
+/// <param name="PlayerLife">Sentences about the player's job and pastimes, so the people here can bring them up.</param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -34,7 +35,8 @@ public sealed record ScenePacket(
     string? Weather = null,
     bool OffersChoices = false,
     string? PlayerGender = null,
-    string? Language = null);
+    string? Language = null,
+    IReadOnlyList<string>? PlayerLife = null);
 
 public static class ScenePacketBuilder
 {
@@ -121,6 +123,11 @@ public static class ScenePacketBuilder
         if (PlayerPronouns.For(packet.PlayerGender) is { } pronouns)
         {
             text.AppendLine($"Other people refer to {packet.PlayerName} as {pronouns}.");
+        }
+
+        foreach (var line in packet.PlayerLife ?? [])
+        {
+            text.AppendLine(line);
         }
         foreach (var person in packet.Present)
         {

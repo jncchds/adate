@@ -10,6 +10,8 @@
   "promiseKept": 4,
   "promiseBroken": 8,
   "likeHit": 5,
+  "traitLevels": [3, 8],
+  "rapportMax": 2,
   "suspicionOnLearn": 15,
   "stages": {
     "friendAffection": 12,

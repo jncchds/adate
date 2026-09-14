@@ -1423,3 +1423,33 @@ the moment pass" choice felt fake; the model should decide that and report it.
   swimwear with a shirt or shorts over it, or shorts and a tank top. Camp outfits are now summer
   shorts and t-shirts. A date dresses up only at casual and evening places; elsewhere the place's own
   clothes win.
+## Something to do: activities, a job, texting and traits
+
+User feedback: the player had nothing to do but wander from place to place waiting for the next
+meeting. The user chose place activities, a job with shifts, and texting, and that what the player
+does should change how the love interests see them, through traits.
+
+* **Traits** are the eight qualities people already look for (adventure, ambition, kindness, humour,
+  stability, independence, attentiveness, honesty), counted in flags (`player.trait.*`). Every
+  activity and every shift adds one. Two effects, both through C#: anyone present scores the
+  activity's trait like a reply's tag (so someone who values adventure warms to a player seen
+  swimming), and once per shared scene `PlayerLife.Rapport` adds warmth for who the player has
+  become: each trait counts by how much the person values it and its level (levels at 3 and 8,
+  `traitLevels`), divided by three, capped at 2 (`rapportMax`), inside the usual per-scene and per-day
+  clamps. The map says which traits are growing. The writer is told the player's job and three most
+  frequent pastimes ("Alex often swims across the lake"), so conversations can bring them up.
+* **Place activities** are content: one or two per place type (`activities`: label, trait, what the
+  scene is told, a habit), shown as buttons under each place card; the card itself still just passes
+  time. The turn is planned as usual, so a story beat still fires there. A quiet turn becomes a
+  written moment of the activity, told through the place without narrating the player; with company,
+  the scene knows why the player came.
+* **A job** per setting (`job`: title, place, shift slots, weekdays, trait): a junior analyst at
+  Meridian & Co. (midday and afternoon on weekdays), a helper at Harlan's General Store (mornings,
+  Monday to Saturday), a camp counsellor on morning duty every day. When a shift is now, the map says
+  so and the workplace offers "Work your shift", a written moment at work with whoever is there.
+  Spending that slot anywhere else, or texting, costs one stability and the scene notes the missed
+  shift.
+* **Texting**: anyone whose number the player has can be messaged from the map. It spends the slot
+  at home (`home`, per setting), overriding whatever was planned there, as a conversation whose scene
+  is only their messages; it can arrange a meeting, and so a first date.
+* Only the desktop and Android app offer these so far; the web page still passes time at places.

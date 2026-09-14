@@ -4,6 +4,8 @@
   "days": 21,
   "tone": "A summer working as adult staff at a lakeside camp: counsellors and instructors, long days outdoors, and late talks after lights out. Everyone in the story is staff, and every character is an adult.",
   "routinePlace": "staff-cabin",
+  "home": "staff-cabin",
+  "job": {"title":"a camp counsellor","place":"mess-hall","slots":["Morning"],"weekdays":[0,1,2,3,4,5,6],"trait":"kindness","scene":"do morning duty as a counsellor: breakfast, the day\u0027s schedule and the small problems that come with it","habit":"works as a camp counsellor"},
   "places": [
     { "id": "staff-cabin", "type": "staff-cabin", "name": "Staff cabin", "details": ["lantern"] },
     { "id": "mess-hall", "type": "mess-hall", "name": "The mess hall", "details": ["banners"] },

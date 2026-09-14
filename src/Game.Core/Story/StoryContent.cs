@@ -36,6 +36,8 @@ public sealed record StageThresholds(int FriendAffection, int DatingAffection, i
 /// <param name="DesireWeights">Weights of a character's desires, strongest first; also how many they have.</param>
 /// <param name="TagValue">What one tag is worth at weight 1.</param>
 /// <param name="AversionWeight">The weight a character counts against their aversion.</param>
+/// <param name="TraitLevels">How many times the player must show a trait for each level of it, ascending.</param>
+/// <param name="RapportMax">The most affection a scene adds for who the player has become; 0 turns rapport off.</param>
 public sealed record RelationshipRules(
     int PerScene,
     int PerDay,
@@ -50,7 +52,9 @@ public sealed record RelationshipRules(
     int LikeHit,
     int SuspicionOnLearn,
     StageThresholds Stages,
-    IReadOnlyList<TemperModifier> Temper);
+    IReadOnlyList<TemperModifier> Temper,
+    IReadOnlyList<int>? TraitLevels = null,
+    int RapportMax = 0);
 
 public sealed record StoryValues(
     IReadOnlyList<DesireDefinition> Desires,
@@ -208,6 +212,17 @@ public sealed record StoryContent(StoryValues Values, IReadOnlyList<PredicateDef
         }
 
         Unique(Rules.Temper.Select(m => m.End), "temper modifier");
+
+        if (Rules.TraitLevels is { } levels
+            && (levels.Any(l => l <= 0) || levels.Zip(levels.Skip(1)).Any(pair => pair.Second <= pair.First)))
+        {
+            throw new InvalidOperationException("Trait levels must be positive and strictly ascending.");
+        }
+
+        if (Rules.RapportMax < 0 || Rules.RapportMax > Rules.PerScene)
+        {
+            throw new InvalidOperationException("Rapport must be between 0 and the per-scene clamp.");
+        }
     }
 
     /// <summary>Rules that depend on the cast vocabulary.</summary>

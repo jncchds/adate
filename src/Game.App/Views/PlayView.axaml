@@ -105,6 +105,8 @@
                                        IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Classes="small" Text="{Binding RevealLine}"
                                        IsVisible="{Binding RevealLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Classes="note" Text="{Binding NoteLine}"
+                                       IsVisible="{Binding NoteLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                             <ItemsControl ItemsSource="{Binding Exchanges}">
                                 <ItemsControl.ItemTemplate>
@@ -171,6 +173,22 @@
                                 </ItemsControl>
                             </StackPanel>
 
+                            <StackPanel IsVisible="{Binding HasContacts}" Spacing="8">
+                                <TextBlock Classes="h2" Text="Message someone" />
+                                <ItemsControl ItemsSource="{Binding Contacts}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ChoiceItem">
+                                            <Button Classes="chip" Content="{Binding Text}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
                             <TextBlock Classes="h2" Text="Where to" />
                             <ItemsControl ItemsSource="{Binding Places}">
                                 <ItemsControl.ItemsPanel>
@@ -180,7 +198,9 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PlaceCardViewModel">
-                                        <Button Classes="card" Command="{Binding Command}" CommandParameter="{Binding}">
+                                        <!-- The card passes time there; the chips below it do something. -->
+                                        <StackPanel Spacing="4" Margin="0,0,8,10">
+                                        <Button Classes="card" Margin="0" Command="{Binding Command}" CommandParameter="{Binding}">
                                             <StackPanel Spacing="4">
                                                 <Panel Height="90" ClipToBounds="True">
                                                     <Border Classes="wait" />
@@ -192,6 +212,21 @@
                                                 <TextBlock Classes="small" Text="{Binding TypeName}" />
                                             </StackPanel>
                                         </Button>
+                                        <ItemsControl ItemsSource="{Binding Activities}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ChoiceItem">
+                                                    <Button Classes="chip" Command="{Binding Command}" CommandParameter="{Binding Parameter}">
+                                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
