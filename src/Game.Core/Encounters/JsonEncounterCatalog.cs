@@ -22,6 +22,15 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>Priority given to dated setting events, above any authored encounter's default.</summary>
     public const int EventPriority = 100;
 
+    /// <summary>Priority of the opening's beats: above ordinary encounters, below events.</summary>
+    public const int OpeningPriority = 90;
+
+    /// <summary>The first day a first date can happen (plan §1: week 2 opens the relationship).</summary>
+    public const int FirstDateDay = 5;
+
+    /// <summary>The words an encounter's text may ask to have filled in.</summary>
+    public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot"];
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() },
@@ -60,6 +69,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 .. common,
                 .. Read(Path.Combine(directory, setting.Id + ".json")),
                 .. setting.Events.Select(Event),
+                .. OpeningBeats(setting),
             ];
 
             Validate(setting, all);
@@ -81,6 +91,75 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         Days: [ev.Day, ev.Day],
         Priority: EventPriority,
         Text: $"{ev.Name} is happening here today. (Placeholder: the event scene.)");
+
+    /// <summary>
+    /// The four beats of meeting the main LI (plan §4), the same shape for every opening so the
+    /// systems under them are tested once: meet, recognise at the home place (re-armed once at a
+    /// second place), a contact choice inside the recognise scene, and a first date from day 5 that
+    /// the player invites the main LI to.
+    /// </summary>
+    private static IEnumerable<EncounterDefinition> OpeningBeats(SettingDefinition setting)
+    {
+        EncounterChoice[] contact =
+        [
+            new("swap-numbers", "Ask for their number", ["main_li.contact"]),
+            new("let-it-go", "Let the moment pass", ["main_li.contact_declined"]),
+        ];
+
+        foreach (var opening in setting.Openings)
+        {
+            var chosen = $"opening={opening.Id}";
+
+            yield return new EncounterDefinition(
+                $"opening.{opening.Id}.meet",
+                new EncounterPlace(Id: opening.MeetingPlace),
+                Days: [1, 2],
+                Requires: [chosen, "!main_li.met"],
+                Sets: ["main_li.met"],
+                With: ["main_li"],
+                Priority: OpeningPriority,
+                Text: $"{opening.Hook} That is how you meet {{main_li}}. (Placeholder: the meeting scene.)");
+
+            yield return new EncounterDefinition(
+                $"opening.{opening.Id}.recognise",
+                new EncounterPlace(Id: opening.HomePlace),
+                Time: [opening.Time],
+                Days: [2, 4],
+                Requires: [chosen, "main_li.met", "!main_li.recognised"],
+                Sets: ["main_li.recognised"],
+                With: ["main_li"],
+                Priority: OpeningPriority - 5,
+                Text: $"{{main_li}} is at {{place}} again, {opening.HomeWindow}, just as they said, and they recognise you straight away. (Placeholder: the second meeting.)",
+                Choices: contact);
+
+            if (opening.SecondPlace is { } second)
+            {
+                yield return new EncounterDefinition(
+                    $"opening.{opening.Id}.recognise-late",
+                    new EncounterPlace(Id: second),
+                    Days: [5, 7],
+                    Requires: [chosen, "main_li.met", "!main_li.recognised"],
+                    Sets: ["main_li.recognised", "main_li.recognised_late"],
+                    With: ["main_li"],
+                    Priority: OpeningPriority - 5,
+                    Text: "You run into {main_li} at {place}, one of the places they mentioned. It takes them a second, and then they smile. (Placeholder: the second chance.)",
+                    Choices: contact);
+            }
+        }
+
+        if (setting.Openings.Count > 0)
+        {
+            yield return new EncounterDefinition(
+                "beat.first-date",
+                new EncounterPlace(),
+                Days: [FirstDateDay, setting.Days],
+                Requires: ["main_li.contact", "!main_li.first_date", $"{EncounterEvaluator.InviteKey}=main_li"],
+                Sets: ["main_li.first_date"],
+                With: ["main_li"],
+                Priority: OpeningPriority + 5,
+                Text: "You and {main_li} spend the {slot} at {place}. Neither of you calls it a date, and both of you know it is one. (Placeholder: the first date.)");
+        }
+    }
 
     private static void Validate(SettingDefinition setting, IReadOnlyList<EncounterDefinition> encounters)
     {
@@ -154,8 +233,42 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
             {
                 Fail("has no text.");
             }
+
+            var choiceIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var choice in encounter.Choices ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(choice.Id) || !choiceIds.Add(choice.Id) || string.IsNullOrWhiteSpace(choice.Text))
+                {
+                    Fail($"has a choice with a blank or duplicate id, or no text.");
+                }
+
+                foreach (var set in choice.Sets ?? [])
+                {
+                    if (!FlagAssignment().IsMatch(set))
+                    {
+                        Fail($"choice '{choice.Id}' sets '{set}', which is not key or key=value.");
+                    }
+                }
+            }
+
+            if (encounter.Choices is { Count: 1 })
+            {
+                Fail("offers a choice with only one answer.");
+            }
+
+            var texts = (encounter.Choices ?? []).Select(c => c.Text).Append(encounter.Text);
+            foreach (Match token in texts.SelectMany(t => Token().Matches(t)))
+            {
+                if (!TextTokens.Contains(token.Groups[1].Value, StringComparer.Ordinal))
+                {
+                    Fail($"uses '{token.Value}' in its text. Known: {string.Join(", ", TextTokens.Select(t => "{" + t + "}"))}.");
+                }
+            }
         }
     }
+
+    [GeneratedRegex(@"\{([^{}]*)\}")]
+    private static partial Regex Token();
 
     private static IReadOnlyList<EncounterDefinition> Read(string path) =>
         File.Exists(path)

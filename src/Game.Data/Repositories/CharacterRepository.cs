@@ -10,9 +10,13 @@ public sealed class CharacterRepository(Database database)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <param name="name">The main LI's name, as the player gave it.</param>
+    /// <param name="temper">Axis id to end id, as the player chose it.</param>
     public async Task<CharacterRecord> CreateAsync(
         SaveId saveId,
         CharacterAppearance appearance,
+        string? name = null,
+        IReadOnlyDictionary<string, string>? temper = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(appearance);
@@ -33,14 +37,16 @@ public sealed class CharacterRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            INSERT INTO character (id, save_id, age, appearance_json)
-            VALUES ($id, $save, $age, $appearance);
+            INSERT INTO character (id, save_id, age, appearance_json, name, temper_json)
+            VALUES ($id, $save, $age, $appearance, $name, $temper);
             """;
 
         command.Parameters.AddWithValue("$id", record.Id.ToString());
         command.Parameters.AddWithValue("$save", saveId.ToString());
         command.Parameters.AddWithValue("$age", appearance.Age);
         command.Parameters.AddWithValue("$appearance", JsonSerializer.Serialize(appearance, Json));
+        command.Parameters.AddWithValue("$name", (object?)name ?? DBNull.Value);
+        command.Parameters.AddWithValue("$temper", temper is null ? DBNull.Value : JsonSerializer.Serialize(temper, Json));
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return record;
@@ -137,9 +143,14 @@ public sealed class CharacterRepository(Database database)
         await using (var update = connection.CreateCommand())
         {
             update.Transaction = transaction;
+            // Each field only where it is still empty: a temper the player chose at creation is
+            // kept, and the want and aesthetic generated alongside it are filled in.
             update.CommandText = """
-                UPDATE character SET temper_json = $temper, want_id = $want, aesthetic = $aesthetic
-                WHERE id = $id AND variant_of IS NULL AND temper_json IS NULL;
+                UPDATE character
+                SET temper_json = COALESCE(temper_json, $temper),
+                    want_id = COALESCE(want_id, $want),
+                    aesthetic = COALESCE(aesthetic, $aesthetic)
+                WHERE id = $id AND variant_of IS NULL;
                 """;
             update.Parameters.AddWithValue("$id", main.Id.ToString());
             update.Parameters.AddWithValue("$temper", JsonSerializer.Serialize(lead.Temper, Json));
@@ -200,7 +211,7 @@ public sealed class CharacterRepository(Database database)
         command.CommandText = """
             SELECT appearance_json, anchor_seed, profile_id, variation_json, temper_json, want_id, aesthetic
             FROM character
-            WHERE (id = $id AND variant_of IS NULL AND temper_json IS NOT NULL) OR variant_of = $id
+            WHERE (id = $id AND variant_of IS NULL AND want_id IS NOT NULL) OR variant_of = $id
             ORDER BY variant_of IS NOT NULL, rowid;
             """;
 
@@ -223,6 +234,49 @@ public sealed class CharacterRepository(Database database)
         }
 
         return members.Count > 0 && members[0].IsMain ? members : null;
+    }
+
+    /// <summary>The save's main love interest: its first character that is not a variant.</summary>
+    public async Task<CharacterRecord?> GetMainAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT id, save_id, appearance_json, anchor_image_hash, anchor_seed, lora_path
+            FROM character
+            WHERE save_id = $save AND variant_of IS NULL
+            ORDER BY rowid
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false) ? Map(reader) : null;
+    }
+
+    public async Task<string?> GetNameAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT name FROM character WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>?> GetTemperAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT temper_json FROM character WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is string json
+            ? JsonSerializer.Deserialize<Dictionary<string, string>>(json, Json)
+            : null;
     }
 
     public async Task<CharacterRecord?> GetAsync(Guid id, CancellationToken ct = default)

@@ -295,6 +295,71 @@ button.active {
     font-size: 0.75rem;
 }
 
+.choices {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+}
+
+.invite {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+}
+
+/* New game ------------------------------------------------------------------ */
+
+.save-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.3rem;
+}
+
+.save-list small {
+    color: var(--muted);
+    margin-left: 0.5rem;
+}
+
+.setting-choices,
+.opening-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.setting-choice,
+.opening-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.75rem;
+    background: var(--field-bg);
+}
+
+.setting-choice.selected {
+    border-color: var(--accent);
+}
+
+.setting-choice small,
+.opening-choice small {
+    color: var(--muted);
+}
+
+.opening-choice p {
+    margin: 0;
+}
+
+.opening-choice button {
+    align-self: flex-start;
+    margin-top: auto;
+}
+
 .encounter-text {
     font-size: 1.05rem;
     max-width: 46rem;

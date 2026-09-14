@@ -478,6 +478,93 @@ public class DatabaseTests
         Assert.Equal(0, await state.CountAloneVisitsAsync(save.Id, "low-tide"));
     }
 
+    [Fact]
+    public async Task Choosing_an_opening_starts_the_clock_sets_flags_and_reveals_places_once()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13, "big-city", "Alex", "woman");
+        await places.AddAsync([Place(save.Id, "riverside-park"), Place(save.Id, "low-tide", known: false)]);
+
+        var start = new Game.Core.World.ClockState(1, Game.Core.Scenes.TimeOfDay.Evening);
+        await state.StartOpeningAsync(save.Id, "lost-and-found", "riverside-park", start, ["riverside-park", "low-tide"]);
+
+        Assert.Equal(start, await state.GetOrStartClockAsync(save.Id));
+        var flags = await state.GetFlagsAsync(save.Id);
+        Assert.Equal("lost-and-found", flags["opening"]);
+        Assert.Equal("riverside-park", flags["main_li.home_place"]);
+        Assert.True((await places.GetAsync(save.Id, "low-tide"))!.Known);
+        Assert.Equal("Alex", await saves.GetPlayerNameAsync(save.Id));
+        Assert.Equal("big-city", await saves.GetSettingIdAsync(save.Id));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            state.StartOpeningAsync(save.Id, "shared-table", "corner-cafe", Game.Core.World.ClockState.Start, []));
+    }
+
+    [Fact]
+    public async Task A_choice_is_answered_once_and_only_when_it_is_open()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+        var state = new GameStateRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "corner-cafe")]);
+        var start = await state.GetOrStartClockAsync(save.Id);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            state.ResolveChoiceAsync(save.Id, "opening.shared-table.recognise", "swap-numbers", new Dictionary<string, string>()));
+
+        var turn = Turn(start, "corner-cafe") with
+        {
+            FlagsToSet = new Dictionary<string, string> { ["pending.choice"] = "opening.shared-table.recognise" },
+        };
+        await state.CommitTurnAsync(save.Id, turn);
+
+        await state.ResolveChoiceAsync(save.Id, "opening.shared-table.recognise", "swap-numbers",
+            new Dictionary<string, string> { ["main_li.contact"] = "true" });
+
+        var flags = await state.GetFlagsAsync(save.Id);
+        Assert.Equal("false", flags["pending.choice"]);
+        Assert.Equal("true", flags["main_li.contact"]);
+        Assert.Equal("swap-numbers", flags["choice.opening.shared-table.recognise"]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            state.ResolveChoiceAsync(save.Id, "opening.shared-table.recognise", "let-it-go", new Dictionary<string, string>()));
+    }
+
+    [Fact]
+    public async Task A_main_LI_is_stored_with_their_name_and_chosen_temper()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var temper = new Dictionary<string, string> { ["temper"] = "fiery", ["energy"] = "reserved" };
+        var main = await characters.CreateAsync(save.Id, Appearance(), "Sam", temper);
+
+        Assert.Equal(main.Id, (await characters.GetMainAsync(save.Id))!.Id);
+        Assert.Equal("Sam", await characters.GetNameAsync(main.Id));
+        Assert.Equal(temper, await characters.GetTemperAsync(main.Id));
+
+        // A temper chosen at creation is not a stored cast: the cast is built later, on approval.
+        Assert.Null(await characters.GetCastAsync(main.Id));
+
+        // Storing the cast keeps the chosen temper and fills in want and aesthetic.
+        await characters.SetAnchorAsync(main.Id, new string('a', 64), anchorSeed: 1);
+        var anchored = (await characters.GetAsync(main.Id))!;
+        await characters.SaveCastAsync(anchored, Lead(anchored.Appearance), [Variant(anchored.Appearance)]);
+
+        var cast = await characters.GetCastAsync(main.Id);
+        Assert.Equal("fiery", cast![0].Temper["temper"]);
+        Assert.Equal("open-a-bakery", cast[0].WantId);
+    }
+
     // -------------------------------------------------------------------- cast
 
     private static CastMember Lead(CharacterAppearance appearance) => new(

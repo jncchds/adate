@@ -9,6 +9,10 @@ public sealed record SettingPlace(string Id, string Type, string Name, IReadOnly
 
 /// <param name="HomePlace">Where the main LI can be found again after meeting (plan §4).</param>
 /// <param name="HomeWindow">When they are there, as the writing describes it.</param>
+/// <param name="SecondPlace">
+/// Where the recognise beat re-arms if the player misses the home place on days 2-4: a second
+/// place the main LI mentioned.
+/// </param>
 public sealed record SettingOpening(
     string Id,
     string Name,
@@ -16,7 +20,8 @@ public sealed record SettingOpening(
     TimeOfDay Time,
     string HomePlace,
     string HomeWindow,
-    string Hook);
+    string Hook,
+    string? SecondPlace = null);
 
 /// <summary>A dated set piece where several cast members are in one place (plan §7).</summary>
 public sealed record SettingEvent(string Id, string Name, int Day, string Place, TimeOfDay Time);

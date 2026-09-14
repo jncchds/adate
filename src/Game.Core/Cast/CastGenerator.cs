@@ -88,8 +88,8 @@ public static class CastGenerator
         [LookDimensions.HairColor, LookDimensions.EyeColor, LookDimensions.HairStyle, LookDimensions.Aesthetic];
 
     /// <summary>
-    /// A temper, want and aesthetic for a main LI who has none stored. Stand-in until the new-game
-    /// flow asks the player for them (plan build step 5); deterministic from the anchor seed.
+    /// A main LI with a stored temper for a save created before the new-game flow asked for one.
+    /// The temper is deterministic from the anchor seed; want and aesthetic come from <see cref="Main"/>.
     /// </summary>
     public static CastMember PlaceholderMain(
         CharacterAppearance appearance,
@@ -97,8 +97,6 @@ public static class CastGenerator
         CastContent content,
         long anchorSeed)
     {
-        ArgumentNullException.ThrowIfNull(appearance);
-        ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(content);
 
         var rng = new Rng(Hash(anchorSeed, "main"));
@@ -109,12 +107,43 @@ public static class CastGenerator
             temper[axis.Id] = rng.Pick(axis.Ends).Id;
         }
 
+        return Main(appearance, temper, subject, content, anchorSeed);
+    }
+
+    /// <summary>
+    /// The main LI as the player described them, temper included. Their want and aesthetic are not
+    /// asked for: the want is a story fact the player discovers, and the aesthetic follows the temper.
+    /// Both are deterministic from the anchor seed.
+    /// </summary>
+    public static CastMember Main(
+        CharacterAppearance appearance,
+        IReadOnlyDictionary<string, string> temper,
+        SubjectProfile subject,
+        CastContent content,
+        long anchorSeed)
+    {
+        ArgumentNullException.ThrowIfNull(appearance);
+        ArgumentNullException.ThrowIfNull(temper);
+        ArgumentNullException.ThrowIfNull(subject);
+        ArgumentNullException.ThrowIfNull(content);
+
+        foreach (var axis in content.Temper)
+        {
+            if (!temper.TryGetValue(axis.Id, out var end) || axis.Ends.All(e => e.Id != end))
+            {
+                throw new ArgumentException($"The temper has no valid end for axis '{axis.Id}'.", nameof(temper));
+            }
+        }
+
+        var rng = new Rng(Hash(anchorSeed, "main-want"));
+
         var want = rng.Pick(content.Wants).Id;
 
         var aesthetics = subject.Aesthetics?.Keys.Order(StringComparer.Ordinal).ToList() ?? [];
         var aesthetic = aesthetics.Count == 0 ? "" : Leaning(temper, content, aesthetics, rng);
 
-        return new CastMember(null, appearance, aesthetic, temper, want, anchorSeed, []);
+        return new CastMember(
+            null, appearance, aesthetic, new Dictionary<string, string>(temper, StringComparer.Ordinal), want, anchorSeed, []);
     }
 
     /// <summary>One member per contrast profile, in content order.</summary>

@@ -102,7 +102,13 @@ else
         try
         {
             await Studio.ApproveAnchorAsync(_character.Id, _selected);
-            Navigation.NavigateTo($"/scene/{_character.Id}");
+
+            // The cast is built now, as records with no art, from the approved look (plan §3).
+            var approved = await Characters.GetAsync(_character.Id)
+                ?? throw new InvalidOperationException($"No character with id {_character.Id}.");
+            await Studio.EnsureCastAsync(approved);
+
+            Navigation.NavigateTo($"/opening/{_character.SaveId.Value}");
         }
         catch (Exception ex)
         {

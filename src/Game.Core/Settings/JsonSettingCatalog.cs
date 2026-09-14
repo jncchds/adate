@@ -144,6 +144,11 @@ public sealed class JsonSettingCatalog : ISettingCatalog
             {
                 Fail($"opening '{opening.Id}' has home place '{opening.HomePlace}', which is not one of its places.");
             }
+
+            if (opening.SecondPlace is null || !Exists(opening.SecondPlace) || opening.SecondPlace == opening.HomePlace)
+            {
+                Fail($"opening '{opening.Id}' needs a second place, one of its places other than the home place, where a missed recognise beat re-arms.");
+            }
         }
 
         foreach (var ev in setting.Events)

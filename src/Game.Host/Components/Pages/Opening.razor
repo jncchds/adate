@@ -1,0 +1,92 @@
+@page "/opening/{SaveGuid:guid}"
+@using Game.Core.Saves
+@using Game.Core.Settings
+@using Game.Host.Services
+@inject WorldService World
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>How you meet</PageTitle>
+
+@if (_error is not null)
+{
+    <h1>How you meet</h1>
+    <div class="error">
+        <strong>Something went wrong.</strong>
+        <p>@_error</p>
+        <button @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_state is null)
+{
+    <h1>How you meet</h1>
+    <div class="working"><p>Loading the save.</p></div>
+}
+else if (_state.Opening is not null)
+{
+    <h1>@_state.Opening.Name</h1>
+    <p class="lede">This save has already begun.</p>
+    <p><a href="/play/@SaveGuid">Continue playing</a></p>
+}
+else
+{
+    <h1>How you meet @_state.MainLiName</h1>
+
+    <p class="lede">@_state.Setting.DisplayName. Choose how the story starts.</p>
+
+    <div class="opening-choices">
+        @foreach (var opening in _state.Setting.Openings)
+        {
+            <div class="opening-choice">
+                <strong>@opening.Name</strong>
+                <p>@opening.Hook</p>
+                <small>@PlaceName(opening.MeetingPlace), @opening.Time.ToString().ToLowerInvariant()</small>
+                <button type="button" disabled="@_working" @onclick="() => ChooseAsync(opening)">Start here</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid SaveGuid { get; set; }
+
+    private PlayState? _state;
+    private bool _working;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+
+        try
+        {
+            _state = await World.GetPlayStateAsync(new SaveId(SaveGuid));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ChooseAsync(SettingOpening opening)
+    {
+        _working = true;
+
+        try
+        {
+            await World.ChooseOpeningAsync(new SaveId(SaveGuid), opening.Id);
+            Navigation.NavigateTo($"/play/{SaveGuid}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _working = false;
+        }
+    }
+
+    private string PlaceName(string placeId) =>
+        _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;
+}

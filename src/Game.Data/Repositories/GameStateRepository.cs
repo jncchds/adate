@@ -69,6 +69,145 @@ public sealed class GameStateRepository(Database database)
     }
 
     /// <summary>
+    /// Records the player's choice of opening in one transaction: the clock starts at the opening's
+    /// time, the opening and the main LI's home place are stored as flags, and the opening's places
+    /// become known. Refused once an opening is chosen or a turn has been taken, so a save's start
+    /// cannot be rewritten after the fact.
+    /// </summary>
+    public async Task StartOpeningAsync(
+        SaveId saveId,
+        string openingId,
+        string homePlaceId,
+        ClockState start,
+        IReadOnlyList<string> reveal,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(openingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(homePlaceId);
+        ArgumentNullException.ThrowIfNull(reveal);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await using (var check = connection.CreateCommand())
+        {
+            check.Transaction = transaction;
+            check.CommandText = """
+                SELECT (SELECT COUNT(*) FROM flag WHERE save_id = $save AND key = 'opening')
+                     + (SELECT COUNT(*) FROM visit WHERE save_id = $save);
+                """;
+            check.Parameters.AddWithValue("$save", saveId.ToString());
+
+            if ((long)(await check.ExecuteScalarAsync(ct).ConfigureAwait(false))! > 0)
+            {
+                throw new InvalidOperationException($"Save '{saveId}' has already started; its opening cannot be chosen again.");
+            }
+        }
+
+        await using (var clock = connection.CreateCommand())
+        {
+            clock.Transaction = transaction;
+            clock.CommandText = """
+                INSERT INTO game_clock (save_id, day, slot) VALUES ($save, $day, $slot)
+                ON CONFLICT(save_id) DO UPDATE SET day = excluded.day, slot = excluded.slot;
+                """;
+            clock.Parameters.AddWithValue("$save", saveId.ToString());
+            clock.Parameters.AddWithValue("$day", start.Day);
+            clock.Parameters.AddWithValue("$slot", start.Slot.ToString());
+            await clock.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        await UpsertFlagsAsync(connection, transaction, saveId, new Dictionary<string, string>
+        {
+            ["opening"] = openingId,
+            ["main_li.home_place"] = homePlaceId,
+        }, ct).ConfigureAwait(false);
+
+        foreach (var placeId in reveal)
+        {
+            await using var known = connection.CreateCommand();
+            known.Transaction = transaction;
+            known.CommandText = """
+                UPDATE place SET known = 1, first_day = COALESCE(first_day, $day)
+                WHERE save_id = $save AND id = $place;
+                """;
+            known.Parameters.AddWithValue("$save", saveId.ToString());
+            known.Parameters.AddWithValue("$place", placeId);
+            known.Parameters.AddWithValue("$day", start.Day);
+            await known.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Answers an open choice in one transaction: closes it, records the answer and sets its flags.
+    /// Refused unless <paramref name="encounterId"/>'s choice is the one open, so an answer cannot
+    /// be given twice or to a choice that was never offered.
+    /// </summary>
+    public async Task ResolveChoiceAsync(
+        SaveId saveId,
+        string encounterId,
+        string choiceId,
+        IReadOnlyDictionary<string, string> flags,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(encounterId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(choiceId);
+        ArgumentNullException.ThrowIfNull(flags);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await using (var close = connection.CreateCommand())
+        {
+            close.Transaction = transaction;
+            close.CommandText = """
+                UPDATE flag SET value = 'false'
+                WHERE save_id = $save AND key = $key AND value = $encounter;
+                """;
+            close.Parameters.AddWithValue("$save", saveId.ToString());
+            close.Parameters.AddWithValue("$key", EncounterEvaluator.PendingChoiceKey);
+            close.Parameters.AddWithValue("$encounter", encounterId);
+
+            if (await close.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
+            {
+                throw new InvalidOperationException($"Save '{saveId}' has no open choice for '{encounterId}'.");
+            }
+        }
+
+        var all = new Dictionary<string, string>(flags, StringComparer.Ordinal)
+        {
+            [EncounterEvaluator.ChoiceKey(encounterId)] = choiceId,
+        };
+
+        await UpsertFlagsAsync(connection, transaction, saveId, all, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    private static async Task UpsertFlagsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        SaveId saveId,
+        IReadOnlyDictionary<string, string> flags,
+        CancellationToken ct)
+    {
+        foreach (var (key, value) in flags)
+        {
+            await using var flag = connection.CreateCommand();
+            flag.Transaction = transaction;
+            flag.CommandText = """
+                INSERT INTO flag (save_id, key, value) VALUES ($save, $key, $value)
+                ON CONFLICT(save_id, key) DO UPDATE SET value = excluded.value;
+                """;
+            flag.Parameters.AddWithValue("$save", saveId.ToString());
+            flag.Parameters.AddWithValue("$key", key);
+            flag.Parameters.AddWithValue("$value", value);
+            await flag.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Applies a turn in one transaction: advances the clock, records the visit, sets flags and
     /// reveals places. The clock only advances from the slot the turn was planned at, so a turn
     /// planned twice from the same state (a double click, two tabs) is applied once and the second
@@ -117,19 +256,7 @@ public sealed class GameStateRepository(Database database)
             await visit.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
 
-        foreach (var (key, value) in outcome.FlagsToSet)
-        {
-            await using var flag = connection.CreateCommand();
-            flag.Transaction = transaction;
-            flag.CommandText = """
-                INSERT INTO flag (save_id, key, value) VALUES ($save, $key, $value)
-                ON CONFLICT(save_id, key) DO UPDATE SET value = excluded.value;
-                """;
-            flag.Parameters.AddWithValue("$save", saveId.ToString());
-            flag.Parameters.AddWithValue("$key", key);
-            flag.Parameters.AddWithValue("$value", value);
-            await flag.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
+        await UpsertFlagsAsync(connection, transaction, saveId, outcome.FlagsToSet, ct).ConfigureAwait(false);
 
         foreach (var placeId in outcome.Reveals)
         {

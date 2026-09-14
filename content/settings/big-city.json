@@ -21,6 +21,7 @@
       "meetingPlace": "corner-cafe",
       "time": "Morning",
       "homePlace": "corner-cafe",
+      "secondPlace": "riverside-park",
       "homeWindow": "weekday mornings",
       "hook": "The last free seat is at their table, and they are reading a book you know."
     },
@@ -30,6 +31,7 @@
       "meetingPlace": "riverside-park",
       "time": "Evening",
       "homePlace": "riverside-park",
+      "secondPlace": "corner-cafe",
       "homeWindow": "evenings on the footpath",
       "hook": "They drop something on the footpath, and you are the one who picks it up."
     },
@@ -39,6 +41,7 @@
       "meetingPlace": "home-stairwell",
       "time": "Afternoon",
       "homePlace": "home-stairwell",
+      "secondPlace": "corner-cafe",
       "homeWindow": "afternoons",
       "hook": "Moving day, and a box too heavy for one person."
     }

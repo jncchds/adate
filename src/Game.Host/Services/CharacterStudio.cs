@@ -313,6 +313,37 @@ public sealed class CharacterStudio(
     /// their own aesthetic. Nothing is stored: the cast is deterministic from the character, so it
     /// is rebuilt on request and the images are served from the content-addressed cache.
     /// </summary>
+    /// <summary>
+    /// The save's cast as records, built and stored the first time it is asked for (plan §3: the cast
+    /// is generated at new game, with no art). The main LI's temper is the one the player chose; a
+    /// save created before the new-game flow gets a placeholder temper instead.
+    /// </summary>
+    public async Task<IReadOnlyList<CastMember>> EnsureCastAsync(CharacterRecord main, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(main);
+
+        var stored = await characters.GetCastAsync(main.Id, ct).ConfigureAwait(false);
+        if (stored is not null)
+        {
+            return stored;
+        }
+
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        cast.ValidateAgainst(pack);
+
+        var subject = pack.SubjectFor(main.Appearance.Subject);
+        var anchorSeed = main.AnchorSeed ?? DeriveSeed(main.Id, 0);
+        var temper = await characters.GetTemperAsync(main.Id, ct).ConfigureAwait(false);
+
+        var lead = temper is null
+            ? CastGenerator.PlaceholderMain(main.Appearance, subject, cast, anchorSeed)
+            : CastGenerator.Main(main.Appearance, temper, subject, cast, anchorSeed);
+        var variants = CastGenerator.For(lead, subject, cast, DeriveSeed(main.Id, 1000));
+
+        await characters.SaveCastAsync(main, lead, variants, ct).ConfigureAwait(false);
+        return [lead, .. variants];
+    }
+
     public Task<IReadOnlyList<CastPortrait>> GenerateCastAsync(CharacterRecord main) =>
         jobs.RunAsync($"cast:{main.Id}", ct => GenerateCastCoreAsync(main, ct));
 
@@ -324,18 +355,7 @@ public sealed class CharacterStudio(
 
         cast.ValidateAgainst(pack);
 
-        // Built once and stored, so the cast is fixed for the save. The main LI's temper, want and
-        // aesthetic are still placeholders until the new-game flow asks for them.
-        var members = await characters.GetCastAsync(main.Id, ct).ConfigureAwait(false);
-        if (members is null)
-        {
-            var lead = CastGenerator.PlaceholderMain(
-                main.Appearance, subject, cast, main.AnchorSeed ?? DeriveSeed(main.Id, 0));
-            var variants = CastGenerator.For(lead, subject, cast, DeriveSeed(main.Id, 1000));
-
-            await characters.SaveCastAsync(main, lead, variants, ct).ConfigureAwait(false);
-            members = [lead, .. variants];
-        }
+        var members = await EnsureCastAsync(main, ct).ConfigureAwait(false);
 
         var results = new List<CastPortrait>(members.Count);
 

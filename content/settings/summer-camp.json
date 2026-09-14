@@ -20,6 +20,7 @@
       "meetingPlace": "mess-hall",
       "time": "Morning",
       "homePlace": "mess-hall",
+      "secondPlace": "lake-dock",
       "homeWindow": "staff breakfast",
       "hook": "Orientation pairs you up for the name game, and they already know yours."
     },
@@ -29,6 +30,7 @@
       "meetingPlace": "boathouse",
       "time": "Afternoon",
       "homePlace": "boathouse",
+      "secondPlace": "mess-hall",
       "homeWindow": "afternoons between sessions",
       "hook": "You are both assigned to count every paddle in the boathouse, and the count keeps coming out different."
     },
@@ -38,6 +40,7 @@
       "meetingPlace": "campfire-circle",
       "time": "Evening",
       "homePlace": "campfire-circle",
+      "secondPlace": "staff-lounge",
       "homeWindow": "evenings after the campers are in bed",
       "hook": "The staff campfire after the first long day, and the only space left on the log is beside them."
     }

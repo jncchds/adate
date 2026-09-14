@@ -338,7 +338,11 @@ Each step ends in something that runs.
 4. **Clock, encounters and a map screen**, with no LLM and placeholder text. *Done: five-slot
    clock, encounters as validated content with setting events added, atomic turns, and
    `/play/{saveId}` (`decisions.md`).*
-5. **New game and the openings** (§3-4), in `big-city` first.
+5. **New game and the openings** (§3-4), in `big-city` first. *Done for all three settings:
+   the new-game form with setting, player, main LI name and temper; the cast built on approval;
+   `/opening/{saveId}`; the four beats generated from each opening's places, with a stored contact
+   choice and an invite to the first date. Played through in `big-city`, and every opening is
+   unit-tested.*
 6. **Story state with no LLM** (§6, §8), unit-tested with authored scenes:
    * facts and knowledge;
    * wants and scoring;

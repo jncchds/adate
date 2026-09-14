@@ -272,6 +272,30 @@ public class CastGeneratorTests
     }
 
     [Fact]
+    public void The_main_LI_keeps_the_temper_the_player_chose()
+    {
+        var content = Shipped();
+        var chosen = content.Temper.ToDictionary(a => a.Id, a => a.Ends[1].Id);
+
+        var main = CastGenerator.Main(Declared(), chosen, Subject(), content, anchorSeed: 7);
+
+        Assert.Equal(chosen, main.Temper);
+        Assert.True(main.IsMain);
+        Assert.Contains(content.Wants, w => w.Id == main.WantId);
+    }
+
+    [Fact]
+    public void A_temper_missing_an_axis_is_refused()
+    {
+        var content = Shipped();
+        var partial = content.Temper.Skip(1).ToDictionary(a => a.Id, a => a.Ends[0].Id);
+
+        var ex = Assert.Throws<ArgumentException>(() => CastGenerator.Main(Declared(), partial, Subject(), content, anchorSeed: 7));
+
+        Assert.Contains(content.Temper[0].Id, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Resting_expression_is_the_majority_of_temper_ends()
     {
         var content = Shipped();

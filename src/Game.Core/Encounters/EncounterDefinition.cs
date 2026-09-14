@@ -23,7 +23,13 @@ public sealed record EncounterPlace(string? Id = null, string? PlaceFlag = null,
 /// <param name="Reveals">Place ids that become known.</param>
 /// <param name="With">Who is there: <c>main_li</c> or <c>variant:{route}</c>. Recorded on the visit.</param>
 /// <param name="Priority">Higher wins when several match. Setting events use <c>100</c>.</param>
-/// <param name="Text">Placeholder prose until the LLM writes scenes (build step 9).</param>
+/// <param name="Text">
+/// Placeholder prose until the LLM writes scenes (build step 9). May use <c>{main_li}</c>,
+/// <c>{player}</c>, <c>{place}</c> and <c>{slot}</c>, filled in when shown.
+/// </param>
+/// <param name="Choices">
+/// A choice the player makes before the next turn. While one is open, no turn can be taken.
+/// </param>
 public sealed record EncounterDefinition(
     string Id,
     EncounterPlace Place,
@@ -35,7 +41,11 @@ public sealed record EncounterDefinition(
     IReadOnlyList<string>? Reveals = null,
     IReadOnlyList<string>? With = null,
     int Priority = 50,
-    string Text = "");
+    string Text = "",
+    IReadOnlyList<EncounterChoice>? Choices = null);
+
+/// <summary>One answer to an encounter's choice. Its flags are set when the player picks it.</summary>
+public sealed record EncounterChoice(string Id, string Text, IReadOnlyList<string>? Sets = null);
 
 public interface IEncounterCatalog
 {

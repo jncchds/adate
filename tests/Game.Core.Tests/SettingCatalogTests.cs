@@ -29,7 +29,7 @@ public sealed class SettingCatalogTests : IDisposable
     {
         string[] times = ["Morning", "Afternoon", "Evening", "Night"];
         var list = Enumerable.Range(0, openings).Select(i =>
-            $$"""{ "id": "o{{i}}", "name": "Opening {{i}}", "meetingPlace": "cafe-1", "time": "{{times[i % times.Length]}}", "homePlace": "cafe-1", "homeWindow": "mornings", "hook": "Hook." }""");
+            $$"""{ "id": "o{{i}}", "name": "Opening {{i}}", "meetingPlace": "cafe-1", "time": "{{times[i % times.Length]}}", "homePlace": "cafe-1", "secondPlace": "alley-1", "homeWindow": "mornings", "hook": "Hook." }""");
 
         return $$"""
             {

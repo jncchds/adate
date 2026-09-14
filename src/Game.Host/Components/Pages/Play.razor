@@ -17,7 +17,7 @@
     <div class="error">
         <strong>Something went wrong.</strong>
         <p>@_error</p>
-        <button @onclick="LoadAsync">Try again</button>
+        <button @onclick="RetryAsync">Try again</button>
     </div>
 }
 else if (_state is null)
@@ -40,7 +40,7 @@ else if (_outcome is not null)
 
     @if (_outcome.With.Count > 0)
     {
-        <p class="encounter-with">With: @string.Join(", ", _outcome.With)</p>
+        <p class="encounter-with">With: @string.Join(", ", _outcome.With.Select(Who))</p>
     }
 
     @if (_outcome.Reveals.Count > 0)
@@ -48,7 +48,36 @@ else if (_outcome is not null)
         <p class="encounter-with">New place: @string.Join(", ", _outcome.Reveals.Select(PlaceName))</p>
     }
 
-    <button type="button" @onclick="ContinueAsync">Continue</button>
+    @if (_outcome.Choices is { Count: > 0 } choices)
+    {
+        <div class="choices">
+            @foreach (var choice in choices)
+            {
+                <button type="button" disabled="@_working" @onclick="() => ChooseAsync(choice)">@choice.Text</button>
+            }
+        </div>
+    }
+    else
+    {
+        <button type="button" @onclick="ContinueAsync">Continue</button>
+    }
+}
+else if (_state.Pending is not null)
+{
+    <h1>Day @_state.Clock.Day</h1>
+    <p class="encounter-text">@_state.Pending.Text</p>
+    <div class="choices">
+        @foreach (var choice in _state.Pending.Choices)
+        {
+            <button type="button" disabled="@_working" @onclick="() => ChooseAsync(choice)">@choice.Text</button>
+        }
+    </div>
+}
+else if (_state.Opening is null)
+{
+    <h1>@_state.Setting.DisplayName</h1>
+    <p class="lede">This save has not chosen how you meet @_state.MainLiName yet.</p>
+    <p><a href="/opening/@SaveGuid">Choose an opening</a></p>
 }
 else if (_state.Over)
 {
@@ -62,11 +91,30 @@ else
         <span class="map-slot">@_state.Clock.Slot</span>
     </div>
 
-    <p class="lede">@_state.Setting.DisplayName. Choose where to spend the @_state.Clock.Slot.ToString().ToLowerInvariant().</p>
+    <p class="lede">
+        @_state.Setting.DisplayName. Choose where to spend the @_state.Clock.Slot.ToString().ToLowerInvariant().
+        @if (_state.MainLiId is { } mainId)
+        {
+            <a href="/scene/@mainId">Scene viewer</a>
+        }
+    </p>
 
     @foreach (var ev in _state.Today)
     {
         <p class="today">Today: @ev.Name at @PlaceName(ev.Place), @ev.Time.ToString().ToLowerInvariant().</p>
+    }
+
+    @foreach (var hint in _state.Hints)
+    {
+        <p class="today">@hint</p>
+    }
+
+    @if (_state.CanInvite)
+    {
+        <label class="invite">
+            <input type="checkbox" @bind="_invite" />
+            Invite @_state.MainLiName along
+        </label>
     }
 
     <div class="map-places">
@@ -90,6 +138,7 @@ else
     private TurnOutcome? _outcome;
     private PlaceRecord? _outcomePlace;
     private string? _background;
+    private bool _invite;
     private bool _working;
     private string? _error;
 
@@ -109,19 +158,45 @@ else
         }
     }
 
+    private async Task RetryAsync()
+    {
+        _outcome = null;
+        await LoadAsync();
+    }
+
     private async Task GoAsync(PlaceRecord place)
     {
         _working = true;
 
         try
         {
-            _outcome = await World.TakeTurnAsync(SaveId, place.Id);
+            _outcome = await World.TakeTurnAsync(SaveId, place.Id, _invite);
+            _invite = false;
             _outcomePlace = place;
             _background = null;
             StateHasChanged();
 
             // Drawn at the slot the visit happened in, not the one the clock moved on to.
             _background = await Studio.GenerateBackgroundAsync(SaveId, place, _outcome.VisitedAt.Slot);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task ChooseAsync(EncounterChoice choice)
+    {
+        _working = true;
+
+        try
+        {
+            await World.ChooseAsync(SaveId, choice.Id);
+            await ContinueAsync();
         }
         catch (Exception ex)
         {
@@ -143,4 +218,7 @@ else
 
     private string PlaceName(string placeId) =>
         _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;
+
+    private string Who(string reference) =>
+        reference == "main_li" ? _state?.MainLiName ?? "them" : reference;
 }

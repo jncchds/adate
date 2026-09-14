@@ -25,7 +25,8 @@ public sealed record TurnOutcome(
     IReadOnlyDictionary<string, string> FlagsToSet,
     IReadOnlyList<string> Reveals,
     IReadOnlyList<string> With,
-    bool GameOver);
+    bool GameOver,
+    IReadOnlyList<EncounterChoice>? Choices = null);
 
 /// <summary>Picks the encounter for a turn. Pure: the same state always picks the same encounter.</summary>
 public static class EncounterEvaluator
@@ -34,6 +35,15 @@ public static class EncounterEvaluator
     public const string FiredPrefix = "encounter.";
 
     public static string FiredKey(string encounterId) => FiredPrefix + encounterId;
+
+    /// <summary>Holds the id of an encounter whose choice is still open, or <c>false</c>.</summary>
+    public const string PendingChoiceKey = "pending.choice";
+
+    /// <summary>Records which answer the player gave to an encounter's choice.</summary>
+    public static string ChoiceKey(string encounterId) => "choice." + encounterId;
+
+    /// <summary>A transient flag, never stored: the player chose to bring the main LI along this turn.</summary>
+    public const string InviteKey = "invite";
 
     /// <summary>The matching encounter with the highest priority; ties go to the lowest id, so the pick never depends on file order.</summary>
     public static EncounterDefinition? Pick(IEnumerable<EncounterDefinition> encounters, TurnContext context)
@@ -134,20 +144,17 @@ public static class TurnPlanner
 
         if (encounter is not null)
         {
-            foreach (var set in encounter.Sets ?? [])
+            foreach (var (key, value) in Assignments(encounter.Sets ?? []))
             {
-                var equals = set.IndexOf('=');
-                if (equals >= 0)
-                {
-                    flags[set[..equals]] = set[(equals + 1)..];
-                }
-                else
-                {
-                    flags[set] = "true";
-                }
+                flags[key] = value;
             }
 
             flags[EncounterEvaluator.FiredKey(encounter.Id)] = context.Clock.Day.ToString(CultureInfo.InvariantCulture);
+
+            if (encounter.Choices is { Count: > 0 })
+            {
+                flags[EncounterEvaluator.PendingChoiceKey] = encounter.Id;
+            }
         }
 
         var next = context.Clock.Next();
@@ -161,7 +168,30 @@ public static class TurnPlanner
             flags,
             encounter?.Reveals ?? [],
             encounter?.With ?? [],
-            next.IsPast(setting.Days));
+            next.IsPast(setting.Days),
+            encounter?.Choices ?? []);
+    }
+
+    /// <summary><c>key</c> sets <c>true</c>; <c>key=value</c> sets the value.</summary>
+    public static IReadOnlyDictionary<string, string> Assignments(IEnumerable<string> sets)
+    {
+        ArgumentNullException.ThrowIfNull(sets);
+
+        var flags = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var set in sets)
+        {
+            var equals = set.IndexOf('=');
+            if (equals >= 0)
+            {
+                flags[set[..equals]] = set[(equals + 1)..];
+            }
+            else
+            {
+                flags[set] = "true";
+            }
+        }
+
+        return flags;
     }
 
     /// <summary>Places that become known on <paramref name="day"/> because a dated event is held there.</summary>

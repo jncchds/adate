@@ -20,6 +20,7 @@
       "meetingPlace": "rosies-diner",
       "time": "Morning",
       "homePlace": "rosies-diner",
+      "secondPlace": "main-street",
       "homeWindow": "breakfast, most days",
       "hook": "The only free stool is next to them, and Rosie has already brought you the same order by mistake."
     },
@@ -29,6 +30,7 @@
       "meetingPlace": "town-library",
       "time": "Afternoon",
       "homePlace": "town-library",
+      "secondPlace": "rosies-diner",
       "homeWindow": "quiet afternoons",
       "hook": "You are both reaching for the one copy of the same book."
     },
@@ -38,6 +40,7 @@
       "meetingPlace": "lake-pier",
       "time": "Evening",
       "homePlace": "lake-pier",
+      "secondPlace": "main-street",
       "homeWindow": "evenings",
       "hook": "Their rowboat has drifted loose, and you are closest to the rope."
     }
