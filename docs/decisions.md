@@ -252,3 +252,314 @@ permits anything covered; Suggestive adds underwear-as-outerwear and sexual posi
 is uncovered or a sex act. The over-broad male terms — `open shirt`, `bare pectorals`,
 `shirtless` — were dropped for the same reason, since keeping them while permitting a bikini
 would apply the rule unequally.
+
+## Proportion negatives for women, and not for men
+
+Illustrious exaggerates female figures by default: with the pack exactly as shipped, a
+clothed standing sprite came back with an oversized bust and, at some seeds, heavy thighs.
+The female subject now negates `large breasts, huge breasts, gigantic breasts, curvy, wide
+hips, thick thighs, chibi, big head`.
+
+No positive terms were added. `slim` and `petite` are what this checkpoint associates with
+juvenile features, which is the direction HANDOFF 1.9 exists to push away from, so the fix is
+subtraction only.
+
+Measured through `xl-sprite` with the `standing` skeleton at 0.95 and the pack's sampler, on
+ComfyUI 0.34.5, prompts assembled the way `BooruPromptCompiler` would. Each row is one seed,
+identical except for the added negatives:
+
+| Case | Mean RGB diff | Silhouette IoU | Figure area |
+|---|---|---|---|
+| Female 25+, seed 42 | 3.30% | 93.3% | -3.7% |
+| Female 25+, seed 7 | 16.82% | 81.5% | -5.0% |
+| Female 18+, seed 42 | 5.33% | 96.9% | -1.2% |
+
+All three read as the same adult with a proportionate figure. The 18+ row is the one that
+decided it: it is the weakest maturity anchor the pack emits, and it still reads as a young
+adult rather than younger. Seed 7 shows the cost -- at some seeds the change reaches past the
+figure, there into skirt colour and length, which the pack leaves unspecified.
+
+The same approach does not work for men. Two sets were tried:
+
+| Case | Set | Mean RGB diff | Silhouette IoU | Figure area |
+|---|---|---|---|---|
+| Male 25+, seed 42 | full | 2.38% | 88.3% | -6.6% |
+| Male 25+, seed 7 | full | 6.47% | 93.0% | -1.5% |
+| Male 18+, seed 42 | full | 9.37% | 89.5% | -6.5% |
+| Male 18+, seed 7 | full | 5.56% | 87.7% | +7.8% |
+| Male 25+, seed 42 | narrow | 11.58% | 88.9% | -5.5% |
+| Male 25+, seed 7 | narrow | 5.28% | 93.0% | -2.7% |
+| Male 18+, seed 42 | narrow | 9.90% | 90.5% | -6.2% |
+
+Full is `muscular, muscular male, bara, pectorals, abs, broad shoulders, chibi, big head`;
+narrow is `bara, huge pectorals, chibi, big head`. Both reduce bulk at 25+, and both turn the
+18+ seed-42 render into the narrow-shouldered, soft-faced figure the male subject anchor was
+written to get away from. Removing `broad shoulders` did not help, so it is not one term doing
+it: on this checkpoint the muscular prior and the adult-male read are the same direction, and
+negating one weakens the other. The male subject is unchanged.
+
+If male bulk needs addressing, the lever is more likely the 18+ band's `(mature male:1.0)`
+weight than a negative -- but that is a separate measurement, not a conclusion.
+
+## Appearance is chosen from pack vocabulary, and candidates are nearby looks
+
+The new-game form took free text for every attribute, and the candidate picker rendered the
+same prompt at four seeds. Spike 0 had already measured that picker as weaker than it read:
+seeds alone gave one character in four poses, not four looks.
+
+Appearance is now picked from choices each subject declares in the pack (`features`), with free
+text kept only for the distinguishing feature. Each choice may list `near` neighbours, and the
+candidates are the appearance exactly as declared plus alternatives that move one or two of
+hair colour, hair style and eye colour to a neighbour -- spread across features, and all at one
+seed. The seed is what Spike 0 found holds a character together; tag sets at one seed gave
+different people, and a neighbour is the smallest tag change there is.
+
+Build, height and skin tone are never varied. The words near build and height are where
+juvenile-coded vocabulary lives, and an alternative the player did not ask for must never drift
+that way; changing skin tone is not a slight variation of the person described. Moving from free
+text to choices also takes `slim` and `petite` out of the input entirely -- the form's old default
+build was `slim`.
+
+The approved candidate's appearance replaces the declared one, because sprites are compiled from
+the stored record and would otherwise describe someone other than the portrait. The write refuses
+a change of age or subject in the same statement that performs it.
+
+The loader refuses a subject missing any feature, a `near` entry that is not itself a choice of
+that feature, neighbours on a feature that is never varied, and any choice containing an
+always-negative term. The alternatives have not yet been judged on the GPU box: whether one
+neighbour at a fixed seed reads as "slightly different" rather than "the same" or "someone else"
+is a measurement, and this entry records the design rather than its result.
+
+## Z-Image mattes on the server, and its stack is pinned in the repo
+
+The Z-Image API returned opaque PNGs, but sprites are composited over separately generated
+backgrounds (HANDOFF 1.1), so they need alpha. HANDOFF 6's rule still holds — the game never
+mattes — so matting went into the server: `/generate` takes `"background": "remove"`, and the
+provider asks for it only for workflows listed in `ZImageOptions.MatteWorkflows`.
+
+BiRefNet runs in the same process as the pipeline. A second hop through ComfyUI's native
+BiRefNet was the alternative, and would have made ComfyUI a runtime dependency of a game that
+otherwise does not need it.
+
+Measured in the running container on the RTX 5090, on a 768x1152 full-body render:
+
+| | |
+|---|---|
+| Load | 21.5 s cold, once at startup |
+| First inference | 5.9 s, paid by a warm-up call at startup |
+| Warm inference | 0.16-0.36 s |
+| VRAM peak | 1.72 GB, beside Z-Image Turbo |
+| Mask | 71.9% transparent, 26.5% opaque, 1.6% soft edge |
+
+Composited over a checkerboard, the hair edges are soft with no background fringe and the gaps
+between hair and arms are clear.
+
+The matting model name enters the cache key for matted workflows only. A background's address
+does not move when the matting model does.
+
+The stack moved into `compose/zimage/` with everything that can drift pinned: DiffSynth-Studio
+at the commit the working image was built from, the torch, transformers, timm and kornia
+versions it resolved to, and BiRefNet's Hugging Face revision. The last pin matters most:
+BiRefNet loads with `trust_remote_code`, so an unpinned revision executes whatever Python was
+pushed to that repository last.
+
+## The art direction stays anime, prompted directly
+
+Three alternatives to prompting Z-Image for anime were tried and rejected. All were rendered
+on Z-Image Turbo from the same three subjects: a woman sprite, a man sprite and a cafe
+background, with fixed seeds. Sprites were matted and composited over their background.
+
+**Photoreal render plus a cartoon filter.** Photoreal Z-Image output is excellent and
+composites well. A classic OpenCV cartoon filter (bilateral smoothing, k-means colour
+quantisation, adaptive-threshold edges) turned it into a hard-inked comic look, and fine
+background detail into black speckle. It reads as action comic, not romance.
+
+**Photoreal render restyled through img2img.** `/generate` gained `input_image_id` and
+`denoising_strength` for this. Six romance-leaning style prompts were tried at 0.55, 0.75,
+0.85, 0.92 and 1.0. Turbo runs 8 steps, and the style only takes over when most of them are
+re-run:
+
+| Strength | Result |
+|---|---|
+| 0.55-0.75 | Indistinguishable from the photo |
+| 0.85-0.92 | Subjects restyle unevenly: in one scene the man turns cartoon while the woman stays photoreal |
+| 1.0 | Real styles, but the input image is ignored, so it is plain prompting |
+
+There is no strength at which the photo's identity survives and the style lands. As a filter,
+img2img does not work on this model. The endpoint stays, for the §0.3 fallback of img2img from an
+approved portrait, where the goal is holding a picture rather than restyling it.
+
+**Glossy 3D, prompted directly.** Six variants: animated feature, game character, toon 3D,
+otome 3D, stylised CGI and soft doll. Two findings ruled the direction out:
+
+* Every man sprite came back with a second figure, even with `single person, solo` in the
+  prompt, and matting kept it. The woman's seed was clean every time. So it is seed and framing
+  dependent, and the style made it worse than in 2D.
+* Three of the six gave the 28- and 30-year-old subjects oversized heads, rounded features and
+  small bodies. That is the juvenile-coded read HANDOFF 1.9 exists to push away from. The other
+  three leaned young as well.
+
+Two lessons carry into the `zimage-anime` pack whatever its style wording:
+
+* Style words move more than style. "Korean webtoon" changed both subjects' ethnicity. Style
+  sentences must be checked against the declared appearance, not assumed neutral.
+* Extra figures in a sprite are a real failure mode on Z-Image, and matting preserves them.
+  Every sprite measurement needs a check for a second salient figure.
+
+## Z-Image holds a sprite set together without a pose skeleton
+
+`zimage-anime` compiles natural-language prompts (`NaturalPromptCompiler`) and uses
+`SeedAndPrompt`: one seed per character, an unchanging identity description, and no
+skeleton. Z-Image refuses a skeleton anyway. The question was whether expressions move the
+body, as `angry` did in Phase 1, once nothing holds it.
+
+Measured through the real game flow against the deployed server, once per character: new-game
+form, four candidates, approve the declared look, six sprites, background. Each seed is derived
+from the character id. IoU was taken on 4x-downsampled alpha masks (alpha > 128). A region is
+an opaque blob of at least 0.5% of the frame. The bar is at least 85% vs neutral on 5 of 6
+frames, with one figure per sprite.
+
+| Character | Frames >= 85% | IoU vs neutral | Worst pair | Regions |
+|---|---|---|---|---|
+| Woman, 24, red long straight hair, green eyes, pale skin, average build, freckles | 6 of 6 | 92.5-97.3% | laughing/sad 90.6% | 1 in all |
+| Man, 30, dark brown short messy hair, brown eyes, fair skin, athletic, tall, trimmed beard | 6 of 6 | 92.4-96.2% | neutral/angry 92.4% | 1 in all |
+| Woman, 45, black ponytail, brown eyes, brown skin, toned, tall, glasses | 6 of 6 | 94.6-98.7% | laughing/angry 92.7% | 1 in all |
+| Man, 22, blonde ponytail, blue eyes, tanned skin, plump, average height, small scar | 6 of 6 | 86.7-95.0% | neutral/sad 86.7% | 1 in all |
+
+**All four pass.** Illustrious with the skeleton at 0.95 measured 93-96%, so the prompt holds
+the body about as well as the skeleton did. The youngest man is the loosest set: sad and
+surprised dip his head and shoulders, landing at 86.7% and 87.2%.
+
+No sprite had a second figure, including both men. In the style experiments the male seed grew
+one in every 3D variant. The sprite sentence ("only this one person… no other people") and 2D
+anime framing are the likely difference, but that was not isolated.
+
+By eye, every set is one person in one outfit, with the pack's default outfit in all 24 frames.
+All six expressions read on every character. Every image took 2.7-3.5 s.
+
+**What the measurement does not cover: declared attributes that did not survive.**
+Silhouette overlap only proves the body holds still. It says nothing about whether the image is
+the character that was declared, and several declarations were lost:
+
+| Declared | Rendered | Kind |
+|---|---|---|
+| brown skin (woman, 45) | fair skin in portrait and all sprites | skin tone ignored |
+| tanned skin (man, 22) | light golden at most | skin tone weakened |
+| plump build (man, 22) | athletic | build ignored |
+| 45 years old, "middle-aged … forties or fifties" | reads early thirties | age band weak |
+| trimmed beard (man, 30) | on the portraits, gone from every sprite | distinguishing feature dropped |
+| freckles (woman, 24); small scar (man, 22) | barely visible | distinguishing feature weak |
+
+Hair colour, hair style, eye colour and glasses held on every character. Everything the
+2D-anime prior already favours survived, and everything it pulls against (darker skin, a heavier
+build, visible age, facial hair on a sprite) was softened or lost. The skin-tone result is the
+one that matters most. A player's explicit choice silently not rendering is a correctness bug,
+not a style quirk. It is also a bias toward pale anime defaults that the game should not
+inherit.
+
+## Declared attributes: wording fixes skin tone, placement alone does not
+
+Three rounds, each regenerating the same four characters at their stored seeds, so only the
+prompt differs.
+
+**Round 1: placement only.** Skin and build moved into the subject sentence, and a closing
+sentence restated skin, build and the distinguishing feature. Brown skin still rendered fair and
+plump still rendered athletic. The beard came back as light stubble and the scar became visible,
+so restating helps small features but not what the prior pulls against.
+
+**Round 2: a wording sweep outside the game.** Direct API renders at three seeds per variant,
+with prompts in the compiler's exact sentence shape and faces cropped and enlarged:
+
+| Variant | Result, 3 seeds |
+|---|---|
+| "brown skin" | light peach on all three |
+| "dark brown skin" / "a deep brown skin tone" | medium tan on two, light on one |
+| "dark-skinned" beside the subject, plus "dark brown skin" | brown on all three |
+| "a plump build" / "a chubby, heavyset build" / "a heavyset build with a soft round belly" | athletic on all nine, indistinguishable |
+| age band + "45 years old" | no visible change |
+| stronger 40+ band ("clearly older than thirty… slightly sagging cheeks") | some added lines on two seeds |
+
+A number did nothing here either, even with a language-model text encoder. An ethnicity word
+was deliberately not tried: the player declares a skin tone, not an ethnicity, and the style
+experiments already showed such words changing more than they name.
+
+**Round 3: the fix, in the game.** `FeatureOption` gained an optional `Prompt`: the words
+emitted in place of the tag, while the tag stays what the player picks and what the character
+stores. The compiler puts skin tone right after the subject, and build still follows the age
+band (HANDOFF 1.9 is about build and height, not skin tone). The loader and the juvenile-coding
+test check prompt wording as well as tags. The skin ladder, rendered at three seeds:
+
+| Choice | Prompt wording | Rendered |
+|---|---|---|
+| pale skin | pale-skinned with pale skin | pale |
+| fair skin | fair-skinned with fair skin | fair, barely darker than pale |
+| tanned skin | tan-skinned with tanned golden-brown skin | light tan |
+| brown skin | dark-skinned with dark brown skin | brown on all three |
+| dark skin | very dark-skinned with deep dark brown skin | **no darker than brown** |
+
+Regenerated in the game with the stronger 40+ band as well, the four characters still pass
+consistency, with IoU vs neutral 90.3-97.1% and one figure in every sprite:
+
+| Declared | First run | Now |
+|---|---|---|
+| brown skin (woman, 45) | fair | brown in all six frames |
+| tanned skin (man, 22) | light golden | visibly tanned |
+| 45 years old | early thirties | lines at the mouth and eyes, reads around 40 |
+| small scar (man, 22) | barely visible | visible in most frames |
+| trimmed beard (man, 30) | gone from sprites | light stubble, not a trimmed beard |
+| plump build (man, 22) | athletic | still athletic |
+| freckles (woman, 24) | barely visible | still barely visible |
+
+Still open, in order of how much they matter:
+
+1. **Dark skin is not distinct from brown skin.** Five choices render as four. That is the
+   same class of bug as the one fixed, one step further down.
+2. **Build does not move at all with wording.** The half-body framing may hide it, or the prior
+   may simply win. The next thing to try is a framing or pose change, not another adjective.
+3. **Facial hair and freckles stay faint on sprites.** They are small at sprite resolution, so
+   the fix may be a closer framing for talking sprites rather than prompt wording.
+
+## Negative prompts do nothing on Z-Image Turbo
+
+Z-Image Turbo is distilled for 8 steps at cfg 1.0. At cfg 1.0 classifier-free guidance has no
+unconditional branch, so the negative should never reach the model. Measured, not assumed:
+one positive prompt (the 45-year-old woman), three seeds, and only the negative and cfg vary.
+Mean absolute RGB difference, and share of pixels that moved by more than 16:
+
+| Pair | Mean diff | Pixels moved |
+|---|---|---|
+| Same request twice (control) | 0.000% | 0.00% |
+| cfg 1.0: no negative vs the full pack negative | 0.000% | 0.00% |
+| cfg 1.0: no negative vs "glasses, eyeglasses, spectacles" | 0.000% | 0.00% |
+| cfg 2.0: no negative vs "glasses, eyeglasses, spectacles" | 5.0-7.8% | 18-95% |
+| cfg 1.0 vs cfg 2.0, no negative | 5.1-6.1% | 24-30% |
+
+At cfg 1.0 the negative is inert: byte-identical on every seed, including a negative that
+directly contradicts the positive.
+
+Raising cfg does not make it a protection. At cfg 2.0 the negative changes the image, but
+"glasses" did not remove the glasses the positive asked for: the render just went harsher,
+flatter and more saturated. cfg 2.0 alone softened focus and lost the age lines, and every
+render took 5.2 s instead of 2.8 s. That is the same lesson as the ceiling measurements on
+Illustrious, but stronger: a negative does not beat a positive, and here it does not even try.
+
+**What this means for safety on this pack.** The `alwaysNegative` minor-safety terms protect
+nothing at render time, and they never did on Z-Image. What actually holds is structural, and
+none of it depends on the model obeying a negative:
+
+* `ContentPolicy.Resolve` clamps anyone under 18 to PG13, from the character's own age;
+* restricted-positive filtering removes refused terms before they enter the prompt;
+* migration 002 refuses above-PG13 art for a character under 18;
+* the loader refuses any appearance choice, tag or prompt wording, that contains an
+  always-negative term;
+* age bands describe adults in the positive prompt.
+
+**What changed.**
+
+* **Packs declare `negativePrompts`.** It is `Applied` by default and `Ignored` on `zimage-anime`.
+  An ignored pack compiles an empty negative in both dialects, because a negative the model never
+  sees still changes the cache key and still reads, to anyone looking at a prompt, as a
+  safeguard.
+* **The Z-Image provider refuses a non-empty negative at cfg ≤ 1.0,** the same way it refuses a
+  pose skeleton. A pack cannot quietly claim a protection this provider does not apply.
+* **`alwaysNegative` stays required on every pack,** as the vocabulary guard, which is real.

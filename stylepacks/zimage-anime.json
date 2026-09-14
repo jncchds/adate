@@ -1,0 +1,347 @@
+{
+  "id": "zimage-anime",
+  "displayName": "Z-Image Turbo (anime, natural language)",
+  "checkpoint": "Tongyi-MAI/Z-Image-Turbo",
+  "baseModel": "z-image",
+  "dialect": "Natural",
+  "consistency": "SeedAndPrompt",
+  "loras": [],
+  "sampler": {
+    "samplerName": "flowmatch",
+    "scheduler": "default",
+    "steps": 8,
+    "cfg": 1.0,
+    "anchorWeight": 0,
+    "poseStrength": 0
+  },
+  "resolutions": {
+    "portrait": {
+      "width": 768,
+      "height": 1152
+    },
+    "sprite": {
+      "width": 768,
+      "height": 1152
+    },
+    "background": {
+      "width": 1152,
+      "height": 768
+    }
+  },
+  "workflows": {
+    "portrait": "zimage-portrait",
+    "sprite": "zimage-sprite",
+    "background": "zimage-background"
+  },
+  "mattingModel": "ZhengPeng7/BiRefNet",
+  "supportedCeilings": [
+    "PG13"
+  ],
+  "positivePrefix": [
+    "Anime illustration",
+    "clean linework",
+    "soft cel shading",
+    "gentle warm colors",
+    "high quality"
+  ],
+  "negativeBase": [
+    "low quality",
+    "blurry",
+    "watermark",
+    "signature",
+    "text",
+    "deformed hands",
+    "extra fingers",
+    "photorealistic",
+    "3d render"
+  ],
+  "negativePrompts": "Ignored",
+  "alwaysNegative": [
+    "child",
+    "toddler",
+    "infant",
+    "loli",
+    "shota",
+    "childlike proportions"
+  ],
+  "subjects": {
+    "female": {
+      "positive": [
+        "a single woman"
+      ],
+      "negative": [
+        "man",
+        "large breasts",
+        "exaggerated curves",
+        "chibi",
+        "oversized head"
+      ],
+      "outfit": [
+        "a white blouse",
+        "a navy pleated skirt"
+      ],
+      "features": {
+        "hairColor": [
+          { "tag": "black hair", "near": ["dark brown hair"] },
+          { "tag": "dark brown hair", "near": ["black hair", "light brown hair"] },
+          { "tag": "light brown hair", "near": ["dark brown hair", "blonde hair"] },
+          { "tag": "blonde hair", "near": ["light brown hair", "auburn hair"] },
+          { "tag": "auburn hair", "near": ["red hair", "light brown hair"] },
+          { "tag": "red hair", "near": ["auburn hair", "pink hair"] },
+          { "tag": "pink hair", "near": ["red hair", "purple hair"] },
+          { "tag": "purple hair", "near": ["pink hair", "blue hair"] },
+          { "tag": "blue hair", "near": ["purple hair", "black hair"] },
+          { "tag": "silver hair", "near": ["white hair", "grey hair"] },
+          { "tag": "white hair", "near": ["silver hair"] },
+          { "tag": "grey hair", "near": ["silver hair"] }
+        ],
+        "hairStyle": [
+          { "tag": "short hair", "near": ["a short bob haircut", "shoulder-length hair"] },
+          { "tag": "a short bob haircut", "near": ["short hair"] },
+          { "tag": "shoulder-length hair", "near": ["short hair", "long straight hair"] },
+          { "tag": "long straight hair", "near": ["shoulder-length hair", "long wavy hair", "very long hair"] },
+          { "tag": "long wavy hair", "near": ["long straight hair"] },
+          { "tag": "very long hair", "near": ["long straight hair"] },
+          { "tag": "hair tied in a long ponytail", "near": ["hair in a long braid"] },
+          { "tag": "hair in a long braid", "near": ["hair tied in a long ponytail"] }
+        ],
+        "eyeColor": [
+          { "tag": "brown eyes", "near": ["dark eyes", "amber eyes"] },
+          { "tag": "dark eyes", "near": ["brown eyes"] },
+          { "tag": "amber eyes", "near": ["brown eyes"] },
+          { "tag": "green eyes", "near": ["teal eyes"] },
+          { "tag": "teal eyes", "near": ["green eyes", "blue eyes"] },
+          { "tag": "blue eyes", "near": ["teal eyes", "grey eyes"] },
+          { "tag": "grey eyes", "near": ["blue eyes"] },
+          { "tag": "violet eyes", "near": ["blue eyes", "red eyes"] },
+          { "tag": "red eyes", "near": ["violet eyes"] }
+        ],
+        "skinTone": [
+          { "tag": "pale skin", "prompt": "pale-skinned with pale skin" },
+          { "tag": "fair skin", "prompt": "fair-skinned with fair skin" },
+          { "tag": "tanned skin", "prompt": "tan-skinned with tanned golden-brown skin" },
+          { "tag": "brown skin", "prompt": "dark-skinned with dark brown skin" },
+          { "tag": "dark skin", "prompt": "very dark-skinned with deep dark brown skin" }
+        ],
+        "build": [
+          { "tag": "an average build" },
+          { "tag": "an athletic build" },
+          { "tag": "a toned build" },
+          { "tag": "a plump build" }
+        ],
+        "height": [
+          { "tag": "average height" },
+          { "tag": "tall" }
+        ]
+      },
+      "ageBands": [
+        {
+          "from": 16,
+          "tags": [
+            "a young adult woman"
+          ]
+        },
+        {
+          "from": 18,
+          "tags": [
+            "a young adult woman in her early twenties",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 25,
+          "tags": [
+            "an adult woman in her late twenties or thirties",
+            "mature adult facial features",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 40,
+          "tags": [
+            "a middle-aged woman in her late forties",
+            "clearly older than thirty",
+            "a mature face with visible smile lines, crow's feet and slightly sagging cheeks",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 60,
+          "tags": [
+            "an elderly woman in her sixties",
+            "an aged face with deep wrinkles and sagging skin",
+            "adult proportions"
+          ]
+        }
+      ]
+    },
+    "male": {
+      "positive": [
+        "a single man"
+      ],
+      "negative": [
+        "woman",
+        "feminine face",
+        "chibi",
+        "oversized head"
+      ],
+      "outfit": [
+        "a white button-up shirt",
+        "black trousers"
+      ],
+      "features": {
+        "hairColor": [
+          { "tag": "black hair", "near": ["dark brown hair"] },
+          { "tag": "dark brown hair", "near": ["black hair", "light brown hair"] },
+          { "tag": "light brown hair", "near": ["dark brown hair", "blonde hair"] },
+          { "tag": "blonde hair", "near": ["light brown hair", "auburn hair"] },
+          { "tag": "auburn hair", "near": ["red hair", "light brown hair"] },
+          { "tag": "red hair", "near": ["auburn hair", "pink hair"] },
+          { "tag": "pink hair", "near": ["red hair", "purple hair"] },
+          { "tag": "purple hair", "near": ["pink hair", "blue hair"] },
+          { "tag": "blue hair", "near": ["purple hair", "black hair"] },
+          { "tag": "silver hair", "near": ["white hair", "grey hair"] },
+          { "tag": "white hair", "near": ["silver hair"] },
+          { "tag": "grey hair", "near": ["silver hair"] }
+        ],
+        "hairStyle": [
+          { "tag": "short hair", "near": ["very short cropped hair", "short messy hair", "medium-length hair"] },
+          { "tag": "very short cropped hair", "near": ["short hair"] },
+          { "tag": "short messy hair", "near": ["short hair"] },
+          { "tag": "short slicked-back hair", "near": ["short hair"] },
+          { "tag": "medium-length hair", "near": ["short hair", "long hair tied in a ponytail"] },
+          { "tag": "long hair tied in a ponytail", "near": ["medium-length hair"] }
+        ],
+        "eyeColor": [
+          { "tag": "brown eyes", "near": ["dark eyes", "amber eyes"] },
+          { "tag": "dark eyes", "near": ["brown eyes"] },
+          { "tag": "amber eyes", "near": ["brown eyes"] },
+          { "tag": "green eyes", "near": ["teal eyes"] },
+          { "tag": "teal eyes", "near": ["green eyes", "blue eyes"] },
+          { "tag": "blue eyes", "near": ["teal eyes", "grey eyes"] },
+          { "tag": "grey eyes", "near": ["blue eyes"] },
+          { "tag": "violet eyes", "near": ["blue eyes", "red eyes"] },
+          { "tag": "red eyes", "near": ["violet eyes"] }
+        ],
+        "skinTone": [
+          { "tag": "pale skin", "prompt": "pale-skinned with pale skin" },
+          { "tag": "fair skin", "prompt": "fair-skinned with fair skin" },
+          { "tag": "tanned skin", "prompt": "tan-skinned with tanned golden-brown skin" },
+          { "tag": "brown skin", "prompt": "dark-skinned with dark brown skin" },
+          { "tag": "dark skin", "prompt": "very dark-skinned with deep dark brown skin" }
+        ],
+        "build": [
+          { "tag": "an average build" },
+          { "tag": "an athletic build" },
+          { "tag": "a toned build" },
+          { "tag": "a muscular build" },
+          { "tag": "a plump build" }
+        ],
+        "height": [
+          { "tag": "average height" },
+          { "tag": "tall" }
+        ]
+      },
+      "ageBands": [
+        {
+          "from": 16,
+          "tags": [
+            "a young adult man"
+          ]
+        },
+        {
+          "from": 18,
+          "tags": [
+            "a young adult man in his early twenties",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 25,
+          "tags": [
+            "an adult man in his late twenties or thirties",
+            "mature masculine facial features",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 40,
+          "tags": [
+            "a middle-aged man in his late forties",
+            "clearly older than thirty",
+            "a mature face with visible lines around the eyes and forehead and slightly sagging cheeks",
+            "adult proportions"
+          ]
+        },
+        {
+          "from": 60,
+          "tags": [
+            "an elderly man in his sixties",
+            "an aged face with deep wrinkles and sagging skin",
+            "adult proportions"
+          ]
+        }
+      ]
+    }
+  },
+  "expressions": {
+    "neutral": "a calm, neutral facial expression",
+    "smile": "a warm, gentle smile",
+    "laughing": "laughing happily with eyes closed and mouth open",
+    "sad": "a sad facial expression with tears in the eyes",
+    "angry": "an angry frown with furrowed brows",
+    "surprised": "a surprised facial expression with wide eyes and parted lips"
+  },
+  "negativeByCeiling": {
+    "PG13": [
+      "nsfw",
+      "nudity",
+      "nude",
+      "topless",
+      "exposed nipples",
+      "bottomless"
+    ]
+  },
+  "restrictedPositive": [
+    {
+      "minCeiling": "Suggestive",
+      "terms": [
+        "lingerie",
+        "panties",
+        "bra only",
+        "in underwear",
+        "underwear only",
+        "wet t-shirt",
+        "wet shirt",
+        "see-through",
+        "seductive pose",
+        "spread legs",
+        "suggestive pose",
+        "undressing"
+      ]
+    },
+    {
+      "minCeiling": "Explicit",
+      "terms": [
+        "nude",
+        "naked",
+        "topless",
+        "bottomless",
+        "nipples",
+        "areolae",
+        "bare breasts",
+        "exposed breasts",
+        "no panties",
+        "no bra",
+        "genital",
+        "pussy",
+        "penis",
+        "vagina",
+        "sex",
+        "penetration",
+        "orgasm",
+        "cum"
+      ]
+    }
+  ]
+}

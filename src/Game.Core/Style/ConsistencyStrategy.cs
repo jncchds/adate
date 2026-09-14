@@ -26,4 +26,12 @@ public enum ConsistencyStrategy
 
     /// <summary>Per-character LoRA trained from approved sprites. Ladder step 4.</summary>
     CharacterLora = 3,
+
+    /// <summary>
+    /// A fixed seed and an unchanging identity description, with no pose skeleton. For providers
+    /// that have no pose input, such as Z-Image, which refuses a request carrying one rather than
+    /// caching an unposed image under a posed address. Whether the body holds still across
+    /// expressions without the skeleton is a measurement (phase-2 plan §1), not an assumption.
+    /// </summary>
+    SeedAndPrompt = 4,
 }

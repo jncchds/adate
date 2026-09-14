@@ -17,7 +17,7 @@ namespace Game.Host.Services;
 /// </summary>
 public sealed class CharacterStudio(
     IImageProvider images,
-    IPromptCompiler compiler,
+    PromptCompilers compilers,
     IStylePackLoader packs,
     JsonStylePackLoader packText,
     CharacterRepository characters,
@@ -85,39 +85,52 @@ public sealed class CharacterStudio(
     // ------------------------------------------------------------------ portraits
 
     /// <summary>
-    /// Generates candidate portraits: one prompt, several seeds (HANDOFF 2). Varying only the
-    /// seed is the point — the player is choosing between interpretations of the attributes
-    /// they declared, not between different characters.
+    /// Generates candidate portraits: the appearance exactly as declared, then alternatives that
+    /// each move one or two features to a close neighbour from the pack's vocabulary. All of them
+    /// share one seed.
     /// </summary>
     /// <remarks>
-    /// Measured, this is a weaker choice than it reads: three seeds against identical tags
-    /// gave one character in three poses, differing far more in framing and hair flow than in
-    /// who they were. A picker worth the name varies appearance tags as well, and pins the
-    /// framing with the same skeleton the sprites use. Left as-is for now because changing it
-    /// changes what the player is being asked to decide, which is a design call.
+    /// Measured in Spike 0, varying only the seed gave one character in several poses rather than
+    /// a choice between looks, while varying tags at one seed gave different people. The seed is
+    /// what holds a character together, so it stays fixed here and the tags move -- but only to
+    /// declared neighbours, which is what keeps an alternative a slight variation of the person
+    /// described rather than a stranger. The approved candidate's appearance replaces the
+    /// declared one; see <see cref="ApproveAnchorAsync"/>.
     /// </remarks>
     public Task<IReadOnlyList<Candidate>> GenerateCandidatesAsync(CharacterRecord character) =>
         jobs.RunAsync($"candidates:{character.Id}", ct => GenerateCandidatesCoreAsync(character, ct));
+
+    /// <summary>How many candidates are requested. Fewer come back if the vocabulary is thin.</summary>
+    public int CandidateCount => _options.CandidateCount;
 
     private async Task<IReadOnlyList<Candidate>> GenerateCandidatesCoreAsync(
         CharacterRecord character,
         CancellationToken ct)
     {
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
         var intent = PortraitIntent();
 
         var approved = Approve(character, pack, intent);
         var ceiling = approved.Ceiling;
-        var positive = compiler.CompilePositive(character.Appearance, approved, pack, RenderTarget.Portrait);
         var negative = compiler.CompileNegative(pack, ceiling, RenderTarget.Portrait, character.Appearance.Subject);
 
-        var results = new List<Candidate>(_options.CandidateCount);
+        // Derived from the character id, so re-running the step reproduces the same portraits
+        // rather than offering the player a different set each time. The same seed picks which
+        // neighbours are offered, for the same reason.
+        var seed = DeriveSeed(character.Id, 0);
+        var variants = AppearanceVariations.For(
+            character.Appearance,
+            pack.SubjectFor(character.Appearance.Subject),
+            _options.CandidateCount,
+            seed);
 
-        for (var i = 0; i < _options.CandidateCount; i++)
+        var results = new List<Candidate>(variants.Count);
+
+        foreach (var variant in variants)
         {
-            // Derived from the character id, so re-running the step reproduces the same four
-            // faces rather than offering the player a different set each time.
-            var seed = DeriveSeed(character.Id, i);
+            // Age and subject never vary, so the content decision above holds for every variant.
+            var positive = compiler.CompilePositive(variant.Appearance, approved, pack, RenderTarget.Portrait);
 
             var image = await images.GenerateAsync(
                 new ImageRequest(
@@ -135,14 +148,22 @@ public sealed class CharacterStudio(
                     Ceiling: ceiling),
                 ct).ConfigureAwait(false);
 
-            results.Add(new Candidate(image.Hash, image.RelativePath, seed));
+            results.Add(new Candidate(image.Hash, image.RelativePath, seed, variant.Appearance, variant.Changes));
         }
 
         return results;
     }
 
-    public Task ApproveAnchorAsync(Guid characterId, Candidate candidate, CancellationToken ct = default) =>
-        characters.SetAnchorAsync(characterId, candidate.Hash, candidate.Seed, ct);
+    /// <summary>
+    /// Makes the chosen portrait the character's anchor and its appearance the character's
+    /// appearance. Sprites are compiled from the stored record, so they have to describe what
+    /// was approved rather than what was first declared.
+    /// </summary>
+    public Task ApproveAnchorAsync(Guid characterId, Candidate candidate, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return characters.SetAnchorAsync(characterId, candidate.Hash, candidate.Seed, candidate.Appearance, ct);
+    }
 
     // -------------------------------------------------------------------- sprites
 
@@ -157,7 +178,12 @@ public sealed class CharacterStudio(
         CancellationToken ct)
     {
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
-        var seedAndTags = pack.Consistency is ConsistencyStrategy.SeedAndTags;
+        var compiler = compilers.For(pack.Dialect);
+
+        // Both seed strategies make the shared seed the identity. Only SeedAndTags also
+        // conditions on a pose skeleton; SeedAndPrompt serves providers with no pose input.
+        var seedAndTags = pack.Consistency is ConsistencyStrategy.SeedAndTags or ConsistencyStrategy.SeedAndPrompt;
+        var posed = pack.Consistency is ConsistencyStrategy.SeedAndTags;
 
         if (seedAndTags && character.AnchorSeed is null)
         {
@@ -176,7 +202,7 @@ public sealed class CharacterStudio(
 
         // Every expression is conditioned on the same skeleton. Varying it would move the
         // body between frames, which is exactly what the crossfade cannot absorb.
-        var poseHash = seedAndTags
+        var poseHash = posed
             ? await poses.HashForAsync(_options.SpritePose, ct).ConfigureAwait(false)
             : null;
 
@@ -239,6 +265,7 @@ public sealed class CharacterStudio(
         CancellationToken ct)
     {
         var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
         var intent = new SceneIntent(locationId, time, "", "", "", Framing.FullBody);
 
         // A background has no subject, so no age clamp applies -- only the game setting and
@@ -313,7 +340,15 @@ public sealed class CharacterStudio(
     }
 }
 
-public sealed record Candidate(string Hash, string RelativePath, long Seed);
+/// <param name="Seed">Shared by every candidate for a character; the look is what differs.</param>
+/// <param name="Appearance">What this portrait was rendered from, and what approving it stores.</param>
+/// <param name="Changes">How it differs from what the player declared. Empty for the declared look.</param>
+public sealed record Candidate(
+    string Hash,
+    string RelativePath,
+    long Seed,
+    CharacterAppearance Appearance,
+    IReadOnlyList<FeatureChange> Changes);
 
 public sealed class StudioOptions
 {
@@ -335,7 +370,11 @@ public sealed class StudioOptions
     /// </summary>
     public string SpritePose { get; set; } = "standing";
 
-    /// <summary>HANDOFF 2: four candidate portraits, same prompt, four seeds.</summary>
+    /// <summary>
+    /// How many portraits the player chooses between: the declared look plus nearby
+    /// alternatives, all at one seed. Replaces HANDOFF 2's four seeds against one prompt, which
+    /// Spike 0 measured as four poses of one look.
+    /// </summary>
     public int CandidateCount { get; set; } = 4;
 
     /// <summary>

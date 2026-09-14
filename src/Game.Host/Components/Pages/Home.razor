@@ -2,6 +2,7 @@
 @using Game.Core
 @using Game.Core.Characters
 @using Game.Core.Saves
+@using Game.Core.Style
 @using Game.Data.Repositories
 @using Game.Host.Services
 @inject SaveRepository Saves
@@ -15,8 +16,10 @@
 <h1>Describe a character</h1>
 
 <p class="lede">
-    These attributes are the contract the generated art is judged against. Every one of
-    them should survive all six sprites; hair colour is the first thing to drift.
+    These attributes are the contract the generated art is judged against. The first portrait
+    shows exactly what you choose here. The others each move one or two of hair colour, hair
+    style and eye colour to a close neighbour, and whichever portrait you pick becomes the
+    character.
 </p>
 
 <EditForm Model="@_form" OnValidSubmit="@CreateAsync" FormName="appearance">
@@ -25,7 +28,7 @@
     <div class="grid">
         <label>
             Love interest
-            <InputSelect @bind-Value="_form.Subject">
+            <InputSelect @bind-Value="_form.Subject" @bind-Value:after="ApplySubjectChoices">
                 @foreach (var subject in _subjects)
                 {
                     <option value="@subject">@subject</option>
@@ -39,44 +42,81 @@
         <label>
             Age
             <InputNumber @bind-Value="_form.Age" min="18" max="99" />
-            <small>Adults only. Injected into every prompt, because tag-based checkpoints
-                read "slim" and "petite" as juvenile without an explicit anchor.</small>
+            <small>Adults only. Never varied between portraits: it is what the content rules
+                are computed from.</small>
         </label>
 
         <label>
             Hair colour
-            <InputText @bind-Value="_form.HairColor" placeholder="red hair" />
+            <InputSelect @bind-Value="_form.HairColor">
+                @foreach (var tag in Choices(AppearanceFeatures.HairColor))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Alternatives may offer a close shade.</small>
         </label>
 
         <label>
             Hair style
-            <InputText @bind-Value="_form.HairStyle" placeholder="long hair, braid" />
+            <InputSelect @bind-Value="_form.HairStyle">
+                @foreach (var tag in Choices(AppearanceFeatures.HairStyle))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Alternatives may offer a nearby style.</small>
         </label>
 
         <label>
             Eye colour
-            <InputText @bind-Value="_form.EyeColor" placeholder="green eyes" />
+            <InputSelect @bind-Value="_form.EyeColor">
+                @foreach (var tag in Choices(AppearanceFeatures.EyeColor))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Alternatives may offer a close shade.</small>
         </label>
 
         <label>
             Skin tone
-            <InputText @bind-Value="_form.SkinTone" placeholder="pale skin" />
+            <InputSelect @bind-Value="_form.SkinTone">
+                @foreach (var tag in Choices(AppearanceFeatures.SkinTone))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Kept exactly as chosen.</small>
         </label>
 
         <label>
             Build
-            <InputText @bind-Value="_form.Build" placeholder="athletic" />
+            <InputSelect @bind-Value="_form.Build">
+                @foreach (var tag in Choices(AppearanceFeatures.Build))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Kept exactly as chosen. Words like "slim" and "petite" are not offered:
+                tag-based checkpoints read them as juvenile.</small>
         </label>
 
         <label>
             Height
-            <InputText @bind-Value="_form.Height" placeholder="tall" />
+            <InputSelect @bind-Value="_form.Height">
+                @foreach (var tag in Choices(AppearanceFeatures.Height))
+                {
+                    <option value="@tag">@tag</option>
+                }
+            </InputSelect>
+            <small>Kept exactly as chosen.</small>
         </label>
 
         <label>
             Distinguishing feature
             <InputText @bind-Value="_form.DistinguishingFeature" placeholder="freckles" />
-            <small>Optional.</small>
+            <small>Optional, and kept exactly as written.</small>
         </label>
     </div>
 
@@ -88,7 +128,7 @@
     }
 
     <button type="submit" disabled="@_working">
-        @(_working ? "Creating…" : $"Generate {_candidateCount} portraits")
+        @(_working ? "Creating…" : $"Generate {Studio.CandidateCount} portraits")
     </button>
 </EditForm>
 
@@ -96,18 +136,47 @@
     private readonly AppearanceForm _form = new();
     private bool _working;
     private string? _error;
-    private int _candidateCount = 4;
+    private StylePack? _pack;
 
     // The pack decides which subjects exist, so the choice cannot be a hardcoded list here.
     private IReadOnlyList<string> _subjects = ["female"];
 
     protected override async Task OnInitializedAsync()
     {
-        _candidateCount = 4;
-
-        var pack = await Studio.GetPackAsync();
-        _subjects = [.. pack.Subjects.Keys.Order(StringComparer.Ordinal)];
+        _pack = await Studio.GetPackAsync();
+        _subjects = [.. _pack.Subjects.Keys.Order(StringComparer.Ordinal)];
         _form.Subject = _subjects[0];
+        ApplySubjectChoices();
+    }
+
+    private IReadOnlyList<string> Choices(string feature) =>
+        _pack is null ? [] : [.. _pack.SubjectFor(_form.Subject).OptionsFor(feature).Select(o => o.Tag)];
+
+    /// <summary>
+    /// Choices are per subject, so switching subject can leave a value the new one does not
+    /// offer. Each current value is kept when it is still on offer and otherwise replaced by the
+    /// new subject's first choice, so the form never submits something the pack cannot vary.
+    /// </summary>
+    private void ApplySubjectChoices()
+    {
+        _form.HairColor = Keep(AppearanceFeatures.HairColor, _form.HairColor);
+        _form.HairStyle = Keep(AppearanceFeatures.HairStyle, _form.HairStyle);
+        _form.EyeColor = Keep(AppearanceFeatures.EyeColor, _form.EyeColor);
+        _form.SkinTone = Keep(AppearanceFeatures.SkinTone, _form.SkinTone);
+        _form.Build = Keep(AppearanceFeatures.Build, _form.Build);
+        _form.Height = Keep(AppearanceFeatures.Height, _form.Height);
+    }
+
+    private string Keep(string feature, string current)
+    {
+        var choices = Choices(feature);
+
+        if (choices.Contains(current, StringComparer.OrdinalIgnoreCase))
+        {
+            return current;
+        }
+
+        return choices.Count > 0 ? choices[0] : current;
     }
 
     private async Task CreateAsync()
@@ -149,7 +218,7 @@
         public string HairStyle { get; set; } = "long hair";
         public string EyeColor { get; set; } = "green eyes";
         public string SkinTone { get; set; } = "pale skin";
-        public string Build { get; set; } = "slim";
+        public string Build { get; set; } = "average build";
         public string Height { get; set; } = "average height";
         public string DistinguishingFeature { get; set; } = "freckles";
 

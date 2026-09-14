@@ -7,14 +7,14 @@
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<PageTitle>Choose an anchor</PageTitle>
+<PageTitle>Choose a look</PageTitle>
 
-<h1>Choose an anchor</h1>
+<h1>Choose a look</h1>
 
 <p class="lede">
-    One prompt, @Studio.StylePackId, four seeds. Pick the one that reads most like the
-    character you described — every sprite is generated against it, so this choice decides
-    what "the same person" means for the rest of the save.
+    One seed, @Studio.StylePackId. The first portrait is exactly what you described; each of the
+    others moves one or two features to a close neighbour. Whichever you pick becomes this
+    character's appearance, and every sprite is generated to match it.
 </p>
 
 @if (_error is not null)
@@ -28,8 +28,8 @@
 else if (_candidates is null)
 {
     <div class="working">
-        <p>Generating four portraits. This runs on the GPU box and takes under a minute if
-            the model is already loaded, longer on a cold start.</p>
+        <p>Generating @Studio.CandidateCount portraits. This runs on the GPU box and takes under
+            a minute if the model is already loaded, longer on a cold start.</p>
         <p><small>Leaving this page will not cancel it — the work is held outside the
             circuit and you will rejoin it when you come back.</small></p>
     </div>
@@ -41,15 +41,15 @@ else
         {
             <figure class="candidate @(_selected?.Hash == candidate.Hash ? "selected" : null)">
                 <button type="button" @onclick="() => _selected = candidate">
-                    <img src="@candidate.RelativePath" alt="Candidate portrait, seed @candidate.Seed" />
+                    <img src="@candidate.RelativePath" alt="Candidate portrait: @Describe(candidate)" />
                 </button>
-                <figcaption>seed @candidate.Seed</figcaption>
+                <figcaption>@Describe(candidate)</figcaption>
             </figure>
         }
     </div>
 
     <button type="button" disabled="@(_selected is null || _approving)" @onclick="ApproveAsync">
-        @(_approving ? "Saving…" : "Use this as the anchor")
+        @(_approving ? "Saving…" : "Use this look")
     </button>
 }
 
@@ -64,6 +64,11 @@ else
     private string? _error;
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static string Describe(Candidate candidate) =>
+        candidate.Changes.Count == 0
+            ? "as described"
+            : string.Join("; ", candidate.Changes.Select(c => $"{c.From} → {c.To}"));
 
     private async Task LoadAsync()
     {

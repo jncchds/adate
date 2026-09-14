@@ -127,6 +127,12 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
                 $"Supported: {string.Join(", ", pack.SupportedCeilings)}.");
         }
 
+        // A negative the model never sees still changes the cache key, and reads as a protection.
+        if (pack.NegativePrompts is NegativeSupport.Ignored)
+        {
+            return "";
+        }
+
         var tags = new List<string>(32);
         tags.AddRange(pack.NegativeBase);
 

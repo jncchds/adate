@@ -157,6 +157,57 @@ public class DatabaseTests
     }
 
     /// <summary>
+    /// A candidate may move a feature to a nearby choice. Sprites are compiled from the stored
+    /// record, so the approved look has to replace the declared one or they would not match it.
+    /// </summary>
+    [Fact]
+    public async Task Approving_a_variant_replaces_the_stored_appearance()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+
+        var save = await saves.CreateAsync("illustrious-anime", "fingerprint", Ceiling.PG13);
+        var created = await characters.CreateAsync(save.Id, Appearance());
+
+        await characters.SetAnchorAsync(
+            created.Id, new string('a', 64), anchorSeed: 4242, Appearance() with { HairColor = "orange hair" });
+
+        var loaded = await characters.GetAsync(created.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("orange hair", loaded!.Appearance.HairColor);
+        Assert.Equal("long hair", loaded.Appearance.HairStyle);
+        Assert.Equal(new string('a', 64), loaded.AnchorImageHash);
+    }
+
+    /// <summary>
+    /// Age is what the content clamp is computed from, and subject selects the anchor tokens.
+    /// Neither is something choosing a look may change, and a refused approval writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task An_approved_variant_cannot_change_age_or_subject()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+
+        var save = await saves.CreateAsync("illustrious-anime", "fingerprint", Ceiling.PG13);
+        var created = await characters.CreateAsync(save.Id, Appearance());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => characters.SetAnchorAsync(
+            created.Id, new string('a', 64), anchorSeed: 1, Appearance() with { Age = 30 }));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => characters.SetAnchorAsync(
+            created.Id, new string('a', 64), anchorSeed: 1, Appearance() with { Subject = "male" }));
+
+        var loaded = await characters.GetAsync(created.Id);
+
+        Assert.Null(loaded!.AnchorImageHash);
+        Assert.Equal(Appearance(), loaded.Appearance);
+    }
+
+    /// <summary>
     /// HANDOFF 1.8. The failure this guards against is silent: a sprite generated under one
     /// ceiling being served into a session running at another.
     /// </summary>

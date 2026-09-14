@@ -2,6 +2,7 @@ using Game.Core.Gpu;
 using Game.Imaging.Caching;
 using Game.Imaging.Comfy;
 using Game.Imaging.Workflows;
+using Game.Imaging.ZImage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -41,8 +42,39 @@ public static class ImagingServiceCollectionExtensions
         // used stays a configuration decision, never a compile-time one.
         services.AddSingleton<IGpuLease, NoOpGpuLease>();
 
-        services.AddSingleton<IImageProvider, ComfyImageProvider>();
+        services.Configure<ZImageOptions>(config.GetSection(ZImageOptions.SectionName));
+        services.AddHttpClient(ZImageImageProvider.HttpClientName, static (sp, http) =>
+        {
+            var options = sp.GetRequiredService<IOptions<ZImageOptions>>().Value;
+            http.BaseAddress = Comfy.ComfyClient.EnsureTrailingSlash(options.BaseAddress);
+
+            // /generate holds the connection open for the whole render, so this bounds a
+            // generation rather than a control call.
+            http.Timeout = options.RequestTimeout;
+        });
+
+        // Which backend renders is configuration, never a compile-time choice. The ComfyUI
+        // client stays registered either way: the CLI's stats and free commands talk to it
+        // directly.
+        var provider = config[ProviderKey] ?? ComfyProvider;
+        if (string.Equals(provider, ZImageProvider, StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IImageProvider, ZImageImageProvider>();
+        }
+        else if (string.Equals(provider, ComfyProvider, StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IImageProvider, ComfyImageProvider>();
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Unknown image provider '{provider}' in '{ProviderKey}'. Known: {ComfyProvider}, {ZImageProvider}.");
+        }
 
         return services;
     }
+
+    public const string ProviderKey = "Imaging:Provider";
+    public const string ComfyProvider = "Comfy";
+    public const string ZImageProvider = "ZImage";
 }

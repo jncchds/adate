@@ -74,6 +74,34 @@ internal static class TestContent
         },
     };
 
+    /// <summary>The same pack as <see cref="Pack"/>, in the natural-language dialect.</summary>
+    public static StylePack NaturalPack() => Pack() with
+    {
+        Id = "test-natural",
+        Dialect = PromptDialect.Natural,
+        Consistency = ConsistencyStrategy.SeedAndPrompt,
+        PositivePrefix = ["Anime illustration", "soft cel shading"],
+        NegativeBase = ["low quality", "blurry"],
+        Subjects = new Dictionary<string, SubjectProfile>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["female"] = new(
+                ["a single woman"],
+                ["man"],
+                ["a white blouse", "a pleated skirt"],
+                [new AgeBand(16, ["a young adult woman"]), new AgeBand(18, ["an adult woman", "adult proportions"]), new AgeBand(60, ["an older woman", "visible wrinkles"])]),
+            ["male"] = new(
+                ["a single man"],
+                ["woman"],
+                ["a white shirt", "black trousers"],
+                [new AgeBand(16, ["a young adult man"]), new AgeBand(18, ["an adult man", "adult proportions"]), new AgeBand(60, ["an older man", "visible wrinkles"])]),
+        },
+        Expressions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["neutral"] = "a calm, neutral facial expression",
+            ["smile"] = "a warm, gentle smile",
+        },
+    };
+
     /// <summary>An intent through the gate at <paramref name="ceiling"/>, for compiler tests.</summary>
     public static ApprovedIntent Approved(SceneIntent? intent = null, Ceiling ceiling = Ceiling.PG13) =>
         ApprovedIntent.Approve(
@@ -92,11 +120,27 @@ internal static class TestContent
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["Evening"] = ["golden hour", "warm lamplight"],
+            },
+            "The interior of a cozy corner cafe with wooden tables",
+            new Dictionary<string, string>
+            {
+                ["Evening"] = "Golden sunset light and warm lamplight",
             });
 
-        public LocationDefinition Get(string locationId) =>
-            locationId == "cafe" ? Cafe : throw new KeyNotFoundException(locationId);
+        /// <summary>A location written only for booru packs: tags, no description.</summary>
+        private static readonly LocationDefinition Bare = new(
+            "bare",
+            "Tag-only location",
+            ["alley"],
+            new Dictionary<string, IReadOnlyList<string>>());
 
-        public IReadOnlyList<LocationDefinition> All() => [Cafe];
+        public LocationDefinition Get(string locationId) => locationId switch
+        {
+            "cafe" => Cafe,
+            "bare" => Bare,
+            _ => throw new KeyNotFoundException(locationId),
+        };
+
+        public IReadOnlyList<LocationDefinition> All() => [Bare, Cafe];
     }
 }

@@ -118,6 +118,99 @@ public class ShippedContentTests
         }
     }
 
+    private const string ZImagePackId = "zimage-anime";
+
+    [Fact]
+    public async Task The_zimage_pack_loads_as_a_natural_seed_and_prompt_pack()
+    {
+        var pack = await PackLoader().LoadAsync(ZImagePackId);
+
+        Assert.Equal(PromptDialect.Natural, pack.Dialect);
+
+        // Z-Image refuses a pose skeleton, and SeedAndTags always uploads one.
+        Assert.Equal(ConsistencyStrategy.SeedAndPrompt, pack.Consistency);
+
+        // Z-Image Turbo runs at cfg 1.0, where negatives are never applied, and the provider refuses one.
+        Assert.Equal(NegativeSupport.Ignored, pack.NegativePrompts);
+        Assert.NotEmpty(pack.AlwaysNegative); // still the vocabulary guard
+
+        // The Z-Image provider mattes the workflows it is configured to, and its default is this one.
+        Assert.Equal("zimage-sprite", pack.Workflows.Sprite);
+    }
+
+    /// <summary>Z-Image's DiT patchifies the 8x latent in 2x2 blocks, so every side must divide by 16.</summary>
+    [Fact]
+    public async Task The_zimage_pack_resolutions_divide_by_16()
+    {
+        var pack = await PackLoader().LoadAsync(ZImagePackId);
+
+        foreach (var size in new[] { pack.Resolutions.Portrait, pack.Resolutions.Sprite, pack.Resolutions.Background })
+        {
+            Assert.Equal(0, size.Width % 16);
+            Assert.Equal(0, size.Height % 16);
+        }
+    }
+
+    [Fact]
+    public async Task Every_shipped_location_describes_itself_at_every_time_of_day()
+    {
+        var pack = await PackLoader().LoadAsync(ZImagePackId);
+        var catalog = Catalog();
+        var compiler = new NaturalPromptCompiler(catalog);
+
+        foreach (var location in catalog.All())
+        {
+            foreach (var time in Enum.GetValues<TimeOfDay>())
+            {
+                var prompt = compiler.CompilePositive(
+                    appearance: null,
+                    ApprovedIntent.Approve(
+                        ContentPolicy.Resolve(GameContentSettings.SafeDefault, 24, pack.HighestCeiling, Intimacy.None),
+                        new SceneIntent(location.Id, time, "", "", "", Framing.FullBody),
+                        pack),
+                    pack,
+                    RenderTarget.Background);
+
+                Assert.Contains("no people", prompt, StringComparison.Ordinal);
+                Assert.True(
+                    location.TimeDescriptions?.ContainsKey(time.ToString()) is true,
+                    $"location '{location.Id}' has no description for {time}");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("female")]
+    [InlineData("male")]
+    public async Task The_zimage_pack_compiles_a_sprite_for_each_subject(string subject)
+    {
+        var pack = await PackLoader().LoadAsync(ZImagePackId);
+        var profile = pack.SubjectFor(subject);
+
+        string First(string feature) => profile.OptionsFor(feature)[0].Tag;
+
+        var appearance = new Characters.CharacterAppearance(
+            subject, 24,
+            EyeColor: First(Characters.AppearanceFeatures.EyeColor),
+            HairColor: First(Characters.AppearanceFeatures.HairColor),
+            HairStyle: First(Characters.AppearanceFeatures.HairStyle),
+            SkinTone: First(Characters.AppearanceFeatures.SkinTone),
+            Build: First(Characters.AppearanceFeatures.Build),
+            Height: First(Characters.AppearanceFeatures.Height),
+            DistinguishingFeature: "");
+
+        var intent = new SceneIntent("studio", TimeOfDay.Midday, string.Join(", ", profile.Outfit), "standing", pack.ExpressionFor("smile"), Framing.HalfBody);
+        var prompt = new NaturalPromptCompiler(Catalog()).CompilePositive(
+            appearance,
+            ApprovedIntent.Approve(ContentPolicy.Resolve(GameContentSettings.SafeDefault, 24, pack.HighestCeiling, Intimacy.None), intent, pack),
+            pack,
+            RenderTarget.Sprite);
+
+        Assert.Contains(profile.Positive[0], prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(profile.BandFor(24).Tags[0], prompt, StringComparison.Ordinal);
+        Assert.Contains("Only this one person", prompt, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void An_unknown_location_names_the_ones_that_exist()
     {
@@ -180,6 +273,79 @@ public class ShippedContentTests
                         tag.Equals("adult", StringComparison.OrdinalIgnoreCase),
                         $"pack {packId}, subject {subject}: {tag} belongs in an age band, not in the subject");
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appearance is picked from pack vocabulary, so the vocabulary is the player's whole input
+    /// surface. HANDOFF 1.9 names these as what tag checkpoints read as juvenile; none may be a
+    /// choice, whether declared or offered as an alternative.
+    /// </summary>
+    [Fact]
+    public async Task No_shipped_appearance_choice_is_juvenile_coded()
+    {
+        string[] juvenile = ["petite", "slim", "flat chest", "youthful", "young", "child", "loli", "shota", "teen", "baby face"];
+        var loader = PackLoader();
+
+        foreach (var packId in await loader.ListAsync())
+        {
+            var pack = await loader.LoadAsync(packId);
+
+            foreach (var (subject, profile) in pack.Subjects)
+            {
+                foreach (var feature in Characters.AppearanceFeatures.All)
+                {
+                    foreach (var option in profile.OptionsFor(feature))
+                    {
+                        foreach (var term in juvenile)
+                        {
+                            Assert.False(
+                                option.Tag.Contains(term, StringComparison.OrdinalIgnoreCase),
+                                $"pack {packId}, subject {subject}, {feature}: '{option.Tag}' contains '{term}'");
+
+                            // The prompt wording is what reaches the generator.
+                            Assert.False(
+                                option.Prompt?.Contains(term, StringComparison.OrdinalIgnoreCase) is true,
+                                $"pack {packId}, subject {subject}, {feature}: prompt '{option.Prompt}' contains '{term}'");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The form defaults to each subject's first choices. If those had too few neighbours, a new
+    /// player would be offered fewer portraits than the page promises.
+    /// </summary>
+    [Fact]
+    public async Task Every_shipped_subject_offers_four_looks_from_its_first_choices()
+    {
+        var loader = PackLoader();
+
+        foreach (var packId in await loader.ListAsync())
+        {
+            var pack = await loader.LoadAsync(packId);
+
+            foreach (var (subject, profile) in pack.Subjects)
+            {
+                string First(string feature) => profile.OptionsFor(feature)[0].Tag;
+
+                var declared = new Characters.CharacterAppearance(
+                    subject,
+                    24,
+                    EyeColor: First(Characters.AppearanceFeatures.EyeColor),
+                    HairColor: First(Characters.AppearanceFeatures.HairColor),
+                    HairStyle: First(Characters.AppearanceFeatures.HairStyle),
+                    SkinTone: First(Characters.AppearanceFeatures.SkinTone),
+                    Build: First(Characters.AppearanceFeatures.Build),
+                    Height: First(Characters.AppearanceFeatures.Height),
+                    DistinguishingFeature: "");
+
+                var variants = Characters.AppearanceVariations.For(declared, profile, count: 4, seed: 1);
+
+                Assert.True(variants.Count == 4, $"pack {packId}, subject {subject}: only {variants.Count} looks");
             }
         }
     }

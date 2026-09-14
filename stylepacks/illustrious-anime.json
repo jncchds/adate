@@ -84,12 +84,73 @@
       ],
       "negative": [
         "1boy",
-        "male focus"
+        "male focus",
+        "large breasts",
+        "huge breasts",
+        "gigantic breasts",
+        "curvy",
+        "wide hips",
+        "thick thighs",
+        "chibi",
+        "big head"
       ],
       "outfit": [
         "white blouse",
         "pleated skirt"
       ],
+      "features": {
+        "hairColor": [
+          { "tag": "black hair", "near": ["brown hair"] },
+          { "tag": "brown hair", "near": ["black hair", "light brown hair"] },
+          { "tag": "light brown hair", "near": ["brown hair", "blonde hair"] },
+          { "tag": "blonde hair", "near": ["light brown hair", "orange hair"] },
+          { "tag": "orange hair", "near": ["blonde hair", "red hair"] },
+          { "tag": "red hair", "near": ["orange hair", "brown hair"] },
+          { "tag": "pink hair", "near": ["red hair", "purple hair"] },
+          { "tag": "purple hair", "near": ["pink hair", "blue hair"] },
+          { "tag": "blue hair", "near": ["purple hair", "black hair"] },
+          { "tag": "silver hair", "near": ["white hair", "grey hair"] },
+          { "tag": "white hair", "near": ["silver hair"] },
+          { "tag": "grey hair", "near": ["silver hair"] }
+        ],
+        "hairStyle": [
+          { "tag": "short hair", "near": ["bob cut", "medium hair"] },
+          { "tag": "bob cut", "near": ["short hair"] },
+          { "tag": "medium hair", "near": ["short hair", "long hair"] },
+          { "tag": "long hair", "near": ["medium hair", "long hair, wavy hair", "very long hair"] },
+          { "tag": "long hair, wavy hair", "near": ["long hair"] },
+          { "tag": "very long hair", "near": ["long hair"] },
+          { "tag": "long hair, ponytail", "near": ["long hair, braid"] },
+          { "tag": "long hair, braid", "near": ["long hair, ponytail"] }
+        ],
+        "eyeColor": [
+          { "tag": "brown eyes", "near": ["black eyes", "yellow eyes"] },
+          { "tag": "black eyes", "near": ["brown eyes"] },
+          { "tag": "yellow eyes", "near": ["brown eyes"] },
+          { "tag": "green eyes", "near": ["aqua eyes"] },
+          { "tag": "aqua eyes", "near": ["green eyes", "blue eyes"] },
+          { "tag": "blue eyes", "near": ["aqua eyes", "grey eyes"] },
+          { "tag": "grey eyes", "near": ["blue eyes"] },
+          { "tag": "purple eyes", "near": ["blue eyes", "red eyes"] },
+          { "tag": "red eyes", "near": ["purple eyes"] }
+        ],
+        "skinTone": [
+          { "tag": "pale skin" },
+          { "tag": "fair skin" },
+          { "tag": "tan" },
+          { "tag": "dark skin" }
+        ],
+        "build": [
+          { "tag": "average build" },
+          { "tag": "athletic" },
+          { "tag": "toned" },
+          { "tag": "plump" }
+        ],
+        "height": [
+          { "tag": "average height" },
+          { "tag": "tall" }
+        ]
+      },
       "ageBands": [
         {
           "from": 16,
@@ -116,8 +177,16 @@
           "from": 40,
           "tags": [
             "(mature female:1.4)",
-            "middle-aged",
-            "aged"
+            "(middle-aged:1.3)",
+            "(wrinkles:0.7)"
+          ]
+        },
+        {
+          "from": 60,
+          "tags": [
+            "(old woman:1.5)",
+            "(wrinkles:1.4)",
+            "(elderly:1.3)"
           ]
         }
       ]
@@ -137,6 +206,58 @@
         "white dress shirt",
         "black trousers"
       ],
+      "features": {
+        "hairColor": [
+          { "tag": "black hair", "near": ["brown hair"] },
+          { "tag": "brown hair", "near": ["black hair", "light brown hair"] },
+          { "tag": "light brown hair", "near": ["brown hair", "blonde hair"] },
+          { "tag": "blonde hair", "near": ["light brown hair", "orange hair"] },
+          { "tag": "orange hair", "near": ["blonde hair", "red hair"] },
+          { "tag": "red hair", "near": ["orange hair", "brown hair"] },
+          { "tag": "pink hair", "near": ["red hair", "purple hair"] },
+          { "tag": "purple hair", "near": ["pink hair", "blue hair"] },
+          { "tag": "blue hair", "near": ["purple hair", "black hair"] },
+          { "tag": "silver hair", "near": ["white hair", "grey hair"] },
+          { "tag": "white hair", "near": ["silver hair"] },
+          { "tag": "grey hair", "near": ["silver hair"] }
+        ],
+        "hairStyle": [
+          { "tag": "short hair", "near": ["very short hair", "short hair, messy hair", "medium hair"] },
+          { "tag": "very short hair", "near": ["short hair"] },
+          { "tag": "short hair, messy hair", "near": ["short hair"] },
+          { "tag": "short hair, slicked back hair", "near": ["short hair"] },
+          { "tag": "medium hair", "near": ["short hair", "long hair, ponytail"] },
+          { "tag": "long hair, ponytail", "near": ["medium hair"] }
+        ],
+        "eyeColor": [
+          { "tag": "brown eyes", "near": ["black eyes", "yellow eyes"] },
+          { "tag": "black eyes", "near": ["brown eyes"] },
+          { "tag": "yellow eyes", "near": ["brown eyes"] },
+          { "tag": "green eyes", "near": ["aqua eyes"] },
+          { "tag": "aqua eyes", "near": ["green eyes", "blue eyes"] },
+          { "tag": "blue eyes", "near": ["aqua eyes", "grey eyes"] },
+          { "tag": "grey eyes", "near": ["blue eyes"] },
+          { "tag": "purple eyes", "near": ["blue eyes", "red eyes"] },
+          { "tag": "red eyes", "near": ["purple eyes"] }
+        ],
+        "skinTone": [
+          { "tag": "pale skin" },
+          { "tag": "fair skin" },
+          { "tag": "tan" },
+          { "tag": "dark skin" }
+        ],
+        "build": [
+          { "tag": "average build" },
+          { "tag": "athletic" },
+          { "tag": "toned" },
+          { "tag": "muscular" },
+          { "tag": "plump" }
+        ],
+        "height": [
+          { "tag": "average height" },
+          { "tag": "tall" }
+        ]
+      },
       "ageBands": [
         {
           "from": 16,

@@ -105,6 +105,8 @@ public sealed class JsonStylePackLoader : IStylePackLoader
                     "An unspecified outfit is re-invented on every render, which moves the " +
                     "silhouette between expressions and breaks the crossfade.");
             }
+
+            FeatureVocabularyRules.Validate(packId, subject, profile, pack.AlwaysNegative);
         }
 
         if (pack.AlwaysNegative.Count == 0)

@@ -106,7 +106,8 @@ body {
     font-weight: 600;
 }
 
-.grid input {
+.grid input,
+.grid select {
     padding: 0.4rem 0.5rem;
     font: inherit;
     font-weight: 400;

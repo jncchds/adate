@@ -50,30 +50,53 @@ public sealed class CharacterRepository(Database database)
     /// generated against this image, which is what makes the expressions read as one
     /// person. The seed is stored alongside it so the portrait itself stays reproducible.
     /// </summary>
+    /// <param name="appearance">
+    /// The appearance the approved portrait was rendered from. Candidates may move a feature to
+    /// a nearby choice, and whichever the player approves has to become the record every later
+    /// sprite is compiled from, or the sprites would describe someone other than the portrait.
+    /// Null keeps the stored appearance. It may change how the character looks, never their age
+    /// or subject: age is what the content clamp is computed from.
+    /// </param>
     public async Task SetAnchorAsync(
         Guid characterId,
         string anchorImageHash,
         long anchorSeed,
+        CharacterAppearance? appearance = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(anchorImageHash);
+        appearance?.Validate();
 
         await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
 
+        // Age and subject are checked in the same statement that writes, so there is no window
+        // between reading the stored values and replacing them.
         command.CommandText = """
             UPDATE character
-            SET anchor_image_hash = $hash, anchor_seed = $seed
-            WHERE id = $id;
+            SET anchor_image_hash = $hash,
+                anchor_seed = $seed,
+                appearance_json = COALESCE($appearance, appearance_json)
+            WHERE id = $id
+              AND ($age IS NULL OR age = $age)
+              AND ($subject IS NULL OR json_extract(appearance_json, '$.subject') = $subject);
             """;
 
         command.Parameters.AddWithValue("$hash", anchorImageHash);
         command.Parameters.AddWithValue("$seed", anchorSeed);
         command.Parameters.AddWithValue("$id", characterId.ToString());
+        command.Parameters.AddWithValue(
+            "$appearance", appearance is null ? DBNull.Value : JsonSerializer.Serialize(appearance, Json));
+        command.Parameters.AddWithValue("$age", appearance is null ? DBNull.Value : appearance.Age);
+        command.Parameters.AddWithValue("$subject", appearance is null ? DBNull.Value : appearance.Subject);
 
         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
         {
-            throw new InvalidOperationException($"No character with id '{characterId}'.");
+            throw new InvalidOperationException(appearance is null
+                ? $"No character with id '{characterId}'."
+                : $"No character with id '{characterId}', age {appearance.Age} and subject " +
+                  $"'{appearance.Subject}'. An approved portrait may change how a character looks, " +
+                  "never their age or subject.");
         }
     }
 

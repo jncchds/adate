@@ -66,6 +66,15 @@ public sealed record StylePack
     public IReadOnlyList<string> AlwaysNegative { get; init; } = [];
 
     /// <summary>
+    /// Whether the checkpoint applies negatives at this pack's settings. When
+    /// <see cref="NegativeSupport.Ignored"/>, no negative is compiled, and <see cref="AlwaysNegative"/>
+    /// still guards the appearance vocabulary but protects nothing at render time. What holds on such
+    /// a pack is structural: the age clamp in <see cref="Content.ContentPolicy"/>, restricted-positive
+    /// filtering, and the schema rules of migration 002.
+    /// </summary>
+    public NegativeSupport NegativePrompts { get; init; } = NegativeSupport.Applied;
+
+    /// <summary>
     /// Subject anchors, keyed by <see cref="Characters.CharacterAppearance.Subject"/>. A game
     /// declares which subjects its love interests may use; the pack supplies the vocabulary
     /// each one needs, because the right tokens are checkpoint-specific and not something
@@ -223,12 +232,43 @@ public sealed record StylePack
 /// <see cref="AgeBand.From"/> ascending; the applicable band is the last one whose
 /// <c>From</c> does not exceed the character's age.
 /// </param>
+/// <param name="Features">
+/// The appearance choices this subject offers, keyed by <see cref="Characters.AppearanceFeatures"/>.
+/// Per subject because the vocabulary differs -- the hair styles offered for a man are not the
+/// ones offered for a woman -- and pack data because the words that render a look are
+/// checkpoint-specific. Nullable only so a manifest written before choices existed still
+/// deserialises; the loader refuses a pack that omits them.
+/// </param>
 public sealed record SubjectProfile(
     IReadOnlyList<string> Positive,
     IReadOnlyList<string> Negative,
     IReadOnlyList<string> Outfit,
-    IReadOnlyList<AgeBand> AgeBands)
+    IReadOnlyList<AgeBand> AgeBands,
+    IReadOnlyDictionary<string, IReadOnlyList<FeatureOption>>? Features = null)
 {
+    /// <summary>The choices for <paramref name="feature"/>, or none.</summary>
+    public IReadOnlyList<FeatureOption> OptionsFor(string feature)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(feature);
+
+        if (Features is null)
+        {
+            return [];
+        }
+
+        // Matched case-insensitively for the same reason as SubjectFor: deserialisation replaces
+        // the dictionary with a case-sensitive one.
+        foreach (var (key, options) in Features)
+        {
+            if (string.Equals(key, feature, StringComparison.OrdinalIgnoreCase))
+            {
+                return options;
+            }
+        }
+
+        return [];
+    }
+
     /// <summary>The band covering <paramref name="age"/>, or a throw if the bands do not.</summary>
     public AgeBand BandFor(int age)
     {

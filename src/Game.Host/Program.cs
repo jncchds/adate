@@ -57,8 +57,10 @@ builder.Services.AddSingleton<IStylePackLoader>(sp => sp.GetRequiredService<Json
 builder.Services.AddSingleton<ILocationCatalog>(sp =>
     new JsonLocationCatalog(sp.GetRequiredService<IOptions<StudioOptions>>().Value.LocationsFile));
 
-// One compiler per prompt dialect. Spike 0 ships the booru dialect only.
+// One compiler per prompt dialect; the pack's dialect picks which one runs.
 builder.Services.AddSingleton<IPromptCompiler, BooruPromptCompiler>();
+builder.Services.AddSingleton<IPromptCompiler, NaturalPromptCompiler>();
+builder.Services.AddSingleton<PromptCompilers>();
 
 // Pose skeletons are shipped content, seeded into the image store on first use.
 builder.Services.AddSingleton(sp => new PoseCatalog(
