@@ -1,0 +1,183 @@
+# Builds every platform and publishes a GitHub release, for release branches only.
+#
+# A push to release/<version> (release/0.1.0, release/1.2.0-beta.1) runs the tests, builds the desktop
+# app for Windows, Linux and macOS, the Android APK and the web host, and publishes them as the GitHub
+# release v<version>. Pushing to the branch again rebuilds and replaces that release, so the release
+# always matches the branch head.
+#
+# The APK is signed with the Android SDK's debug key unless these repository secrets are set:
+# ANDROID_KEYSTORE_BASE64 (the keystore file, base64), ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - "release/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  version:
+    name: Version from the branch
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#release/}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Branch '$GITHUB_REF_NAME' is not release/<major>.<minor>.<patch>[-label]."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Tests
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet test Adate.slnx -c Release
+
+  desktop:
+    name: Desktop (${{ matrix.rid }})
+    needs: [version, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Publish
+        shell: bash
+        run: >
+          dotnet publish src/Game.Desktop/Game.Desktop.csproj -c Release -r ${{ matrix.rid }} --self-contained
+          -p:Version="$VERSION" -o publish/adate
+      - name: Package
+        shell: bash
+        run: |
+          cd publish
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a "../adate-$VERSION-${{ matrix.rid }}.zip" adate
+          else
+            tar czf "../adate-$VERSION-${{ matrix.rid }}.tar.gz" adate
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.rid }}
+          path: adate-*
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet workload install android
+      - name: Install the Android SDK platform
+        run: >
+          dotnet build src/Game.Android/Game.Android.csproj -t:InstallAndroidDependencies -f net10.0-android
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+      - name: Publish
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          signing=()
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/adate.keystore"
+            signing=(-p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$RUNNER_TEMP/adate.keystore"
+                     -p:AndroidSigningKeyAlias="$KEY_ALIAS"
+                     -p:AndroidSigningKeyPass=env:KEYSTORE_PASSWORD -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD)
+          fi
+          dotnet publish src/Game.Android/Game.Android.csproj -c Release -f net10.0-android \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" \
+            -p:ApplicationDisplayVersion="$VERSION" -p:ApplicationVersion="${{ github.run_number }}" \
+            "${signing[@]}" -o publish/android
+          cp "$(find publish/android -name '*-Signed.apk' | head -n 1)" "adate-$VERSION-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: adate-*.apk
+          if-no-files-found: error
+
+  web:
+    name: Web host
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet publish src/Game.Host/Game.Host.csproj -c Release -p:Version="$VERSION" -o publish/adate-web
+      - run: tar czf "adate-$VERSION-web.tar.gz" -C publish adate-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: adate-*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    needs: [version, desktop, android, web]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        shell: bash
+        run: |
+          tag="v$VERSION"
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then prerelease=(--prerelease); fi
+          # The branch is the version: a new push replaces the release and moves its tag.
+          gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "adate $VERSION" --generate-notes "${prerelease[@]}"

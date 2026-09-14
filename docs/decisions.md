@@ -1219,3 +1219,48 @@ So the band wording stays as it is. The other-life variant is told apart by its 
 want, temper, style), not by looking older. The five-year gap stays because it gives the story a
 real difference. The measure passes on its own condition: four different people. The opposite
 variant is recognisable in both casts.
+
+## Avalonia beside Blazor, with the game on the device
+
+The user chose an Avalonia frontend beside the web host (not replacing it), the game running on the
+phone itself, every screen shape, and a release workflow for release branches only.
+
+**One game library, two frontends.** The world, the studio, jobs and poses moved from Game.Host into
+Game.Play, and the composition that was in Program.cs became `AddGame(config, contentRoot)`. The web
+host and the Avalonia app build the same graph, so there is no second copy of any game rule. Game.App
+holds the Avalonia screens; the heads are thin: Game.Desktop (Windows, Linux, macOS) and Game.Android.
+The measure harness stays in the web host.
+
+**Where things live.** Each head gives `GamePaths(ContentRoot, DataRoot)`.
+* Desktop: content next to the executable, data in local application data under `adate`
+  (`ADATE_DATA` overrides it). Desktop saves are separate from the web host's `data/adate.db`.
+* Android: content ships as APK assets and is copied to app storage on every start (under 200 KB),
+  so an update never leaves stale or deleted files; data is the app's private files folder.
+* Server addresses default to the home GPU box, shipped inside Game.App; the Servers screen writes
+  the player's own `settings.json` over them and restarts the game, because the HTTP clients read
+  their addresses once. Android allows cleartext HTTP, since LM Studio and Z-Image are plain HTTP
+  on the LAN.
+
+**The picture never scrolls away.** The play screen is two parts in a `StageLayout` panel: the stage
+(background, sprite, caption) and the side (words and choices), which scrolls on its own.
+* Landscape, from nearly square to 20:9 phones: the side is on the right at 36% of the width,
+  clamped to 320 to 560 px and never more than half.
+* Portrait: the side stacks under a stage 45% of the height, capped at a square, so a person still
+  reads at phone size.
+* `SpriteFrame` shows a sprite from the head to about mid-thigh (62% of its height) and crops arms
+  before shrinking the face in narrow cards. The same frame draws people on the neutral backdrop in
+  the invite and ending cards.
+* On the map the stage shows the place the player was last at, at the current slot and weather;
+  after a restart, the first known place. This is not saved. At the ending offer and the ending it
+  shows the backdrop.
+
+**Not ported.** The cast debug page and the scene viewer stay web-only; they are tools, not play.
+
+**Solution and CI.** Adate.slnx holds what builds anywhere .NET builds, the desktop head and the UI
+tests included. The Android head is built by path, so the everyday build and test loop does not
+need the Android workload. `.github/workflows/release.yml` runs only on pushes to
+`release/<semver>`: tests, then desktop for win-x64, linux-x64 and osx-arm64, the APK and the web
+host, then the GitHub release `v<version>` with every file attached. Pushing the branch again
+replaces that release and moves its tag, so the release matches the branch head. A version with a
+label (`-beta.1`) is marked prerelease. The APK is signed with the debug key unless keystore secrets
+are set. iOS is not built yet: it needs a Mac runner and signing to be of any use.

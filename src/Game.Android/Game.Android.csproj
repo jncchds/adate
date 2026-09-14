@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Android head: the whole game runs on the phone and reaches the servers over the network. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <RootNamespace>Game.Android</RootNamespace>
+    <ApplicationId>io.github.jncchds.adate</ApplicationId>
+    <!-- The release workflow passes both from the branch name and the run number. -->
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <!--
+      Content, options and saved state are read with reflection-based System.Text.Json. A trimmed
+      build turns that off by default, which would fail the first content file at startup.
+    -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.App\Game.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" Version="12.1.2" />
+  </ItemGroup>
+
+  <!-- Shipped content travels as assets and is copied into app storage at start. -->
+  <ItemGroup>
+    <AndroidAsset Include="..\..\stylepacks\**\*.json" Link="Assets\stylepacks\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\..\content\**\*.json" Link="Assets\content\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\..\content\**\*.png" Link="Assets\content\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\..\workflows\**\*.json" Link="Assets\workflows\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

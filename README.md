@@ -25,12 +25,16 @@ is reached through a configured URL.
 | `Game.Core` | Domain types, `SceneIntent`, `IPromptCompiler`, `IGpuLease`, style pack model |
 | `Game.Imaging` | `IImageProvider`, ComfyUI client, workflow patching, content-addressed cache |
 | `Game.Data` | SQLite schema, migrations, repositories |
-| `Game.Llm` | Empty by design — Spike 0 has no LLM |
-| `Game.Host` | Blazor Server app |
+| `Game.Llm` | Scene, reaction and epilogue writers, memory, the OpenAI-compatible client |
+| `Game.Play` | The game without a frontend: world, studio, jobs; composed by `AddGame` |
+| `Game.Host` | Blazor Server app, and the `measure` harness |
+| `Game.App` | Avalonia frontend shared by every native head |
+| `Game.Desktop` | Avalonia head for Windows, Linux and macOS |
+| `Game.Android` | Avalonia head for Android, built as an APK (not in the solution) |
 | `Game.Cli` | Console harness for the image pipeline |
 
-`Game.Core` depends on nothing. Everything else depends on it. `Game.Host` depends on
-everything.
+`Game.Core` depends on nothing. Everything else depends on it. `Game.Play` depends on the
+libraries; both frontends depend on `Game.Play`, so neither holds a game rule.
 
 ## Running
 
@@ -57,6 +61,27 @@ Reports ComfyUI's version and free VRAM per device.
 ```bash
 ADATE_Comfy__BaseAddress=http://gpu-box:8188 dotnet run --project src/Game.Host
 ```
+
+### 4. The native app
+
+The game runs inside the app, and reaches the language model and Z-Image over the network. The
+shipped addresses point at the home GPU box; change them under **Servers and storage**.
+
+```bash
+dotnet run --project src/Game.Desktop
+```
+
+The Android APK needs the `android` workload and JDK 17 or 21:
+
+```bash
+dotnet publish src/Game.Android -c Release -f net10.0-android -o artifacts/android
+```
+
+## Releases
+
+Push a branch named `release/<version>` (for example `release/0.1.0`). The release workflow runs the
+tests, builds the desktop app for Windows, Linux and macOS, the Android APK and the web host, and
+publishes them as the GitHub release `v<version>`. Pushing the branch again replaces that release.
 
 ## Status
 
