@@ -71,7 +71,8 @@ public sealed class BibleWriter(ILlmClient llm, IOptions<LlmOptions> options)
             $"- id {p.Id}: {p.Name}, works as {p.WorksAs}, wants to {p.Want}. {string.Join(" ", p.Temper)}")) +
             $"\n\n## Rules\n- For every person: one to {MaxLikes} likes, each under {MaxLikeLength} characters.\n" +
             $"- One secret each, under {MaxSecretLength} characters, something they would not say on a first meeting.\n" +
-            "- Use exactly the ids given, once each.";
+            "- Use exactly the ids given, once each.\n" +
+            "- Write likes as short noun phrases and the secret in the third person about them, for example \"Still keeps every letter from an estranged sibling.\"";
 
         IReadOnlyList<string> lastReasons = [];
         for (var attempt = 0; attempt <= settings.MaxRetries; attempt++)

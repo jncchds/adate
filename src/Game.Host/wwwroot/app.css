@@ -368,6 +368,8 @@ button.active {
 .encounter-text {
     font-size: 1.05rem;
     max-width: 46rem;
+    /* Written scenes separate paragraphs with line breaks. */
+    white-space: pre-line;
 }
 
 .encounter-with {

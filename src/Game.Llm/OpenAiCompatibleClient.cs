@@ -37,6 +37,11 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
             },
         };
 
+        if (!string.IsNullOrWhiteSpace(settings.ReasoningEffort))
+        {
+            body["reasoning_effort"] = settings.ReasoningEffort;
+        }
+
         await using var held = await lease.AcquireAsync(GpuConsumer.Llm, ct).ConfigureAwait(false);
 
         using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");

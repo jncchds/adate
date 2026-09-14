@@ -1077,3 +1077,55 @@ The same RAM ceiling rules out offloading the text encoder to the CPU. Both opti
 memory for the VM (`.wslconfig` on the Windows host), or weights converted to fp8 ahead of time
 with a loader that streams them. The override was removed and the service went back to bf16. The
 option stays in the server, off by default.
+
+## Gemma 4 12B beside Z-Image
+
+**Settings.** `google/gemma-4-12b-qat` (Q4_0, 6.7 GB on disk) is loaded in LM Studio with its saved
+settings: 10K context, quantised KV cache on the GPU, flash attention, 4 parallel slots. Embeddings
+use `text-embedding-nomic-embed-text-v1.5` (768 dimensions, 2K context). Both are configured in
+`appsettings.Development.json`. nemotron-3-nano-omni turned out to be a 30B MoE at 26 GB and would
+not load.
+
+**VRAM**, after a restart of the box:
+
+| State | GPU used | Free |
+|---|---|---|
+| Z-Image loaded, after one render | 23.2 GB | 9.0 GB |
+| Gemma loaded as well | 31.3 GB | 0.9 GB |
+| After three renders | 27.7 GB | 4.5 GB |
+| After three scene requests | 29.3 GB | 2.9 GB |
+
+Gemma takes about 8 GB. Renders at 1152x768 and 768x1152 all succeeded, sprite matting included,
+at 3.0 to 3.7 s once warm. The first took 8.2 s while memory settled. Z-Image's peak stays at
+21.5 GB. It needs about 1.8 GB above its idle reservation, so it fits, but with little to spare.
+
+**Scene requests.** Three scene-shaped requests with the strict schema took 11.7 to 13.5 s each.
+All three parsed, and each returned an expression, one or two facts, a summary and tags. About
+1,000 of the output tokens are reasoning, because the model's reasoning is on by default. One of
+the three slipped from the second person into the first ("we", "I"). Nothing checks person yet.
+
+**Reasoning off.** With `reasoning_effort: "none"`, the same request took 6.1 to 7.6 s and 370 to
+430 output tokens, still parsing with an expression, facts, a summary and tags. Development sets
+`Llm:ReasoningEffort` to `none`. The model repeats tags ("confession, confession"), which the
+writer already de-duplicates.
+
+**First live scene in the game.** Maya's contact scene on Mira's save was written on the first
+attempt and stored everything it should:
+
+* bible facts for all four people, with distinct appearance and a job, likes and a secret each;
+* a scene memory with its 768-dimension embedding, a summary and a `first` tag;
+* the turn log.
+
+It also showed three writing problems, now checked or asked for:
+
+* **First person.** The scene narrated "I find Maya… we talk". The writer now rejects two or more
+  first-person words outside quoted dialogue, and the packet rules name the words to avoid.
+* **One long block on screen.** The stored text did have paragraph breaks. The page collapsed
+  them, and `.encounter-text` now keeps line breaks. The 1,721 characters were still long, so
+  the limit dropped to 1,500, the packet asks for under 1,200, and text over 600 characters
+  without line breaks is sent back as a guard.
+* **Bible secrets in the first person** ("I secretly keep…"). The bible prompt now asks for the
+  third person with an example.
+
+Jobs are picked per person, stepping past any job another cast member already has, after two
+people in one cast both came out as baristas.

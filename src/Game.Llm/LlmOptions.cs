@@ -24,7 +24,14 @@ public sealed class LlmOptions
 
     public double Temperature { get; set; } = 0.8;
 
-    public int MaxTextLength { get; set; } = 1800;
+    /// <summary>
+    /// Sent as <c>reasoning_effort</c> when set, for models that think before answering. <c>none</c>
+    /// roughly halves a scene's latency on Gemma 4 with the schema still met; empty leaves the
+    /// server's default.
+    /// </summary>
+    public string? ReasoningEffort { get; set; }
+
+    public int MaxTextLength { get; set; } = 1500;
 
     /// <summary>The embedding model id for memory retrieval; empty turns retrieval off and memories fall back to recency.</summary>
     public string EmbeddingModel { get; set; } = "";

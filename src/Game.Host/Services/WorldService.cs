@@ -590,6 +590,7 @@ public sealed class WorldService(
 
         var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var people = new List<BiblePerson>();
+        var takenJobs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var li in cast)
         {
@@ -600,9 +601,17 @@ public sealed class WorldService(
                 await story.AddFactAsync(saveId, fact, storyContent.Predicate(fact.Predicate), [id, FactLedger.Player], ct: ct).ConfigureAwait(false);
             }
 
-            var job = setting.Occupations.Count == 0
-                ? "something they rarely talk about"
-                : setting.Occupations[(int)(PlaceRecord.SeedFor(saveId, id) % setting.Occupations.Count)];
+            // Deterministic from the save and person, stepping past jobs another cast member already has.
+            var job = "something they rarely talk about";
+            if (setting.Occupations.Count > 0)
+            {
+                var start = (int)(PlaceRecord.SeedFor(saveId, id) % setting.Occupations.Count);
+                job = Enumerable.Range(0, setting.Occupations.Count)
+                    .Select(step => setting.Occupations[(start + step) % setting.Occupations.Count])
+                    .FirstOrDefault(candidate => !takenJobs.Contains(candidate))
+                    ?? setting.Occupations[start];
+                takenJobs.Add(job);
+            }
 
             await story.AddFactAsync(
                 saveId,

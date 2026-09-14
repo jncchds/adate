@@ -87,6 +87,42 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task First_person_narration_is_sent_back_but_dialogue_may_say_I()
+    {
+        var llm = new FakeLlm(
+            () => Answer(text: "I find Rin by the window and we talk for a while about my week."),
+            () => Answer(text: "You find Rin by the window. \\\"I missed you,\\\" they say, and we both know it."),
+            () => Answer(text: "You find Rin by the window. \\\"I missed you,\\\" they say."));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(2, scene.Attempts);
+        Assert.Contains("first person", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Narration_checks_ignore_quoted_dialogue_and_count_paragraphs()
+    {
+        Assert.Empty(Narration.FirstPersonOutsideDialogue("You wave. “I know,” Rin says. \"We should go,\" they add."));
+        Assert.Equal(["I", "my", "we"], Narration.FirstPersonOutsideDialogue("I grab my coat and we leave."));
+        Assert.True(Narration.HasParagraphs("One.\n\nTwo."));
+        Assert.False(Narration.HasParagraphs("One long block."));
+    }
+
+    [Fact]
+    public async Task A_long_scene_in_one_block_is_sent_back()
+    {
+        var block = string.Join(" ", Enumerable.Repeat("You watch the rain against the window.", 20));
+        var llm = new FakeLlm(() => Answer(text: block), () => Answer());
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.Equal(2, scene.Attempts);
+        Assert.Contains("one block", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_judge_sends_a_contradicting_scene_back_with_the_contradiction()
     {
         var llm = new FakeLlm(
@@ -282,7 +318,7 @@ public class SceneWriterTests
         var handler = new RecordingHandler(HttpStatusCode.OK, """{ "choices": [ { "message": { "content": "{\"text\":\"hi\"}" } } ] }""");
         var lease = new CountingLease();
         var http = new HttpClient(handler) { BaseAddress = OpenAiCompatibleClient.EnsureTrailingSlash("http://llm.local/v1") };
-        var client = new OpenAiCompatibleClient(http, lease, Options.Create(new LlmOptions { Model = "qwen/qwen3.8-27b", Temperature = 0.5 }));
+        var client = new OpenAiCompatibleClient(http, lease, Options.Create(new LlmOptions { Model = "qwen/qwen3.8-27b", Temperature = 0.5, ReasoningEffort = "none" }));
 
         var answer = await client.CompleteJsonAsync(new LlmRequest("system", "user", "scene", new JsonObject { ["type"] = "object" }));
 
@@ -292,6 +328,7 @@ public class SceneWriterTests
 
         var sent = JsonNode.Parse(handler.Sent!)!;
         Assert.Equal("qwen/qwen3.8-27b", sent["model"]!.GetValue<string>());
+        Assert.Equal("none", sent["reasoning_effort"]!.GetValue<string>());
         Assert.Equal("json_schema", sent["response_format"]!["type"]!.GetValue<string>());
         Assert.Equal("scene", sent["response_format"]!["json_schema"]!["name"]!.GetValue<string>());
         Assert.Equal("user", sent["messages"]![1]!["content"]!.GetValue<string>());

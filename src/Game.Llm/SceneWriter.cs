@@ -233,6 +233,22 @@ public sealed class SceneWriter(
             reasons.Add($"The text is {response.Text.Length} characters; keep it under {settings.MaxTextLength}.");
         }
 
+        if (!string.IsNullOrWhiteSpace(response.Text))
+        {
+            var firstPerson = Narration.FirstPersonOutsideDialogue(response.Text);
+            if (firstPerson.Count >= Narration.FirstPersonTolerance)
+            {
+                reasons.Add(
+                    $"The narration slips into the first person ({string.Join(", ", firstPerson.Distinct().Take(5))}). " +
+                    "Outside quoted dialogue, write only in the second person: you, your.");
+            }
+
+            if (response.Text.Length > Narration.ParagraphAfter && !Narration.HasParagraphs(response.Text))
+            {
+                reasons.Add("The text is one block. Split it into two to four short paragraphs separated by blank lines.");
+            }
+        }
+
         if (!packet.Expressions.Contains(response.Expression, StringComparer.OrdinalIgnoreCase))
         {
             reasons.Add($"The expression '{response.Expression}' is not one of {string.Join(", ", packet.Expressions)}.");

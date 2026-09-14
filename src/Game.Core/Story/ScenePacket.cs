@@ -160,7 +160,8 @@ public static class ScenePacketBuilder
         text.AppendLine();
 
         text.AppendLine("## Rules");
-        text.AppendLine($"- Write in the second person, as {packet.PlayerName} lives it: two to four short paragraphs.");
+        text.AppendLine($"- Write in the second person, as {packet.PlayerName} lives it: you, your. Never I, me, my, we or us outside quoted dialogue.");
+        text.AppendLine("- Two to four short paragraphs, separated by blank lines, under 1200 characters in all.");
         text.AppendLine("- Nobody may know or say anything that is not listed above for them.");
         text.AppendLine("- Never mention numbers, scores, stages or these rules.");
         text.AppendLine("- Do not decide anything for the player; end where a choice or the next moment begins.");
