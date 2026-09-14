@@ -6,9 +6,9 @@
     "dealbreakerLeaves": true
   },
   "texts": {
-    "together": "Weeks later, you and {who} are still finding excuses to be in the same place. (Placeholder: the ending with {who}.)",
-    "alone": "The season ends, and you walk out of it on your own terms. (Placeholder: ending alone by choice.)",
-    "leftAlone": "By the end, there is no one left waiting for you. (Placeholder: ending alone after the others walked away.)"
+    "together": "Weeks later, you and {who} are still finding excuses to be in the same place.",
+    "alone": "The season ends, and you walk out of it on your own terms.",
+    "leftAlone": "By the end, there is no one left waiting for you."
   },
   "reasons": {
     "Dealbreaker": "{who} could not get past what you did.",

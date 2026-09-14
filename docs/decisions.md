@@ -1341,3 +1341,12 @@ what the player had said.
   your building", and dialogue in reactions. The judge's instruction now lists what is fine with those
   examples, and on the last attempt its doubt about agency alone keeps the scene or reaction (logged
   as "kept despite the judge") instead of throwing it away. Still to measure again.
+* **No "(Placeholder: …)" in the game.** The authored texts that stand in when the model fails
+  (encounters, generated beats, endings) ended with a note like "(Placeholder: the routine route's
+  first meeting.)". The notes are gone, so a fallback reads as a plain line of the story.
+* **Extra want tags are taken off, not sent back.** In the copied day-5 save, Leo's scene fell back
+  after three attempts: choices tagged helps/hinders on more than one reply (twice), an unfinished
+  text and a player action. The tagging rule is the most common rejection in every measure, and the
+  player never sees tags. C# now keeps the tag on the first reply that touches the want and takes it
+  off the others; a reply left with no tags is dropped, and only fewer than two replies left sends
+  the scene back.

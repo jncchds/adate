@@ -31,7 +31,7 @@
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,
-    "text": "The same person as on your last two evenings sits at the end of the counter, and tonight they ask whether you are waiting for someone. (Placeholder: the chance route's first meeting.)"
+    "text": "The same person as on your last two evenings sits at the end of the counter, and tonight they ask whether you are waiting for someone."
   },
   {
     "id": "night-market-poster",

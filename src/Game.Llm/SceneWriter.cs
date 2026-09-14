@@ -277,19 +277,37 @@ public sealed class SceneWriter(
             return [];
         }
 
-        // Touching their want is the exception, not a default tag for any friendly line.
-        var wantTagged = offered.Count(c => (c.Tags ?? []).Any(t =>
-            t.StartsWith(StoryContent.HelpsPrefix, StringComparison.Ordinal) || t.StartsWith(StoryContent.HindersPrefix, StringComparison.Ordinal)));
-        if (wantTagged > 1)
-        {
-            reasons.Add($"{wantTagged} choices are tagged helps or hinders; only a choice that really touches their want may be, at most one. Tag the others with the quality they show.");
-        }
+        // Touching their want is the exception, not a default tag for any friendly line. Gemma tags most
+        // friendly replies with it, and sending the scene back for that alone cost whole scenes to the
+        // authored text. So C# settles it: the first reply that touches the want keeps the tag, the others
+        // lose it, and a reply left with no tags is dropped. Only too few replies left sends it back.
+        static bool TouchesWant(string tag) =>
+            tag.StartsWith(StoryContent.HelpsPrefix, StringComparison.Ordinal) || tag.StartsWith(StoryContent.HindersPrefix, StringComparison.Ordinal);
+
+        var wantTagged = offered.Count(c => (c.Tags ?? []).Any(TouchesWant));
+        var wantKept = false;
+        var dropped = 0;
 
         var choices = new List<ProposedChoice>();
         foreach (var choice in offered)
         {
             var text = choice.Text?.Trim() ?? "";
             var tags = (choice.Tags ?? []).Distinct(StringComparer.Ordinal).ToList();
+
+            if (tags.Any(TouchesWant))
+            {
+                if (wantKept)
+                {
+                    tags.RemoveAll(TouchesWant);
+                    if (tags.Count == 0)
+                    {
+                        dropped++;
+                        continue;
+                    }
+                }
+
+                wantKept = true;
+            }
 
             if (text.Length is 0 or > MaxChoiceLength)
             {
@@ -307,6 +325,11 @@ public sealed class SceneWriter(
             {
                 choices.Add(new ProposedChoice(text, tags));
             }
+        }
+
+        if (dropped > 0 && choices.Count < MinChoices)
+        {
+            reasons.Add($"{wantTagged} choices are tagged helps or hinders; only a choice that really touches their want may be, at most one. Tag the others with the quality they show.");
         }
 
         return choices;

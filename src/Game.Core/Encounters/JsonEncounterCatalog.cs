@@ -132,7 +132,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         Time: [ev.Time],
         Days: [ev.Day, ev.Day],
         Priority: EventPriority,
-        Text: $"{ev.Name} is happening here today. (Placeholder: the event scene.)");
+        Text: $"{ev.Name} is happening here today.");
 
     /// <summary>
     /// The four beats of meeting the main LI (plan §4), the same shape for every opening so the
@@ -160,7 +160,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: ["main_li.met"],
                 With: ["main_li"],
                 Priority: OpeningPriority,
-                Text: $"{opening.Hook} That is how you meet {{main_li}}. (Placeholder: the meeting scene.)");
+                Text: $"{opening.Hook} That is how you meet {{main_li}}.");
 
             yield return new EncounterDefinition(
                 $"opening.{opening.Id}.recognise",
@@ -171,7 +171,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: ["main_li.recognised"],
                 With: ["main_li"],
                 Priority: OpeningPriority - 5,
-                Text: $"{{main_li}} is at {{place}} again, {opening.HomeWindow}, just as they said, and they recognise you straight away. (Placeholder: the second meeting.)",
+                Text: $"{{main_li}} is at {{place}} again, {opening.HomeWindow}, just as they said, and they recognise you straight away.",
                 Choices: contact);
 
             if (opening.SecondPlace is { } second)
@@ -184,7 +184,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Sets: ["main_li.recognised", "main_li.recognised_late"],
                     With: ["main_li"],
                     Priority: OpeningPriority - 5,
-                    Text: "{main_li} is at {place}, one of the places they mentioned. It takes them a second, and then they smile. (Placeholder: the second chance.)",
+                    Text: "{main_li} is at {place}, one of the places they mentioned. It takes them a second, and then they smile.",
                     Choices: contact);
             }
         }
@@ -199,7 +199,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: ["main_li.first_date"],
                 With: ["main_li"],
                 Priority: OpeningPriority + 5,
-                Text: "{main_li} is already at {place} for the {slot} the two of you agreed on. Neither of you calls it a date, and both of you know it is one. (Placeholder: the first date.)");
+                Text: "{main_li} is already at {place} for the {slot} the two of you agreed on. Neither of you calls it a date, and both of you know it is one.");
         }
     }
 
@@ -225,7 +225,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Sets: ["routine.met", "routine.place=" + TurnPlanner.PlaceValue],
                     With: [who],
                     Priority: 60,
-                    Text: "Third time at {place}, and the same face is here again. Today they say hello: {who}. (Placeholder: the routine route's first meeting.)");
+                    Text: "Third time at {place}, and the same face is here again. Today they say hello: {who}.");
             }
 
             if (route == "introduced")
@@ -239,7 +239,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Sets: ["introduced.met", "introduced.place=" + TurnPlanner.PlaceValue],
                     With: [MainLiRef, who],
                     Priority: OpeningPriority + 6,
-                    Text: "Halfway through the evening {main_li} waves someone over: {who}, an old friend, who stays for a drink. (Placeholder: the introduced route's first meeting.)");
+                    Text: "Halfway through the evening {main_li} waves someone over: {who}, an old friend, who stays for a drink.");
             }
 
             yield return new EncounterDefinition(
@@ -248,7 +248,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Requires: [$"{route}.met", $"!{route}.contact", $"!{route}.contact_declined"],
                 With: [who],
                 Priority: 70,
-                Text: "{who} is at {place} again, and this time the two of you talk properly. (Placeholder: getting to know {who}.)",
+                Text: "{who} is at {place} again, and this time the two of you talk properly.",
                 Choices:
                 [
                     new("swap-numbers", "Ask for their number", [$"{route}.contact"], ["adventure"]),
@@ -263,7 +263,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: [$"{route}.first_date"],
                 With: [who],
                 Priority: OpeningPriority + 5,
-                Text: "{who} is already at {place} for the {slot} the two of you agreed on. (Placeholder: a first date with {who}.)");
+                Text: "{who} is already at {place} for the {slot} the two of you agreed on.");
         }
     }
 
@@ -296,7 +296,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: [$"{key}.want_revealed"],
                 With: [who],
                 Priority: ArcPriority,
-                Text: "Somewhere in a long conversation at {place}, {who} admits what they really want: to {want}. (Placeholder: the reveal.)");
+                Text: "Somewhere in a long conversation at {place}, {who} admits what they really want: to {want}.");
 
             yield return new EncounterDefinition(
                 $"arc.{key}.obstacle",
@@ -306,7 +306,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Sets: [$"{key}.obstacle"],
                 With: [who],
                 Priority: ArcPriority,
-                Text: "{who} is quiet today. Something has got in the way of their plan to {want}. (Placeholder: the obstacle.)",
+                Text: "{who} is quiet today. Something has got in the way of their plan to {want}.",
                 Choices:
                 [
                     new("think-it-through", "Help them think it through", [$"{key}.obstacle_helped"], [StoryContent.HelpsPrefix + want, "attentiveness"]),
@@ -326,7 +326,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Requires: [$"{key}.obstacle", $"{EncounterEvaluator.InviteKey}={key}"],
                 With: [who],
                 Priority: EventPriority + 1,
-                Text: $"{crisisEvent.Name} is in full swing when {{who}}'s plan to {{want}} comes apart, right here. (Placeholder: the crisis.)",
+                Text: $"{crisisEvent.Name} is in full swing when {{who}}'s plan to {{want}} comes apart, right here.",
                 Choices:
                 [
                     new("help", "Step in and help", [$"{key}.crisis_resolved"], [StoryContent.HelpsPrefix + want, "kindness"]),
@@ -340,7 +340,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 Requires: [$"{key}.crisis_resolved"],
                 With: [who],
                 Priority: ArcPriority,
-                Text: "When it is all over, {who} finally says what they need: {need}. (Placeholder: the resolution.)",
+                Text: "When it is all over, {who} finally says what they need: {need}.",
                 Choices:
                 [
                     new("hear-them", "Take it seriously", [$"{key}.need_addressed"], ["attentiveness"]),

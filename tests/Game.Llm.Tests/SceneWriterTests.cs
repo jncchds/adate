@@ -136,6 +136,21 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task Extra_want_tags_are_taken_off_rather_than_sending_the_scene_back()
+    {
+        var llm = new FakeLlm(() => WithChoices(
+            """[{ "text": "Ask about the book", "tags": ["attentiveness", "helps:{want}"] }, { "text": "Mention the rain", "tags": ["humour", "helps:{want}"] }, { "text": "Wave", "tags": ["kindness"] }]"""));
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.", wantChoices: true);
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(1, scene.Attempts);
+        Assert.Equal(3, scene.Choices!.Count);
+        Assert.Equal(["attentiveness", "helps:{want}"], scene.Choices[0].Tags);
+        Assert.Equal(["humour"], scene.Choices[1].Tags);
+    }
+
+    [Fact]
     public async Task Choices_are_ignored_when_the_scene_does_not_ask_for_them()
     {
         var llm = new FakeLlm(() => WithChoices("""[{ "text": "Wave", "tags": ["charm"] }]"""));

@@ -15,7 +15,7 @@
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,
-    "text": "For the third evening running, someone else is sitting at the end of the dock after lights out. Tonight they wave you over. (Placeholder: the chance route's first meeting.)"
+    "text": "For the third evening running, someone else is sitting at the end of the dock after lights out. Tonight they wave you over."
   },
   {
     "id": "boathouse-roster",
