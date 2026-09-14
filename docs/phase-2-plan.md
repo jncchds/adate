@@ -354,7 +354,8 @@ Each step ends in something that runs.
    validator, with content in `values.json`, `predicates.json` and `relationship.json` and
    migration 004. In play, the contact choice and the first date move the main LI's relationship,
    and the map shows it (`decisions.md`).*
-7. **Variant routes and arcs** (§5, §7).
+7. **Variant routes and arcs** (§5, §7). *Routes done: assigned by temper, named, with generated
+   meeting, contact and first-date beats and scoring for everyone in a scene. Arcs are next.*
 8. **Endings** (§9).
 9. **LLM** (§7-8):
    * **Features:** story bible flavour, scene writing, fact extraction, the judge and place

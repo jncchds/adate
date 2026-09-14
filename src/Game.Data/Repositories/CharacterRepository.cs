@@ -236,6 +236,57 @@ public sealed class CharacterRepository(Database database)
         return members.Count > 0 && members[0].IsMain ? members : null;
     }
 
+    /// <summary>Ids, names and routes of a stored cast, in the same order as <see cref="GetCastAsync"/>.</summary>
+    public async Task<IReadOnlyList<CastIdentity>> GetCastIdentitiesAsync(Guid mainId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT id, profile_id, name, route
+            FROM character
+            WHERE (id = $id AND variant_of IS NULL AND want_id IS NOT NULL) OR variant_of = $id
+            ORDER BY variant_of IS NOT NULL, rowid;
+            """;
+        command.Parameters.AddWithValue("$id", mainId.ToString());
+
+        var identities = new List<CastIdentity>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            identities.Add(new CastIdentity(
+                Guid.Parse(reader.GetString(0)),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3)));
+        }
+
+        return identities;
+    }
+
+    /// <summary>Gives a variant a name and a route, once each: a later call never renames or re-routes anyone.</summary>
+    public async Task SetIdentityAsync(Guid characterId, string name, string route, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = """
+            UPDATE character SET name = COALESCE(name, $name), route = COALESCE(route, $route)
+            WHERE id = $id AND variant_of IS NOT NULL;
+            """;
+        command.Parameters.AddWithValue("$id", characterId.ToString());
+        command.Parameters.AddWithValue("$name", name);
+        command.Parameters.AddWithValue("$route", route);
+
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0)
+        {
+            throw new InvalidOperationException($"No variant with id {characterId}.");
+        }
+    }
+
     /// <summary>The save's main love interest: its first character that is not a variant.</summary>
     public async Task<CharacterRecord?> GetMainAsync(SaveId saveId, CancellationToken ct = default)
     {

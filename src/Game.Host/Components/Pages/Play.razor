@@ -117,11 +117,18 @@ else
         </p>
     }
 
-    @if (_state.CanInvite)
+    @if (_state.Invitees.Count > 0)
     {
         <label class="invite">
-            <input type="checkbox" @bind="_invite" />
-            Invite @_state.MainLiName along
+            Invite
+            <select @bind="_invite">
+                <option value="">nobody</option>
+                @foreach (var person in _state.Invitees)
+                {
+                    <option value="@person.Key">@person.Name</option>
+                }
+            </select>
+            along
         </label>
     }
 
@@ -146,7 +153,7 @@ else
     private TurnOutcome? _outcome;
     private PlaceRecord? _outcomePlace;
     private string? _background;
-    private bool _invite;
+    private string _invite = "";
     private bool _working;
     private string? _error;
 
@@ -178,8 +185,8 @@ else
 
         try
         {
-            _outcome = await World.TakeTurnAsync(SaveId, place.Id, _invite);
-            _invite = false;
+            _outcome = await World.TakeTurnAsync(SaveId, place.Id, string.IsNullOrEmpty(_invite) ? null : _invite);
+            _invite = "";
             _outcomePlace = place;
             _background = null;
             StateHasChanged();
@@ -228,5 +235,5 @@ else
         _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;
 
     private string Who(string reference) =>
-        reference == "main_li" ? _state?.MainLiName ?? "them" : reference;
+        _state?.People.GetValueOrDefault(reference) ?? reference;
 }

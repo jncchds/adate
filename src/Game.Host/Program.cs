@@ -45,6 +45,7 @@ builder.Services.PostConfigure<StudioOptions>(o =>
     o.ValuesFile = ResolveContentPath(o.ValuesFile);
     o.PredicatesFile = ResolveContentPath(o.PredicatesFile);
     o.RelationshipFile = ResolveContentPath(o.RelationshipFile);
+    o.RoutesFile = ResolveContentPath(o.RoutesFile);
 
     // Fail at startup rather than at the first render: a game that has declared an
     // impossible age floor should not serve a single page.
@@ -71,7 +72,8 @@ builder.Services.AddSingleton<Game.Core.Settings.ISettingCatalog>(sp => new Game
 
 builder.Services.AddSingleton<Game.Core.Encounters.IEncounterCatalog>(sp => new Game.Core.Encounters.JsonEncounterCatalog(
     sp.GetRequiredService<IOptions<StudioOptions>>().Value.EncountersDirectory,
-    sp.GetRequiredService<Game.Core.Settings.ISettingCatalog>()));
+    sp.GetRequiredService<Game.Core.Settings.ISettingCatalog>(),
+    [.. sp.GetRequiredService<Game.Core.Cast.RouteContent>().Routes.Select(r => r.Id)]));
 
 builder.Services.AddSingleton<WorldService>();
 
@@ -87,6 +89,13 @@ builder.Services.AddSingleton(sp =>
     var story = Game.Core.Story.StoryContent.Load(o.ValuesFile, o.PredicatesFile, o.RelationshipFile);
     story.ValidateAgainst(sp.GetRequiredService<Game.Core.Cast.CastContent>());
     return story;
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var routes = Game.Core.Cast.RouteContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.RoutesFile);
+    routes.ValidateAgainst(sp.GetRequiredService<Game.Core.Cast.CastContent>());
+    return routes;
 });
 
 // One compiler per prompt dialect; the pack's dialect picks which one runs.

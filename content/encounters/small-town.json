@@ -12,7 +12,7 @@
     "place": { "id": "town-library", "aloneVisitsBefore": 2 },
     "time": ["Afternoon"],
     "days": [6, 28],
-    "sets": ["chance.met"],
+    "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,
     "text": "Your usual table by the arched windows has someone at it again, and this time they slide the chair out for you. (Placeholder: the chance route's first meeting.)"

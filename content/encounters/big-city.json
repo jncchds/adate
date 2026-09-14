@@ -28,7 +28,7 @@
     "place": { "id": "low-tide", "aloneVisitsBefore": 2 },
     "time": ["Evening", "Night"],
     "days": [8, 28],
-    "sets": ["chance.met"],
+    "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,
     "text": "The third evening you take the end of the counter, the person on the next stool finally asks whether you are waiting for someone. (Placeholder: the chance route's first meeting.)"

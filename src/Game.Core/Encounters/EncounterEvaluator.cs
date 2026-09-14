@@ -123,6 +123,9 @@ public static class EncounterEvaluator
 /// <summary>Turns a choice of place into a <see cref="TurnOutcome"/>.</summary>
 public static class TurnPlanner
 {
+    /// <summary>A flag value that stores the place the encounter fired at, for places decided in play.</summary>
+    public const string PlaceValue = "{place}";
+
     public static TurnOutcome Plan(
         SettingDefinition setting,
         IReadOnlyList<EncounterDefinition> encounters,
@@ -146,7 +149,7 @@ public static class TurnPlanner
         {
             foreach (var (key, value) in Assignments(encounter.Sets ?? []))
             {
-                flags[key] = value;
+                flags[key] = value == PlaceValue ? context.PlaceId : value;
             }
 
             flags[EncounterEvaluator.FiredKey(encounter.Id)] = context.Clock.Day.ToString(CultureInfo.InvariantCulture);

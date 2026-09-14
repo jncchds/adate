@@ -13,11 +13,19 @@ namespace Game.Host.Services;
 /// <summary>An encounter's choice that is still open, with its text filled in.</summary>
 public sealed record PendingChoice(string EncounterId, string Text, IReadOnlyList<EncounterChoice> Choices);
 
+/// <summary>Someone the player can bring along this turn.</summary>
+/// <param name="Key">The invite value and flag prefix: <c>main_li</c> or a route id.</param>
+public sealed record Invitee(string Key, string Name);
+
+/// <summary>Where the player stands with someone they have met.</summary>
+public sealed record RelationshipView(string Name, RelationshipState State);
+
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
 /// <param name="Hints">Where the story expects the player to look next, while the opening's beats are open.</param>
 /// <param name="Pending">A choice the player must answer before the next turn.</param>
-/// <param name="CanInvite">Whether the player may bring the main LI along this turn.</param>
+/// <param name="Invitees">Who the player may bring along this turn.</param>
+/// <param name="People">Display names by encounter reference: <c>main_li</c> or <c>variant:{route}</c>.</param>
 public sealed record PlayState(
     SettingDefinition Setting,
     ClockState Clock,
@@ -29,11 +37,9 @@ public sealed record PlayState(
     SettingOpening? Opening,
     IReadOnlyList<string> Hints,
     PendingChoice? Pending,
-    bool CanInvite,
-    IReadOnlyList<RelationshipView>? Relationships = null);
-
-/// <summary>Where the player stands with someone they have met.</summary>
-public sealed record RelationshipView(string Name, RelationshipState State);
+    IReadOnlyList<Invitee> Invitees,
+    IReadOnlyList<RelationshipView> Relationships,
+    IReadOnlyDictionary<string, string> People);
 
 /// <summary>A save's setting, places, clock, openings, choices and turns.</summary>
 public sealed class WorldService(
@@ -45,6 +51,7 @@ public sealed class WorldService(
     ISettingCatalog settings,
     IEncounterCatalog encounters,
     StoryContent storyContent,
+    RouteContent routes,
     IOptions<StudioOptions> options)
 {
     private readonly RelationshipEngine _engine = new(storyContent);
@@ -75,7 +82,8 @@ public sealed class WorldService(
 
         var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
         var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
-        var names = await NamesAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
 
         var opening = flags.TryGetValue("opening", out var openingId)
             ? setting.Openings.FirstOrDefault(o => o.Id == openingId)
@@ -84,14 +92,30 @@ public sealed class WorldService(
         PendingChoice? pending = null;
         if (EncounterEvaluator.Holds(flags, EncounterEvaluator.PendingChoiceKey))
         {
-            var encounter = encounters.For(setting.Id).First(e => e.Id == flags[EncounterEvaluator.PendingChoiceKey]);
+            var encounter = Encounter(setting, flags[EncounterEvaluator.PendingChoiceKey]);
+            var placeId = encounter.Place.Id ?? (encounter.Place.PlaceFlag is { } placeFlag ? flags.GetValueOrDefault(placeFlag) : null);
+            var who = WhoName(cast, names, encounter.With ?? []);
+
             pending = new PendingChoice(
                 encounter.Id,
-                Fill(encounter.Text, names, PlaceName(setting, known, flags.GetValueOrDefault("main_li.home_place")), clock),
-                [.. (encounter.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, "", clock) })]);
+                Fill(encounter.Text, names, who, PlaceName(setting, known, placeId), clock),
+                [.. (encounter.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, who, "", clock) })]);
         }
 
         var over = clock.IsPast(setting.Days);
+
+        IReadOnlyList<Invitee> invitees = over || pending is not null
+            ? []
+            : [.. cast.Where(li => CanInvite(setting, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
+
+        var relationships = new List<RelationshipView>();
+        foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met")))
+        {
+            relationships.Add(new RelationshipView(li.Name, await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false)));
+        }
+
+        var people = cast.ToDictionary(li => li.Ref, li => li.Name, StringComparer.Ordinal);
+        people.TryAdd(JsonEncounterCatalog.MainLiRef, names.MainLi);
 
         return new PlayState(
             setting,
@@ -104,8 +128,9 @@ public sealed class WorldService(
             opening,
             Hints(setting, opening, flags, clock, names.MainLi),
             pending,
-            !over && pending is null && CanInvite(setting, known, flags, clock),
-            await RelationshipsAsync(saveId, names, flags, ct).ConfigureAwait(false));
+            invitees,
+            relationships,
+            people);
     }
 
     /// <summary>
@@ -132,9 +157,9 @@ public sealed class WorldService(
 
     /// <summary>
     /// Spends the current slot at <paramref name="placeId"/>, which must be a place the player knows,
-    /// optionally bringing the main LI along.
+    /// optionally bringing someone along by their <see cref="Invitee.Key"/>.
     /// </summary>
-    public async Task<TurnOutcome> TakeTurnAsync(SaveId saveId, string placeId, bool invite = false, CancellationToken ct = default)
+    public async Task<TurnOutcome> TakeTurnAsync(SaveId saveId, string placeId, string? invite = null, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
 
@@ -148,19 +173,19 @@ public sealed class WorldService(
             throw new InvalidOperationException("Answer the open choice before taking another turn.");
         }
 
-        if (invite && !play.CanInvite)
+        if (invite is not null && play.Invitees.All(i => i.Key != invite))
         {
-            throw new InvalidOperationException($"{play.MainLiName} cannot be invited along right now.");
+            throw new InvalidOperationException($"'{invite}' cannot be invited along right now.");
         }
 
         var place = play.KnownPlaces.FirstOrDefault(p => p.Id == placeId)
             ?? throw new InvalidOperationException($"'{placeId}' is not a place the player knows.");
 
         var flags = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
-        if (invite)
+        if (invite is not null)
         {
             // Transient: it shapes this turn's pick and is never stored.
-            flags[EncounterEvaluator.InviteKey] = "main_li";
+            flags[EncounterEvaluator.InviteKey] = invite;
         }
 
         var context = new TurnContext(
@@ -171,43 +196,48 @@ public sealed class WorldService(
 
         var outcome = TurnPlanner.Plan(play.Setting, encounters.For(play.Setting.Id), context, place.Name);
 
-        if (invite && !outcome.With.Contains("main_li"))
+        if (invite is not null && !outcome.With.Contains(RefFor(invite)))
         {
-            throw new InvalidOperationException($"Nothing here would bring {play.MainLiName} along.");
+            throw new InvalidOperationException($"Nothing at {place.Name} would bring them along.");
         }
 
-        // The main LI's relationship moves with the turn and commits with it: a date at a place
-        // they like or dislike, and any stage the turn's flags now allow.
+        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
+
+        var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
+        after.Remove(EncounterEvaluator.InviteKey);
+        foreach (var (key, value) in outcome.FlagsToSet)
+        {
+            after[key] = value;
+        }
+
+        // Everyone in the scene: a date at a place they like or dislike, and any stage the turn's
+        // flags now allow. It all commits with the turn.
+        var toSet = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal);
         var relationships = new Dictionary<Guid, RelationshipState>();
-        if (outcome.With.Contains("main_li") && await MainStoryAsync(saveId, play.Setting, ct).ConfigureAwait(false) is { } main)
+        foreach (var li in cast.Where(li => outcome.With.Contains(li.Ref)))
         {
-            var current = await story.GetRelationshipAsync(saveId, main.Id, ct).ConfigureAwait(false);
-            if (outcome.EncounterId == JsonEncounterCatalog.FirstDateId)
+            var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            if (outcome.EncounterId == JsonEncounterCatalog.FirstDateIdFor(li.Key))
             {
-                current = _engine.DateAt(current, main.Profile, place.TypeId, play.Clock.Day);
+                current = _engine.DateAt(current, li.Profile, place.TypeId, play.Clock.Day);
             }
 
-            var after = new Dictionary<string, string>(flags, StringComparer.Ordinal);
-            after.Remove(EncounterEvaluator.InviteKey);
-            foreach (var (key, value) in outcome.FlagsToSet)
-            {
-                after[key] = value;
-            }
-
-            relationships[main.Id] = _engine.Advance(current, StageFacts.FromFlags(after, "main_li"), main.Member.Temper);
+            relationships[li.Id] = Advance(li, current, after, toSet);
         }
 
+        outcome = outcome with { FlagsToSet = toSet };
         await state.CommitTurnAsync(saveId, outcome, relationships, ct).ConfigureAwait(false);
 
-        var names = await NamesAsync(saveId, ct).ConfigureAwait(false);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
+        var who = WhoName(cast, names, outcome.With);
         return outcome with
         {
-            Text = Fill(outcome.Text, names, place.Name, outcome.VisitedAt),
-            Choices = [.. (outcome.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, place.Name, outcome.VisitedAt) })],
+            Text = Fill(outcome.Text, names, who, place.Name, outcome.VisitedAt),
+            Choices = [.. (outcome.Choices ?? []).Select(c => c with { Text = Fill(c.Text, names, who, place.Name, outcome.VisitedAt) })],
         };
     }
 
-    /// <summary>Answers the open choice.</summary>
+    /// <summary>Answers the open choice. Its tags are scored for everyone in the scene.</summary>
     public async Task ChooseAsync(SaveId saveId, string choiceId, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
@@ -218,83 +248,144 @@ public sealed class WorldService(
         var choice = pending.Choices.FirstOrDefault(c => c.Id == choiceId)
             ?? throw new InvalidOperationException($"'{choiceId}' is not an answer to the open choice.");
 
-        var sets = TurnPlanner.Assignments(choice.Sets ?? []);
+        var encounter = Encounter(play.Setting, pending.EncounterId);
+        var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
+        var sets = new Dictionary<string, string>(TurnPlanner.Assignments(choice.Sets ?? []), StringComparer.Ordinal);
 
-        // Every choice so far is in a scene with the main LI, so its tags are scored for them.
-        // Variant routes (build step 7) score whoever is present.
-        var relationships = new Dictionary<Guid, RelationshipState>();
-        if (await MainStoryAsync(saveId, play.Setting, ct).ConfigureAwait(false) is { } main)
+        var after = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
+        foreach (var (key, value) in sets)
         {
-            var current = await story.GetRelationshipAsync(saveId, main.Id, ct).ConfigureAwait(false);
-            var delta = _engine.Score(main.Profile, main.Member.Temper, main.Member.WantId, choice.Tags ?? []);
-            current = _engine.Apply(current, delta, play.Clock.Day);
+            after[key] = value;
+        }
 
-            var after = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
-            foreach (var (key, value) in sets)
-            {
-                after[key] = value;
-            }
-
-            relationships[main.Id] = _engine.Advance(current, StageFacts.FromFlags(after, "main_li"), main.Member.Temper);
+        var relationships = new Dictionary<Guid, RelationshipState>();
+        foreach (var li in cast.Where(li => (encounter.With ?? []).Contains(li.Ref)))
+        {
+            var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, choice.Tags ?? []);
+            relationships[li.Id] = Advance(li, _engine.Apply(current, delta, play.Clock.Day), after, sets);
         }
 
         await state.ResolveChoiceAsync(saveId, pending.EncounterId, choice.Id, sets, relationships, ct).ConfigureAwait(false);
     }
 
-    private sealed record MainStory(Guid Id, CastMember Member, StoryProfile Profile);
+    /// <param name="Key">The flag prefix and invite value: <c>main_li</c> or a route id.</param>
+    /// <param name="Ref">How encounters name them: <c>main_li</c> or <c>variant:{route}</c>.</param>
+    private sealed record LoveInterest(Guid Id, string Key, string Ref, string Name, CastMember Member, StoryProfile Profile);
 
     /// <summary>
-    /// The main LI with their cast record and story profile, the profile built and stored the first
-    /// time it is needed. Null for a save without a stored cast, which has nothing to score against.
+    /// Moves a stage forward, and records a reached <c>dating</c> as a flag, which encounters can
+    /// require: an introduction waits for the main LI to be dating.
     /// </summary>
-    private async Task<MainStory?> MainStoryAsync(SaveId saveId, SettingDefinition setting, CancellationToken ct)
+    private RelationshipState Advance(
+        LoveInterest li,
+        RelationshipState current,
+        Dictionary<string, string> after,
+        Dictionary<string, string> toSet)
+    {
+        var advanced = _engine.Advance(current, StageFacts.FromFlags(after, li.Key), li.Member.Temper);
+
+        if (advanced.Stage >= RelationshipStage.Dating)
+        {
+            after[$"{li.Key}.dating"] = "true";
+            toSet[$"{li.Key}.dating"] = "true";
+        }
+
+        return advanced;
+    }
+
+    /// <summary>
+    /// The save's love interests with their cast records and story profiles. Variants are given a
+    /// route by temper and a placeholder name the first time the cast is played, and profiles are
+    /// built and stored the first time they are needed. Empty for a save without a stored cast.
+    /// </summary>
+    private async Task<IReadOnlyList<LoveInterest>> CastAsync(SaveId saveId, SettingDefinition setting, CancellationToken ct)
     {
         var main = await characters.GetMainAsync(saveId, ct).ConfigureAwait(false);
         var cast = main is null ? null : await characters.GetCastAsync(main.Id, ct).ConfigureAwait(false);
         if (main is null || cast is null)
         {
-            return null;
-        }
-
-        var profile = await story.GetProfileAsync(main.Id, ct).ConfigureAwait(false);
-        if (profile is null)
-        {
-            var placeTypes = setting.Places.Select(p => p.Type).Distinct(StringComparer.Ordinal).ToList();
-            var generated = StoryProfileGenerator.For(cast, storyContent, placeTypes, main.AnchorSeed ?? 0);
-            profile = await story.SetProfileAsync(main.Id, generated[0], ct).ConfigureAwait(false);
-        }
-
-        return new MainStory(main.Id, cast[0], profile);
-    }
-
-    private async Task<IReadOnlyList<RelationshipView>> RelationshipsAsync(
-        SaveId saveId,
-        Names names,
-        IReadOnlyDictionary<string, string> flags,
-        CancellationToken ct)
-    {
-        if (names.MainLiId is not { } mainId || !EncounterEvaluator.Holds(flags, "main_li.met"))
-        {
             return [];
         }
 
-        return [new RelationshipView(names.MainLi, await story.GetRelationshipAsync(saveId, mainId, ct).ConfigureAwait(false))];
+        var identities = await characters.GetCastIdentitiesAsync(main.Id, ct).ConfigureAwait(false);
+        if (identities.Count != cast.Count)
+        {
+            throw new InvalidOperationException($"The cast of save '{saveId}' has {cast.Count} members but {identities.Count} identities.");
+        }
+
+        if (identities.Skip(1).Any(i => i.Route is null || i.Name is null))
+        {
+            var variants = cast.Skip(1).ToList();
+            var assigned = RouteAssigner.Assign(variants, routes);
+            var picked = routes.PickNames(main.Appearance.Subject, variants.Count, identities.Select(i => i.Name).OfType<string>(), main.AnchorSeed ?? 0);
+
+            for (var i = 0; i < variants.Count; i++)
+            {
+                await characters.SetIdentityAsync(identities[i + 1].Id, picked[i], assigned[i], ct).ConfigureAwait(false);
+            }
+
+            identities = await characters.GetCastIdentitiesAsync(main.Id, ct).ConfigureAwait(false);
+        }
+
+        IReadOnlyList<StoryProfile>? generated = null;
+        var interests = new List<LoveInterest>(cast.Count);
+        for (var i = 0; i < cast.Count; i++)
+        {
+            var profile = await story.GetProfileAsync(identities[i].Id, ct).ConfigureAwait(false);
+            if (profile is null)
+            {
+                generated ??= StoryProfileGenerator.For(
+                    cast,
+                    storyContent,
+                    [.. setting.Places.Select(p => p.Type).Distinct(StringComparer.Ordinal)],
+                    main.AnchorSeed ?? 0);
+                profile = await story.SetProfileAsync(identities[i].Id, generated[i], ct).ConfigureAwait(false);
+            }
+
+            var key = i == 0 ? JsonEncounterCatalog.MainLiRef : identities[i].Route!;
+            interests.Add(new LoveInterest(identities[i].Id, key, RefFor(key), identities[i].Name ?? "them", cast[i], profile));
+        }
+
+        return interests;
     }
+
+    private static string RefFor(string key) =>
+        key == JsonEncounterCatalog.MainLiRef ? key : JsonEncounterCatalog.VariantPrefix + key;
+
+    private EncounterDefinition Encounter(SettingDefinition setting, string id) =>
+        encounters.For(setting.Id).FirstOrDefault(e => e.Id == id)
+        ?? throw new InvalidOperationException($"Setting '{setting.Id}' has no encounter '{id}'.");
 
     private sealed record Names(Guid? MainLiId, string MainLi, string Player);
 
-    private async Task<Names> NamesAsync(SaveId saveId, CancellationToken ct)
+    private async Task<Names> NamesAsync(SaveId saveId, IReadOnlyList<LoveInterest> cast, CancellationToken ct)
     {
+        var player = await saves.GetPlayerNameAsync(saveId, ct).ConfigureAwait(false);
+        var playerName = string.IsNullOrWhiteSpace(player) ? "you" : player;
+
+        if (cast.FirstOrDefault(li => li.Key == JsonEncounterCatalog.MainLiRef) is { } lead)
+        {
+            return new Names(lead.Id, lead.Name, playerName);
+        }
+
+        // A save from before the cast was stored still has a main LI with a name.
         var main = await characters.GetMainAsync(saveId, ct).ConfigureAwait(false);
         var mainName = main is null ? null : await characters.GetNameAsync(main.Id, ct).ConfigureAwait(false);
-        var player = await saves.GetPlayerNameAsync(saveId, ct).ConfigureAwait(false);
-
-        return new Names(main?.Id, string.IsNullOrWhiteSpace(mainName) ? "them" : mainName, string.IsNullOrWhiteSpace(player) ? "you" : player);
+        return new Names(main?.Id, string.IsNullOrWhiteSpace(mainName) ? "them" : mainName, playerName);
     }
 
-    private static string Fill(string text, Names names, string place, ClockState clock) =>
+    /// <summary>The <c>{who}</c> of a scene: the first variant in it, or the main LI.</summary>
+    private static string WhoName(IReadOnlyList<LoveInterest> cast, Names names, IReadOnlyList<string> with)
+    {
+        var variant = with.FirstOrDefault(w => w.StartsWith(JsonEncounterCatalog.VariantPrefix, StringComparison.Ordinal));
+        return variant is null ? names.MainLi : cast.FirstOrDefault(li => li.Ref == variant)?.Name ?? "someone";
+    }
+
+    private static string Fill(string text, Names names, string who, string place, ClockState clock) =>
         text.Replace("{main_li}", names.MainLi, StringComparison.Ordinal)
             .Replace("{player}", names.Player, StringComparison.Ordinal)
+            .Replace("{who}", who, StringComparison.Ordinal)
             .Replace("{place}", place, StringComparison.Ordinal)
             .Replace("{slot}", clock.Slot.ToString().ToLowerInvariant(), StringComparison.Ordinal);
 
@@ -343,17 +434,17 @@ public sealed class WorldService(
         return [];
     }
 
-    private bool CanInvite(SettingDefinition setting, IReadOnlyList<PlaceRecord> known, IReadOnlyDictionary<string, string> flags, ClockState clock)
+    /// <summary>Whether some encounter would honour inviting <paramref name="key"/> at a place the player knows, now.</summary>
+    private bool CanInvite(
+        SettingDefinition setting,
+        IReadOnlyList<PlaceRecord> known,
+        IReadOnlyDictionary<string, string> flags,
+        ClockState clock,
+        string key)
     {
-        if (clock.IsPast(setting.Days))
-        {
-            return false;
-        }
-
-        var withInvite = new Dictionary<string, string>(flags, StringComparer.Ordinal) { [EncounterEvaluator.InviteKey] = "main_li" };
-        var inviteBeats = encounters.For(setting.Id)
-            .Where(e => (e.Requires ?? []).Contains($"{EncounterEvaluator.InviteKey}=main_li"))
-            .ToList();
+        var requirement = $"{EncounterEvaluator.InviteKey}={key}";
+        var withInvite = new Dictionary<string, string>(flags, StringComparer.Ordinal) { [EncounterEvaluator.InviteKey] = key };
+        var inviteBeats = encounters.For(setting.Id).Where(e => (e.Requires ?? []).Contains(requirement)).ToList();
 
         return known.Any(place =>
             inviteBeats.Any(e => EncounterEvaluator.Matches(e, new TurnContext(clock, place.Id, withInvite, 0))));

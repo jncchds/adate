@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Game.Core.Scenes;
 using Game.Core.Settings;
 
 namespace Game.Core.Encounters;
@@ -32,7 +33,15 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     public const int FirstDateDay = 5;
 
     /// <summary>The words an encounter's text may ask to have filled in.</summary>
-    public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot"];
+    public static readonly IReadOnlyList<string> TextTokens = ["main_li", "player", "place", "slot", "who"];
+
+    /// <summary>Who an encounter is with: the main LI, or a variant by its route.</summary>
+    public const string MainLiRef = "main_li";
+
+    public const string VariantPrefix = "variant:";
+
+    /// <summary>The first date with the main LI (key <c>main_li</c>) or with the variant on a route.</summary>
+    public static string FirstDateIdFor(string key) => key == MainLiRef ? FirstDateId : $"{FirstDateId}.{key}";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -41,7 +50,11 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
 
     private readonly IReadOnlyDictionary<string, IReadOnlyList<EncounterDefinition>> _bySetting;
 
-    public JsonEncounterCatalog(string directory, ISettingCatalog settings)
+    /// <param name="routes">
+    /// The cast's route ids. Each gets generated meeting, contact and first-date beats, and an
+    /// encounter with <c>variant:{route}</c> must name one of them. Null skips both.
+    /// </param>
+    public JsonEncounterCatalog(string directory, ISettingCatalog settings, IReadOnlyList<string>? routes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentNullException.ThrowIfNull(settings);
@@ -73,9 +86,10 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 .. Read(Path.Combine(directory, setting.Id + ".json")),
                 .. setting.Events.Select(Event),
                 .. OpeningBeats(setting),
+                .. RouteBeats(setting, routes ?? []),
             ];
 
-            Validate(setting, all);
+            Validate(setting, all, routes);
             bySetting[setting.Id] = all;
         }
 
@@ -164,7 +178,71 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         }
     }
 
-    private static void Validate(SettingDefinition setting, IReadOnlyList<EncounterDefinition> encounters)
+    /// <summary>
+    /// How the player meets and gets close to each variant (plan §5), generated per route so a
+    /// setting only authors what is specific to it: where the chance meeting happens. Routine meets
+    /// at the routine place after two solo visits; introduced meets on an evening out with the main
+    /// LI once they are dating. Every route then has a contact choice where they were met, and a
+    /// first date the player invites them to.
+    /// </summary>
+    private static IEnumerable<EncounterDefinition> RouteBeats(SettingDefinition setting, IReadOnlyList<string> routes)
+    {
+        foreach (var route in routes)
+        {
+            var who = VariantPrefix + route;
+
+            if (route == "routine")
+            {
+                yield return new EncounterDefinition(
+                    "route.routine.meet",
+                    new EncounterPlace(Id: setting.RoutinePlace, AloneVisitsBefore: 2),
+                    Requires: ["!routine.met"],
+                    Sets: ["routine.met", "routine.place=" + TurnPlanner.PlaceValue],
+                    With: [who],
+                    Priority: 60,
+                    Text: "Third time at {place}, and the same face is here again. Today they say hello: {who}. (Placeholder: the routine route's first meeting.)");
+            }
+
+            if (route == "introduced")
+            {
+                yield return new EncounterDefinition(
+                    "route.introduced.meet",
+                    new EncounterPlace(),
+                    Time: [TimeOfDay.Evening],
+                    Days: [FirstDateDay, setting.Days],
+                    Requires: [$"{MainLiRef}.dating", $"{EncounterEvaluator.InviteKey}={MainLiRef}", "!introduced.met"],
+                    Sets: ["introduced.met", "introduced.place=" + TurnPlanner.PlaceValue],
+                    With: [MainLiRef, who],
+                    Priority: OpeningPriority + 6,
+                    Text: "Halfway through the evening {main_li} waves someone over: {who}, an old friend, who stays for a drink. (Placeholder: the introduced route's first meeting.)");
+            }
+
+            yield return new EncounterDefinition(
+                $"route.{route}.contact",
+                new EncounterPlace(PlaceFlag: $"{route}.place"),
+                Requires: [$"{route}.met", $"!{route}.contact", $"!{route}.contact_declined"],
+                With: [who],
+                Priority: 70,
+                Text: "{who} is at {place} again, and this time the two of you talk properly. (Placeholder: getting to know {who}.)",
+                Choices:
+                [
+                    new("swap-numbers", "Ask for their number", [$"{route}.contact"], ["adventure"]),
+                    new("let-it-go", "Keep it friendly", [$"{route}.contact_declined"], ["independence"]),
+                ]);
+
+            yield return new EncounterDefinition(
+                FirstDateIdFor(route),
+                new EncounterPlace(),
+                Days: [FirstDateDay, setting.Days],
+                Requires: [$"{route}.contact", $"!{route}.first_date", $"{EncounterEvaluator.InviteKey}={route}"],
+                Sets: [$"{route}.first_date"],
+                With: [who],
+                Priority: OpeningPriority + 5,
+                Text: "You and {who} spend the {slot} at {place}. (Placeholder: a first date with {who}.)");
+        }
+    }
+
+    private static void Validate(SettingDefinition setting, IReadOnlyList<EncounterDefinition> encounters, IReadOnlyList<string>? routes)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var places = setting.Places.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -229,6 +307,12 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                 if (!WithRef().IsMatch(who))
                 {
                     Fail($"is with '{who}'; use main_li or variant:{{route}}.");
+                }
+                else if (routes is not null
+                         && who.StartsWith(VariantPrefix, StringComparison.Ordinal)
+                         && !routes.Contains(who[VariantPrefix.Length..]))
+                {
+                    Fail($"is with '{who}', but the cast has no route '{who[VariantPrefix.Length..]}'. Known: {string.Join(", ", routes)}.");
                 }
             }
 

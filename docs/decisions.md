@@ -866,3 +866,35 @@ A trigger keeps stored facts from being edited or superseded twice.
 checks the place type, and relationship changes commit inside the turn or choice transaction.
 Friend needs the want revealed, which arcs set in step 7, so a playthrough stops at acquaintance
 for now.
+
+## Variant routes: temper assigns them, and their beats are generated
+
+Phase-2 plan build step 7, first half.
+
+**Temper picks the route.** `content/routes.json` lists what each route suits:
+
+* routine: open, easygoing;
+* introduced: outgoing, playful;
+* chance: fiery, guarded.
+
+`RouteAssigner` tries every one-to-one assignment and keeps the one where the most suited temper
+ends line up. Ties go to the first in cast and content order, so a cast always gets the same
+routes.
+
+**Routes and names are stored once, on first play.** Placeholder names come from the same file,
+per subject, and never repeat the main LI's. A save made before routes existed gets them the first
+time it is played, and a later call never renames or re-routes anyone.
+
+**Each route's beats are generated**, as the opening's are:
+
+* **routine** meets at the routine place after two solo visits;
+* **introduced** meets on an evening out with the main LI once they are dating, a flag written
+  when that stage is reached;
+* **chance** stays authored per setting, because its place is the point.
+
+Every route then gets a contact choice where they were met, remembered through a `{place}` flag
+value, and a first date the player invites them to.
+
+**Everyone in a scene is scored.** Choices and dates change the relationship of each love interest
+the encounter is with, not only the main LI's. The map's invite is a picker over whoever some
+encounter would honour now.

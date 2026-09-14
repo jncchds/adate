@@ -593,6 +593,40 @@ public class DatabaseTests
 
     // -------------------------------------------------------------------- cast
 
+    [Fact]
+    public async Task Cast_identities_follow_the_cast_order_and_are_given_once()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var characters = new CharacterRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var created = await characters.CreateAsync(save.Id, Appearance(), "Sam");
+        await characters.SetAnchorAsync(created.Id, new string('a', 64), anchorSeed: 1);
+        var main = (await characters.GetAsync(created.Id))!;
+
+        await characters.SaveCastAsync(main, Lead(main.Appearance),
+        [
+            Variant(main.Appearance with { HairColor = "purple hair" }),
+            Variant(main.Appearance with { Age = 30 }, "other-life"),
+        ]);
+
+        var identities = await characters.GetCastIdentitiesAsync(main.Id);
+        Assert.Equal(main.Id, identities[0].Id);
+        Assert.Equal("Sam", identities[0].Name);
+        Assert.Equal([null, "bolder", "other-life"], identities.Select(i => i.ProfileId));
+        Assert.All(identities.Skip(1), i => Assert.Null(i.Route));
+
+        await characters.SetIdentityAsync(identities[1].Id, "Kai", "chance");
+        await characters.SetIdentityAsync(identities[1].Id, "Ren", "routine");
+
+        var again = await characters.GetCastIdentitiesAsync(main.Id);
+        Assert.Equal(("Kai", "chance"), (again[1].Name, again[1].Route));
+
+        // The main LI is named by the player and has no route.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => characters.SetIdentityAsync(main.Id, "Other", "routine"));
+    }
+
     private static CastMember Lead(CharacterAppearance appearance) => new(
         null,
         appearance,

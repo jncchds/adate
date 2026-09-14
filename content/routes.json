@@ -1,0 +1,11 @@
+{
+  "routes": [
+    { "id": "routine", "label": "Routine", "suits": ["open", "easygoing"] },
+    { "id": "introduced", "label": "Introduced", "suits": ["outgoing", "playful"] },
+    { "id": "chance", "label": "Chance", "suits": ["fiery", "guarded"] }
+  ],
+  "names": {
+    "female": ["Aya", "Hana", "Mei", "June", "Clara", "Nora", "Lena", "Iris", "Maya", "Tess", "Rosa", "Elin"],
+    "male": ["Kai", "Ren", "Theo", "Sam", "Noah", "Eli", "Jun", "Leo", "Owen", "Finn", "Hugo", "Ravi"]
+  }
+}
