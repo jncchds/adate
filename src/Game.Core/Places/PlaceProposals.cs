@@ -41,7 +41,7 @@ public static partial class PlaceProposals
         {
             reasons.Add($"A new place needs a name of 1 to {MaxNameLength} characters; '{proposal.Name}' is not.");
         }
-        else if (takenNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+        else if (takenNames.Any(taken => SameName(taken, name)))
         {
             reasons.Add($"'{name}' is already a place the player knows; use it instead of proposing it.");
         }
@@ -93,6 +93,20 @@ public static partial class PlaceProposals
             PlaceOrigin.Story,
             Known: true,
             FirstDay: day);
+    }
+
+    /// <summary>Names that differ only by case, punctuation, spacing or a leading "the" are the same place.</summary>
+    public static bool SameName(string a, string b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        return Comparable(a) == Comparable(b);
+    }
+
+    private static string Comparable(string name)
+    {
+        var words = NotSlug().Replace(name.Trim().ToLowerInvariant(), " ").Trim();
+        return words.StartsWith("the ", StringComparison.Ordinal) ? words[4..] : words;
     }
 
     private static string Slug(string name)

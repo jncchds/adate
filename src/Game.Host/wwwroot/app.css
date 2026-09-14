@@ -278,21 +278,138 @@ button.active {
     padding: 0.4rem 0.8rem;
 }
 
+.map-section {
+    font-size: 1rem;
+    margin: 1.25rem 0 0.5rem;
+    color: var(--muted);
+}
+
 .map-places {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 0.6rem;
-    margin: 1rem 0;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 0.75rem;
+    margin: 0 0 1rem;
 }
 
-.map-places button {
+/* Picture cards: places and people on the map. */
+.place-card,
+.person-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
     text-align: left;
+    border-radius: 10px;
 }
 
-.map-places small {
+.place-picture,
+.person-picture {
+    position: relative;
     display: block;
+    width: 100%;
+    background: var(--notice-bg);
+    overflow: hidden;
+}
+
+.place-picture {
+    aspect-ratio: 16 / 9;
+}
+
+.person-picture {
+    aspect-ratio: 3 / 4;
+}
+
+.place-picture img,
+.person-picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    animation: picture-in 300ms ease-out;
+}
+
+/* The shared neutral backdrop fills the card; the cut-out sprite stands on it. */
+.person-picture {
+    background-size: cover;
+    background-position: center;
+}
+
+/* Full-body sprites: head to about the waist. */
+.person-picture img {
+    object-fit: contain;
+    object-position: 50% 0;
+    transform: scale(1.6);
+    transform-origin: 50% 4%;
+}
+
+.place-card:not(:disabled):hover img {
+    transform: scale(1.04);
+    transition: transform 200ms ease-out;
+}
+
+.place-name,
+.person-name {
+    display: block;
+    padding: 0.45rem 0.6rem 0;
+    font-weight: 600;
+}
+
+.place-card small {
+    display: block;
+    padding: 0 0.6rem 0.5rem;
     color: var(--muted);
     font-size: 0.75rem;
+}
+
+.person-name {
+    padding-bottom: 0.5rem;
+    text-align: center;
+}
+
+.person-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 9rem));
+    gap: 0.75rem;
+}
+
+.person-card.chosen {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.person-none {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    color: var(--muted);
+}
+
+.picture-wait {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.12) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: picture-wait 1.4s linear infinite;
+}
+
+@keyframes picture-wait {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+}
+
+@keyframes picture-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .picture-wait,
+    .place-picture img,
+    .person-picture img {
+        animation: none;
+    }
 }
 
 .choices {
@@ -321,6 +438,31 @@ button.active {
 @keyframes popup-in {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: none; }
+}
+
+.recap {
+    max-width: 46rem;
+    padding-left: 1.25rem;
+}
+
+.recap li {
+    margin: 0 0 0.75rem;
+}
+
+.recap-when {
+    display: block;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.recap-words {
+    display: block;
+}
+
+.recap-influence {
+    display: block;
+    color: var(--accent);
+    font-size: 0.9rem;
 }
 
 .reply-form {

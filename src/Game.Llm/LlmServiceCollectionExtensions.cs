@@ -41,6 +41,7 @@ public static class LlmServiceCollectionExtensions
         services.AddTransient<BibleWriter>();
         services.AddTransient<SceneWriter>();
         services.AddTransient<ReactionWriter>();
+        services.AddTransient<EpilogueWriter>();
 
         return services;
     }

@@ -31,7 +31,8 @@ public sealed record ScenePacket(
     IReadOnlyList<string>? KnownPlaces = null,
     IReadOnlyList<string>? Memories = null,
     string? Weather = null,
-    bool OffersChoices = false);
+    bool OffersChoices = false,
+    string? PlayerGender = null);
 
 public static class ScenePacketBuilder
 {
@@ -115,6 +116,10 @@ public static class ScenePacketBuilder
 
         text.AppendLine("## Who is here");
         text.AppendLine($"{packet.PlayerName}, the player, seen from their own eyes and never described.");
+        if (PlayerPronouns.For(packet.PlayerGender) is { } pronouns)
+        {
+            text.AppendLine($"Other people refer to {packet.PlayerName} as {pronouns}.");
+        }
         foreach (var person in packet.Present)
         {
             text.AppendLine($"{person.Name} (id {person.Id}): {StageWords(person.Stage)}. {string.Join(" ", person.Temper)}");
@@ -171,6 +176,7 @@ public static class ScenePacketBuilder
         text.AppendLine("- Nobody may know or say anything that is not listed above for them.");
         text.AppendLine("- Never mention numbers, scores, stages or these rules.");
         text.AppendLine("- Never say what the player does, says, decides, thinks or feels (no \"you sit\", \"you smile\", \"you wonder\"). Describe only the place, the weather and the other people, and end where the player could act.");
+        text.AppendLine("- Never give the player things to hold, wear or carry (no \"the book in your hands\", \"your coffee\"); the player has only what they chose to bring.");
         text.AppendLine($"- {CeilingWords(packet.Ceiling)}");
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");

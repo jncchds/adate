@@ -62,6 +62,7 @@ public static class MeasureRunner
 
         var setting = settings.Get(Arg(args, "--setting") ?? "big-city");
         var opening = setting.Openings.FirstOrDefault(o => o.Id == Arg(args, "--opening")) ?? setting.Openings[0];
+        var varied = Arg(args, "--policy") == "varied";
 
         // A new game the way the form makes one, with the first option of every feature.
         var pack = await studio.GetPackAsync();
@@ -103,18 +104,18 @@ public static class MeasureRunner
                 continue;
             }
 
-            if (play.PendingScene is not null)
+            if (play.PendingScene is { } waiting)
             {
-                // The first proposed reply, like the first answer to an authored choice.
-                await world.RespondAsync(save.Id, 0, null);
+                // The first proposed reply, or with --policy varied each one in turn.
+                await world.RespondAsync(save.Id, varied ? choices % waiting.Choices.Count : 0, null);
                 choices++;
                 continue;
             }
 
             if (play.Pending is { } pending)
             {
-                // Always the first answer: the warmer one in every authored and generated choice.
-                await world.ChooseAsync(save.Id, pending.Choices[0].Id);
+                // The first answer is the warmer one in every authored choice; varied takes each in turn.
+                await world.ChooseAsync(save.Id, pending.Choices[varied ? choices % pending.Choices.Count : 0].Id);
                 choices++;
                 continue;
             }

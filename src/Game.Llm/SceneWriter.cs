@@ -62,6 +62,9 @@ public sealed class SceneWriter(
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>A 1500-character scene with its facts, places, summary, tags and choices, with room to spare.</summary>
+    public const int MaxTokens = 1500;
+
     public const int MinChoices = 2;
     public const int MaxChoices = 3;
     public const int MaxChoiceLength = 90;
@@ -101,7 +104,7 @@ public sealed class SceneWriter(
             string raw;
             try
             {
-                raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "scene", schema), ct).ConfigureAwait(false);
+                raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "scene", schema, MaxTokens), ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))

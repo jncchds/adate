@@ -372,6 +372,51 @@ public sealed class CharacterStudio(
         return image.RelativePath;
     }
 
+    /// <summary>
+    /// A neutral backdrop the cut-out sprites stand on wherever a person is picked rather than met,
+    /// such as the map's invite cards: soft, empty and the same for everyone, so the cards compare
+    /// people and not places. One image for the pack, rendered once and served from the cache after.
+    /// </summary>
+    /// <remarks>
+    /// Not a place type: the catalog is what the writer may propose, and a backdrop is not somewhere
+    /// the story can go. So the prompt is built here from the pack's own style prefix.
+    /// </remarks>
+    public Task<string> GenerateBackdropAsync() =>
+        jobs.RunAsync("backdrop", GenerateBackdropCoreAsync);
+
+    /// <summary>Fixed, so the backdrop is the same image on every run and machine.</summary>
+    private const long BackdropSeed = 20260914;
+
+    private async Task<string> GenerateBackdropCoreAsync(CancellationToken ct)
+    {
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
+
+        var positive = pack.Dialect is PromptDialect.Booru
+            ? string.Join(", ", [.. pack.PositivePrefix, "simple background", "gradient background", "pastel colors", "soft lighting", "no humans", "empty"])
+            : string.Join(" ", [.. pack.PositivePrefix, "An empty, softly lit studio backdrop: a smooth pastel gradient fading to a faint floor shadow, with no objects, no furniture and no people."]);
+
+        var ceiling = _options.Content.MaxCeiling < pack.HighestCeiling ? _options.Content.MaxCeiling : pack.HighestCeiling;
+
+        var image = await images.GenerateAsync(
+            new ImageRequest(
+                WorkflowId: pack.Workflows.Background,
+                Positive: positive,
+                Negative: compiler.CompileNegative(pack, ceiling, RenderTarget.Background, subject: null),
+                Seed: BackdropSeed,
+                Width: pack.Resolutions.Background.Width,
+                Height: pack.Resolutions.Background.Height,
+                PackFingerprint: PackFingerprint(),
+                AnchorImageHash: null,
+                AnchorWeight: null,
+                PoseImageHash: null,
+                PoseStrength: null,
+                Ceiling: ceiling),
+            ct).ConfigureAwait(false);
+
+        return image.RelativePath;
+    }
+
     // ----------------------------------------------------------------------- cast
 
     /// <summary>

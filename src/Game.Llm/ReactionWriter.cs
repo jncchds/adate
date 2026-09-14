@@ -6,16 +6,18 @@ using Microsoft.Extensions.Options;
 
 namespace Game.Llm;
 
-public sealed record ReactionResponse(string Text, string Expression, IReadOnlyList<string>? Tags);
+public sealed record ReactionResponse(string Text, string Expression, IReadOnlyList<string>? Tags, ProposedMeeting? Meet = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
+/// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
 public sealed record WrittenReaction(
     string Text,
     string? Expression,
     IReadOnlyList<string> Tags,
     bool Fallback,
     int Attempts,
-    IReadOnlyList<string> Rejections);
+    IReadOnlyList<string> Rejections,
+    ProposedMeeting? Meet = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -26,6 +28,9 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
 {
     public const int MaxLength = 1000;
     public const int MaxReplyLength = 300;
+
+    /// <summary>About twice what a 1000-character reaction and its tags take.</summary>
+    public const int MaxTokens = 700;
 
     public const string SystemPrompt =
         "You continue one scene of a first-person dating sim after the player has replied. Write only how " +
@@ -59,8 +64,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             + "- Write how the people present react: one or two short paragraphs, in the second person as before.\n"
             + "- Take the player's reply exactly as written above. Add nothing else the player does, says, thinks or feels.\n"
             + (chosenTags is null
-                ? "- tags: what the player's reply shows about them, from the schema's list; an empty list if nothing stands out.\n"
-                : "- tags: an empty list.\n");
+                ? "- tags: what the player's reply shows about them, from the schema's list; an empty list if nothing stands out. " +
+                  "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n"
+                : "- tags: an empty list.\n")
+            + "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
+              $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n";
 
         var schema = Schema(packet);
         var rejections = new List<string>();
@@ -77,7 +85,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             ReactionResponse? response;
             try
             {
-                var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema), ct).ConfigureAwait(false);
+                var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema, MaxTokens), ct).ConfigureAwait(false);
                 response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json);
             }
             catch (JsonException ex)
@@ -100,7 +108,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 var tags = chosenTags
                     ?? [.. (response!.Tags ?? []).Distinct(StringComparer.Ordinal).Where(t => story.IsKnownTag(t, cast))];
 
-                return new WrittenReaction(response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections);
+                return new WrittenReaction(response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet);
             }
 
             lastReasons = reasons;
@@ -122,8 +130,20 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 ["text"] = new JsonObject { ["type"] = "string" },
                 ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
                 ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                ["meet"] = new JsonObject
+                {
+                    ["type"] = Strings(["object", "null"]),
+                    ["properties"] = new JsonObject
+                    {
+                        ["place"] = new JsonObject { ["type"] = "string" },
+                        ["inDays"] = new JsonObject { ["type"] = "integer" },
+                        ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Morning", "Midday", "Afternoon", "Evening"]) },
+                    },
+                    ["required"] = Strings(["place", "inDays", "slot"]),
+                    ["additionalProperties"] = false,
+                },
             },
-            ["required"] = Strings(["text", "expression", "tags"]),
+            ["required"] = Strings(["text", "expression", "tags", "meet"]),
             ["additionalProperties"] = false,
         };
     }

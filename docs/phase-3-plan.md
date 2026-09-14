@@ -81,6 +81,12 @@ Each step ends in something that runs and is committed.
    max 92.4 s; rejections: other 22, player action 11, judge 4, json 4, place 3, unreachable 2;
    25 choices answered, reactions written first try. The step-3 commit did not build (a missing
    using), so its earlier measure had run the old binaries.*
+   *Live: a free-form reply waited 113 s and then failed with LM Studio's "Context size has been
+   exceeded" (10K context shared by 4 parallel slots, while the measure ran); the retry answered.
+   Requests now cap their output (scenes 1500 tokens, reactions 700), so a runaway answer ends fast
+   and is retried. A reply admitting a lie was tagged only honesty, so the reaction prompt now keeps
+   a dealbreaker tag even when the behaviour is confessed. Enter in the reply box raced the button's
+   enabled state; the button is now only disabled while a reply is being written.*
 5. **Initiative and temper:** initiative events and temper-scaled leaving. *Built: temper modifiers
    gain patience and initiative. Neglect days and forgiven broken promises scale with patience
    (fiery 0.7, ambitious 0.8, reserved 1.15, calm and easygoing 1.3), next to the existing suspicion
@@ -90,5 +96,23 @@ Each step ends in something that runs and is committed.
    acquaintance, 1.5x when the player has never invited them and 0.6x once the player has invited
    them three times or more; capped at 60%, a deterministic roll, and a three-day cooldown per
    person. The visit is written as them taking the lead and ends in the usual replies.*
-6. **Endings:** the commitment ask, the written epilogue and the choice recap.
+6. **Endings:** the commitment ask, the written epilogue and the choice recap. *Built: every reply
+   and authored choice is logged with how it moved each person there. The ending shows up to twelve
+   choices that moved someone, the most influential kept, in story order, each with plain influence
+   ("Kai warmed to you", "Kai trusted you a little less", "Kai won't forget that"); numbers stay
+   hidden to the end as well. Gemma writes the epilogue from the decided ending, the partner's
+   temper, who was passed over or left, the last memory summaries and the recap; it must be second
+   person, finished and name the partner when together, else the authored text stands. The
+   commitment ask is the ending offer framed as the most attached person on offer asking; a
+   separate authored ask scene was judged not worth another turn type.*
 7. **Fixes and tuning:** gender, places, promises, tuning measure, live play in the other settings.
+   *Built so far: the player's pronouns reach the packet; place names equal up to case, punctuation
+   or a leading "the" are refused as known; scenes may not give the player possessions; the cast
+   page's note is current; `measure run --policy varied` rotates through replies and choices.
+   Promises are made in play: a reaction may report a meeting the two just agreed (a known place,
+   1 to 3 days ahead, not at night, within the story); C# turns it into a meet promise, one open
+   meeting per person, and tells the player. Turning up at that place and time puts the person
+   there ("waiting, as agreed"); every turn resolves open promises, kept by being there together and
+   broken once the time has passed, with the trust change committed in the turn. The promise row is
+   marked right after the turn commits, not in the same transaction; a crash in between could apply
+   the trust change twice, judged acceptable for now.*

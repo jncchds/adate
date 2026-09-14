@@ -69,6 +69,10 @@ else if (_outcome is not null)
         {
             <div class="popup" role="status">@_popup</div>
         }
+        @if (_agreed is not null)
+        {
+            <p class="today">@_agreed</p>
+        }
         <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
     }
     else if (_view?.Choices is { Count: > 0 } offered)
@@ -82,7 +86,7 @@ else if (_outcome is not null)
         </div>
         <form class="reply-form" @onsubmit="() => RespondAsync(null)">
             <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
-            <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Reply</button>
+            <button type="submit" disabled="@_working">Reply</button>
         </form>
     }
     else
@@ -102,6 +106,10 @@ else if (_state.PendingScene is { } waiting)
         {
             <div class="popup" role="status">@_popup</div>
         }
+        @if (_agreed is not null)
+        {
+            <p class="today">@_agreed</p>
+        }
         <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
     }
     else
@@ -115,7 +123,7 @@ else if (_state.PendingScene is { } waiting)
         </div>
         <form class="reply-form" @onsubmit="() => RespondAsync(null)">
             <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
-            <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Reply</button>
+            <button type="submit" disabled="@_working">Reply</button>
         </form>
     }
 }
@@ -141,6 +149,21 @@ else if (_state.Ending is { } ending)
         <p>@string.Join(", ", ending.PassedOver)</p>
     }
 
+    @if (ending.Choices is { Count: > 0 } madeChoices)
+    {
+        <h2>Your choices</h2>
+        <ol class="recap">
+            @foreach (var line in madeChoices)
+            {
+                <li>
+                    <span class="recap-when">Day @line.Day, @line.Slot.ToLowerInvariant()</span>
+                    <span class="recap-words">“@line.Words”</span>
+                    <span class="recap-influence">@string.Join(" · ", line.Influence)</span>
+                </li>
+            }
+        </ol>
+    }
+
     @if (ending.ProfileOf is not null)
     {
         <h2>@ending.ProfileOf</h2>
@@ -164,8 +187,15 @@ else if (_state.EndingOffer is { } offer)
     }
 
     <p class="lede">
-        @(offer.Routes.Count == 0 ? "No one is waiting for an answer." : "Who do you stay with?")
+        @(offer.Routes.Count == 0
+            ? "No one is waiting for an answer."
+            : offer.Asker is { } asker ? $"{asker} asks whether you'll stay. Who do you stay with?" : "Who do you stay with?")
     </p>
+
+    @if (_working)
+    {
+        <div class="working"><p>Writing the ending.</p></div>
+    }
 
     <div class="choices">
         @foreach (var route in offer.Routes)
@@ -224,24 +254,49 @@ else
 
     @if (_state.Invitees.Count > 0)
     {
-        <label class="invite">
-            Invite
-            <select @bind="_invite">
-                <option value="">nobody</option>
-                @foreach (var person in _state.Invitees)
-                {
-                    <option value="@person.Key">@person.Name</option>
-                }
-            </select>
-            along
-        </label>
+        <h2 class="map-section">Bring someone along</h2>
+        <div class="person-cards" role="radiogroup" aria-label="Invite along">
+            <button type="button" role="radio" aria-checked="@(_invite == "")"
+                    class="person-card nobody @(_invite == "" ? "chosen" : "")" @onclick='() => _invite = ""'>
+                <span class="person-picture"><span class="person-none">—</span></span>
+                <span class="person-name">Nobody</span>
+            </button>
+            @foreach (var person in _state.Invitees)
+            {
+                <button type="button" role="radio" aria-checked="@(_invite == person.Key)"
+                        class="person-card @(_invite == person.Key ? "chosen" : "")" @onclick="() => _invite = person.Key">
+                    <span class="person-picture" style="@(_backdrop is null ? null : $"background-image: url('{_backdrop}')")">
+                        @if (_portraits.GetValueOrDefault(person.Key) is { } portrait)
+                        {
+                            <img src="@portrait" alt="" />
+                        }
+                        else
+                        {
+                            <span class="picture-wait" aria-hidden="true"></span>
+                        }
+                    </span>
+                    <span class="person-name">@person.Name</span>
+                </button>
+            }
+        </div>
     }
 
+    <h2 class="map-section">Where to</h2>
     <div class="map-places">
         @foreach (var place in _state.KnownPlaces)
         {
-            <button type="button" disabled="@_working" @onclick="() => GoAsync(place)">
-                @place.Name
+            <button type="button" class="place-card" disabled="@_working" @onclick="() => GoAsync(place)">
+                <span class="place-picture">
+                    @if (_thumbnails.GetValueOrDefault(place.Id) is { } thumbnail)
+                    {
+                        <img src="@thumbnail" alt="" />
+                    }
+                    else
+                    {
+                        <span class="picture-wait" aria-hidden="true"></span>
+                    }
+                </span>
+                <span class="place-name">@place.Name</span>
                 <small>@PlaceTypes.Get(place.TypeId).DisplayName</small>
             </button>
         }
@@ -262,10 +317,19 @@ else
     private SceneView? _view;
     private string? _reaction;
     private string? _popup;
+    private string? _agreed;
     private string _reply = "";
     private string _invite = "";
     private bool _working;
     private string? _error;
+
+    // Map pictures, keyed by place id and invitee key, for the slot and weather they were drawn for.
+    private readonly Dictionary<string, string> _thumbnails = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _portraits = new(StringComparer.Ordinal);
+    private string? _picturesFor;
+
+    // One neutral backdrop, shared by every person card, with the cut-out sprites standing on it.
+    private string? _backdrop;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -276,10 +340,78 @@ else
         try
         {
             _state = await World.GetPlayStateAsync(SaveId);
+            _ = LoadPicturesAsync(_state);
         }
         catch (Exception ex)
         {
             _error = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Fills in the map's pictures one by one as they arrive, never holding up the map: backgrounds
+    /// at this slot and weather, and each invitee at their resting expression. Cached images come
+    /// back at once; the rest render once and are cached for every later visit.
+    /// </summary>
+    private async Task LoadPicturesAsync(PlayState state)
+    {
+        var key = $"{state.Clock.Day}:{state.Clock.Slot}:{state.Weather?.Id ?? "clear"}";
+        if (_picturesFor != key)
+        {
+            _thumbnails.Clear();
+            _picturesFor = key;
+        }
+
+        if (_backdrop is null && state.Invitees.Count > 0)
+        {
+            try
+            {
+                _backdrop = await Studio.GenerateBackdropAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception)
+            {
+                // Without the backdrop the cards keep their plain ground.
+            }
+        }
+
+        foreach (var person in state.Invitees.Where(p => !_portraits.ContainsKey(p.Key)))
+        {
+            try
+            {
+                if (await World.PortraitAsync(SaveId, person.Key) is { } portrait)
+                {
+                    _portraits[person.Key] = portrait;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception)
+            {
+                // A missing picture leaves the card with its name; the choice still works.
+            }
+        }
+
+        foreach (var place in state.KnownPlaces.Where(p => !_thumbnails.ContainsKey(p.Id)))
+        {
+            try
+            {
+                var thumbnail = await Studio.GenerateBackgroundAsync(SaveId, place, state.Clock.Slot, state.Weather?.Id ?? "clear");
+                if (_picturesFor == key)
+                {
+                    _thumbnails[place.Id] = thumbnail;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception)
+            {
+                // As above: the place stays choosable by name.
+            }
+
+            // The player moved on to another slot while this one was drawing; stop drawing it.
+            if (_picturesFor != key || _outcome is not null)
+            {
+                return;
+            }
         }
     }
 
@@ -368,6 +500,7 @@ else
             var result = await World.RespondAsync(SaveId, index, index is null ? _reply : null);
             _reaction = result.View.Text;
             _popup = result.Popup;
+            _agreed = result.Agreed;
             _reply = "";
             StateHasChanged();
 
@@ -415,6 +548,7 @@ else
         _view = null;
         _reaction = null;
         _popup = null;
+        _agreed = null;
         _reply = "";
         await LoadAsync();
     }

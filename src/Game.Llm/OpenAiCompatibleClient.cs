@@ -37,6 +37,11 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
             },
         };
 
+        if (request.MaxTokens is { } maxTokens)
+        {
+            body["max_tokens"] = maxTokens;
+        }
+
         if (!string.IsNullOrWhiteSpace(settings.ReasoningEffort))
         {
             body["reasoning_effort"] = settings.ReasoningEffort;

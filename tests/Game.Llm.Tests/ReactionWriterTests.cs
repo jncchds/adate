@@ -60,6 +60,7 @@ public class ReactionWriterTests
         Assert.False(reaction.Fallback);
         Assert.Equal(["humour"], reaction.Tags);
         Assert.Contains("tags: an empty list", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Equal(ReactionWriter.MaxTokens, llm.Requests[0].MaxTokens);
     }
 
     [Fact]
@@ -85,6 +86,17 @@ public class ReactionWriterTests
         Assert.False(reaction.Fallback);
         Assert.Equal(2, reaction.Attempts);
         Assert.Contains("you kiss", llm.Requests[1].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_agreed_meeting_comes_back_for_the_game_to_check()
+    {
+        var llm = new FakeLlm(() => """{ "text": "Maya nods. \"Thursday evening, then.\"", "expression": "smile", "tags": [], "meet": { "place": "Riverside Park", "inDays": 2, "slot": "Evening" } }""");
+
+        var reaction = await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Ask her to meet at the park on Thursday evening", ["attentiveness"], "Maya takes that in.");
+
+        Assert.Equal(new ProposedMeeting("Riverside Park", 2, "Evening"), reaction.Meet);
+        Assert.Contains("meet: only if", llm.Requests[0].User, StringComparison.Ordinal);
     }
 
     [Fact]

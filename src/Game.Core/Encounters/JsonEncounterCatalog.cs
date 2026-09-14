@@ -39,6 +39,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// <summary>A turn where someone came looking for the player, of their own accord.</summary>
     public const string InitiativeId = "initiative.visit";
 
+    /// <summary>A turn at the place and time the player agreed to meet someone.</summary>
+    public const string PromisedMeetingId = "promise.meet";
+
     /// <summary>The first date with the main LI, whichever opening led to it.</summary>
     public const string FirstDateId = "beat.first-date";
 

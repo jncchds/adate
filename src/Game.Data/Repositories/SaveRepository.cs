@@ -87,6 +87,18 @@ public sealed class SaveRepository(Database database)
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }
 
+    /// <summary>The player's gender as chosen on the form, for how the writing refers to them.</summary>
+    public async Task<string?> GetPlayerGenderAsync(SaveId id, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT player_gender FROM save WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+    }
+
     public async Task<string?> GetSettingIdAsync(SaveId id, CancellationToken ct = default)
     {
         await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);

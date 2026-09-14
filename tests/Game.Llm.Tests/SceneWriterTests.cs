@@ -388,7 +388,7 @@ public class SceneWriterTests
         var http = new HttpClient(handler) { BaseAddress = OpenAiCompatibleClient.EnsureTrailingSlash("http://llm.local/v1") };
         var client = new OpenAiCompatibleClient(http, lease, Options.Create(new LlmOptions { Model = "qwen/qwen3.8-27b", Temperature = 0.5, ReasoningEffort = "none" }));
 
-        var answer = await client.CompleteJsonAsync(new LlmRequest("system", "user", "scene", new JsonObject { ["type"] = "object" }));
+        var answer = await client.CompleteJsonAsync(new LlmRequest("system", "user", "scene", new JsonObject { ["type"] = "object" }, MaxTokens: 700));
 
         Assert.Equal("""{"text":"hi"}""", answer);
         Assert.Equal("http://llm.local/v1/chat/completions", handler.Uri!.ToString());
@@ -397,6 +397,7 @@ public class SceneWriterTests
         var sent = JsonNode.Parse(handler.Sent!)!;
         Assert.Equal("qwen/qwen3.8-27b", sent["model"]!.GetValue<string>());
         Assert.Equal("none", sent["reasoning_effort"]!.GetValue<string>());
+        Assert.Equal(700, sent["max_tokens"]!.GetValue<int>());
         Assert.Equal("json_schema", sent["response_format"]!["type"]!.GetValue<string>());
         Assert.Equal("scene", sent["response_format"]!["json_schema"]!["name"]!.GetValue<string>());
         Assert.Equal("user", sent["messages"]![1]!["content"]!.GetValue<string>());

@@ -47,4 +47,21 @@ public class PendingSceneTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             state.ResolvePendingSceneAsync(save.Id, new Dictionary<Guid, RelationshipState>(), new Dictionary<string, string>()));
     }
+
+    [Fact]
+    public async Task Logged_turns_of_one_kind_come_back_in_order()
+    {
+        using var db = new TempDatabase();
+        var save = await new SaveRepository(db.Database).CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var story = new StoryStateRepository(db.Database);
+
+        await story.LogTurnAsync(save.Id, new ClockState(2, TimeOfDay.Morning), "player-choice", new ChoiceRecord(2, "Morning", "first", []));
+        await story.LogTurnAsync(save.Id, new ClockState(2, TimeOfDay.Morning), "scene", new { Text = "ignored" });
+        await story.LogTurnAsync(save.Id, new ClockState(4, TimeOfDay.Evening), "player-choice", new ChoiceRecord(4, "Evening", "second", []));
+
+        var turns = await story.ListTurnsAsync(save.Id, "player-choice");
+
+        Assert.Equal([2, 4], turns.Select(t => t.Clock.Day));
+        Assert.Contains("\"second\"", turns[1].PayloadJson, StringComparison.Ordinal);
+    }
 }

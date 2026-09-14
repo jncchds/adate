@@ -501,4 +501,26 @@ public sealed class StoryStateRepository(Database database)
         command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
+
+    /// <summary>The logged turns of one kind, in the order they happened, payloads as stored.</summary>
+    public async Task<IReadOnlyList<(ClockState Clock, string PayloadJson)>> ListTurnsAsync(SaveId saveId, string kind, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT day, slot, payload_json FROM turn_log WHERE save_id = $save AND kind = $kind ORDER BY id;";
+        command.Parameters.AddWithValue("$save", saveId.ToString());
+        command.Parameters.AddWithValue("$kind", kind);
+
+        var turns = new List<(ClockState, string)>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            turns.Add((new ClockState(reader.GetInt32(0), Enum.Parse<TimeOfDay>(reader.GetString(1))), reader.GetString(2)));
+        }
+
+        return turns;
+    }
 }

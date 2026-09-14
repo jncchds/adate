@@ -34,14 +34,16 @@ public sealed record SceneView(
     IReadOnlyList<ProposedChoice>? Choices = null);
 
 /// <summary>The other people's reaction to a reply, and a popup when the reaction was considerable.</summary>
-public sealed record ReactionResult(SceneView View, string? Popup);
+/// <param name="Agreed">A meeting the reply settled, now held as a promise.</param>
+public sealed record ReactionResult(SceneView View, string? Popup, string? Agreed = null);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
 public sealed record RelationshipView(string Name, RelationshipState State, string? Left = null);
 
 /// <summary>The ending check: who can be chosen (alone always can), and who has already left.</summary>
-public sealed record EndingOffer(IReadOnlyList<Invitee> Routes, IReadOnlyList<string> Departures);
+/// <param name="Asker">Who asks the player for an answer: the one on offer who cares most, or nobody.</param>
+public sealed record EndingOffer(IReadOnlyList<Invitee> Routes, IReadOnlyList<string> Departures, string? Asker = null);
 
 /// <summary>What the playthrough revealed (plan §9), stored once the story ends.</summary>
 /// <param name="ProfileOf">Whose profile is shown: the person the player ended with, or the one they were closest to.</param>
@@ -52,7 +54,8 @@ public sealed record EndingRecap(
     IReadOnlyList<string> PassedOver,
     IReadOnlyList<string> Departures,
     string? ProfileOf,
-    IReadOnlyList<string> Profile);
+    IReadOnlyList<string> Profile,
+    IReadOnlyList<RecapLine>? Choices = null);
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
@@ -97,6 +100,7 @@ public sealed class WorldService(
     WeatherContent weatherContent,
     SceneWriter sceneWriter,
     ReactionWriter reactionWriter,
+    EpilogueWriter epilogueWriter,
     BibleWriter bibleWriter,
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
@@ -154,9 +158,17 @@ public sealed class WorldService(
             var statuses = await StatusesAsync(saveId, cast, flags, null, ct).ConfigureAwait(false);
             if (EndingRules.IsDue(clock, setting.Days, statuses))
             {
+                var onOffer = EndingRules.Offer(statuses);
+                var asker = statuses
+                    .Where(s => onOffer.Contains(s.Key))
+                    .OrderByDescending(s => s.State.Affection)
+                    .Select(s => cast.First(li => li.Key == s.Key).Name)
+                    .FirstOrDefault();
+
                 offer = new EndingOffer(
-                    [.. EndingRules.Offer(statuses).Select(key => new Invitee(key, cast.First(li => li.Key == key).Name))],
-                    Departures(cast, flags));
+                    [.. onOffer.Select(key => new Invitee(key, cast.First(li => li.Key == key).Name))],
+                    Departures(cast, flags),
+                    asker);
             }
         }
 
@@ -292,6 +304,21 @@ public sealed class WorldService(
             throw new InvalidOperationException($"Nothing at {place.Name} would bring them along.");
         }
 
+        // A meeting the player agreed to happens when they turn up for it, whatever else was planned
+        // for a quiet turn.
+        var openPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
+        if (outcome.EncounterId is null
+            && openPromises.FirstOrDefault(p => Promises.PutsThere(p, play.Clock, place.Id)) is { } meeting
+            && cast.FirstOrDefault(li => li.Id.ToString() == meeting.CharacterId && !HasLeft(flags, li)) is { } waitingFor)
+        {
+            outcome = outcome with
+            {
+                EncounterId = JsonEncounterCatalog.PromisedMeetingId,
+                With = [waitingFor.Ref],
+                Text = $"{waitingFor.Name} is waiting at {place.Name}, as agreed.",
+            };
+        }
+
         // No encounter: the turn is still a scene (phase-3 plan). Someone whose schedule puts them
         // here is present, the one the player is closest to first; otherwise it is the place itself.
         if (outcome.EncounterId is null)
@@ -358,6 +385,22 @@ public sealed class WorldService(
             relationships[li.Id] = Advance(li, current, after, toSet);
         }
 
+        // Promises: a meeting kept by being there together, anything whose time has passed broken.
+        // The trust change commits with the turn; the promise is marked once the turn is stored.
+        var presentIds = cast.Where(li => outcome.With.Contains(li.Ref)).Select(li => li.Id.ToString()).ToList();
+        var resolvedPromises = new List<(Promise Promise, PromiseStatus Status)>();
+        foreach (var promise in openPromises)
+        {
+            if (Promises.Resolve(promise, outcome.VisitedAt, place.Id, presentIds) is { } status
+                && cast.FirstOrDefault(li => li.Id.ToString() == promise.CharacterId) is { } promisedTo)
+            {
+                var current = relationships.GetValueOrDefault(promisedTo.Id)
+                    ?? await story.GetRelationshipAsync(saveId, promisedTo.Id, ct).ConfigureAwait(false);
+                relationships[promisedTo.Id] = _engine.PromiseResolved(current, promisedTo.Member.Temper, status, outcome.VisitedAt.Day);
+                resolvedPromises.Add((promise, status));
+            }
+        }
+
         // The daily world tick (plan §7): at the end of each day, evaluate the leaving rules.
         if (outcome.Next.Day != outcome.VisitedAt.Day || outcome.GameOver)
         {
@@ -376,6 +419,11 @@ public sealed class WorldService(
 
         outcome = outcome with { FlagsToSet = toSet };
         await state.CommitTurnAsync(saveId, outcome, relationships, ct).ConfigureAwait(false);
+
+        foreach (var (promise, status) in resolvedPromises)
+        {
+            await story.ResolvePromiseAsync(saveId, promise.Id, status, outcome.VisitedAt.Day, ct).ConfigureAwait(false);
+        }
 
         var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
         var owner = Owner(cast, outcome.With);
@@ -412,15 +460,25 @@ public sealed class WorldService(
         var tags = (choice.Tags ?? []).Select(t => t.Replace(StoryContent.WantToken, ownerWant, StringComparison.Ordinal)).ToList();
 
         var relationships = new Dictionary<Guid, RelationshipState>();
+        var effects = new List<ChoiceEffect>();
         foreach (var li in cast.Where(li => (encounter.With ?? []).Contains(li.Ref)))
         {
             var current = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
             var delta = _engine.Score(li.Profile, li.Member.Temper, li.Member.WantId, tags);
             relationships[li.Id] = Advance(li, _engine.Apply(current, delta, play.Clock.Day), after, sets);
+            effects.Add(Effect(li.Name, current, relationships[li.Id]));
         }
 
         await state.ResolveChoiceAsync(saveId, pending.EncounterId, choice.Id, sets, relationships, ct).ConfigureAwait(false);
+        await story.LogTurnAsync(saveId, play.Clock, ChoiceLogKind,
+            new ChoiceRecord(play.Clock.Day, play.Clock.Slot.ToString(), choice.Text, effects), ct).ConfigureAwait(false);
     }
+
+    /// <summary>The turn-log kind every choice the player makes is recorded under, for the ending's recap.</summary>
+    public const string ChoiceLogKind = "player-choice";
+
+    private static ChoiceEffect Effect(string name, RelationshipState before, RelationshipState after) =>
+        new(name, after.Affection - before.Affection, after.Trust - before.Trust, after.Dealbreaker && !before.Dealbreaker);
 
     /// <summary>
     /// Ends the story with <paramref name="pick"/>: a route key on offer, or <see cref="EndingRules.AloneKey"/>.
@@ -459,19 +517,75 @@ public sealed class WorldService(
             _ => endingContent.Texts.LeftAlone,
         };
 
+        var passedOver = stillAround.Where(s => s.Key != choice.Key).Select(s => cast.First(li => li.Key == s.Key).Name).ToList();
+
+        // The choices that mattered, as the player made them (phase-3 plan: the recap).
+        var choices = ChoiceRecap.For(
+            (await story.ListTurnsAsync(saveId, ChoiceLogKind, ct).ConfigureAwait(false))
+                .Select(t => JsonSerializer.Deserialize<ChoiceRecord>(t.PayloadJson, Json))
+                .OfType<ChoiceRecord>());
+
+        // Gemma tells the ending C# decided; the authored text stands in when it cannot.
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var memories = (await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false))
+            .Where(m => m.CompactedInto is null)
+            .OrderBy(m => m.Day)
+            .TakeLast(10)
+            .Select(m => $"Day {m.Day}: {m.Summary}")
+            .ToList();
+        var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
+
+        var epilogue = await epilogueWriter.WriteAsync(
+            new EpilogueRequest(
+                play.Setting.DisplayName,
+                play.Setting.Tone,
+                names.Player,
+                choice.Kind,
+                partner?.Name,
+                partner is null ? [] : [.. partner.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, "")).Where(w => w.Length > 0)],
+                passedOver,
+                offer.Departures,
+                memories,
+                choices,
+                ceiling),
+            Fill(text, names, partner, "", play.Clock),
+            ct).ConfigureAwait(false);
+
+        await story.LogTurnAsync(saveId, play.Clock, epilogue.Fallback ? "epilogue-fallback" : "epilogue", new
+        {
+            epilogue.Text,
+            epilogue.Attempts,
+            epilogue.Rejections,
+        }, ct).ConfigureAwait(false);
+
         var recap = new EndingRecap(
             choice.Kind,
-            Fill(text, names, partner, "", play.Clock),
+            epilogue.Text,
             partner?.Name,
-            [.. stillAround.Where(s => s.Key != choice.Key).Select(s => cast.First(li => li.Key == s.Key).Name)],
+            passedOver,
             offer.Departures,
             closest is null ? null : partner is null ? $"{closest.Name}, the one you were closest to" : closest.Name,
-            closest is null ? [] : ProfileLines(closest));
+            closest is null ? [] : ProfileLines(closest),
+            choices);
 
         await story.SaveEndingAsync(
             saveId,
             new StoredEnding(choice.Kind, partner?.Id, Math.Min(play.Clock.Day, play.Setting.Days), JsonSerializer.Serialize(recap, Json)),
             ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A picture of someone the player can invite: their full-body scene sprite at their temper's
+    /// resting expression, the same image the scenes use, so it is rendered once and cached.
+    /// </summary>
+    public async Task<string?> PortraitAsync(SaveId saveId, string key, CancellationToken ct = default)
+    {
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var li = (await CastAsync(saveId, setting, ct).ConfigureAwait(false)).FirstOrDefault(l => l.Key == key);
+
+        return li is null
+            ? null
+            : await studio.GenerateSceneSpriteAsync(saveId, li.Id, li.Member.Aesthetic, li.Member.RestingExpression(castContent)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -587,6 +701,8 @@ public sealed class WorldService(
             {
                 JsonEncounterCatalog.QuietCompanyId =>
                     $"{presented.Name} happens to be at {place?.Name ?? outcome.PlaceId}. Show a short, ordinary moment: what they are doing, how they react on noticing the player, maybe a line of dialogue. Nothing important happens.",
+                JsonEncounterCatalog.PromisedMeetingId =>
+                    $"{presented.Name} is at {place?.Name ?? outcome.PlaceId} because the two of them agreed to meet here now. Show them arriving or already waiting, glad or relieved the player came, and pick up where they left off.",
                 JsonEncounterCatalog.InitiativeId =>
                     $"{presented.Name} has come to {place?.Name ?? outcome.PlaceId} looking for the player, of their own accord, after not seeing them for a while. They take the lead in a way that fits their temper and where things stand between them: say why they came, and ask or suggest something the player can answer. Do not decide the player's answer.",
                 JsonEncounterCatalog.QuietAloneId =>
@@ -598,7 +714,8 @@ public sealed class WorldService(
             [.. known.Select(p => p.Name)],
             memoryLines,
             WeatherOn(saveId, setting, day).Writing,
-            OffersChoices: presented.CharacterId is not null && (outcome.Choices ?? []).Count == 0);
+            OffersChoices: presented.CharacterId is not null && (outcome.Choices ?? []).Count == 0,
+            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false));
 
         var world = new SceneWorld(
             facts,
@@ -759,7 +876,9 @@ public sealed class WorldService(
             "The player has just replied; see below.",
             ceiling,
             [.. pack.Expressions.Keys],
-            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing);
+            KnownPlaces: [.. known.Select(p => p.Name)],
+            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
+            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false));
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
@@ -778,6 +897,11 @@ public sealed class WorldService(
         }
 
         await state.ResolvePendingSceneAsync(saveId, relationships, toSet, ct).ConfigureAwait(false);
+        await story.LogTurnAsync(saveId, scene.Clock, ChoiceLogKind, new ChoiceRecord(
+            scene.Clock.Day,
+            scene.Clock.Slot.ToString(),
+            words,
+            [.. presentPeople.Select(li => Effect(li.Name, before[li.Id], relationships[li.Id]))]), ct).ConfigureAwait(false);
 
         await story.LogTurnAsync(saveId, scene.Clock, reaction.Fallback ? "reaction-fallback" : "reaction", new
         {
@@ -798,9 +922,21 @@ public sealed class WorldService(
             ? null
             : ScenePresentation.Expression(reaction.Expression, owner.Member.RestingExpression(castContent), [.. pack.Expressions.Keys]);
 
+        // A meeting agreed in the reaction is held as a promise, if the story can hold it.
+        string? agreed = null;
+        if (owner is not null
+            && MeetingAgreement.ToPromise(reaction.Meet, owner.Id.ToString(), scene.Clock, setting.Days, known.Select(p => (p.Id, p.Name))) is { } promise
+            && (await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false)).All(p => p.CharacterId != promise.CharacterId))
+        {
+            await story.AddPromiseAsync(saveId, promise, ct).ConfigureAwait(false);
+            var placeName = known.First(p => p.Id == promise.PlaceId).Name;
+            agreed = $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
+        }
+
         return new ReactionResult(
             new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression),
-            popup);
+            popup,
+            agreed);
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>
