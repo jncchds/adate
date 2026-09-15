@@ -276,13 +276,26 @@ public static class CastGenerator
             : rng.Pick(pool).Id;
     }
 
-    /// <summary>The candidate most of the temper's ends lean towards; ties broken by seed.</summary>
+    /// <summary>
+    /// The candidate most of the temper's ends lean towards; ties broken by seed. When an axis dresses, only its end's
+    /// leanings are candidates, unless the others have taken them all.
+    /// </summary>
     private static string Leaning(
         IReadOnlyDictionary<string, string> temper,
         CastContent content,
         IReadOnlyList<string> candidates,
         Rng rng)
     {
+        if (content.Temper.FirstOrDefault(a => a.Dresses) is { } dressing)
+        {
+            var leanings = dressing.End(temper[dressing.Id]).Aesthetics;
+            var narrowed = candidates.Where(c => leanings.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (narrowed.Count > 0)
+            {
+                candidates = narrowed;
+            }
+        }
+
         var votes = candidates.ToDictionary(c => c, _ => 0, StringComparer.OrdinalIgnoreCase);
 
         foreach (var axis in content.Temper)

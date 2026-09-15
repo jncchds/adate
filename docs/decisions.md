@@ -584,6 +584,11 @@ member per profile, deterministically from a seed.
   not describe.
 * **Player-only choices** are never picked.
 * **No two members share a moved hair colour, hair style, aesthetic or age.**
+* **Energy picks the aesthetic** (added later, user feedback: the everyday outfit on the map cards should follow the
+  temper but show the LI's energy). The axis marked `dresses` in `temper.json` narrows the candidates to its end's
+  leanings (reserved: artsy, preppy, elegant; outgoing: sporty, alternative, rugged), and the rest of the temper
+  votes among them. When other members have taken all three, any free aesthetic is used. A cast already stored with
+  a save keeps its aesthetics.
 
 The loader refuses content that could not meet the budget: an axis without exactly two ends, a
 one-sided conflict, or a profile with too few or no silhouette dimensions.

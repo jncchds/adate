@@ -10,9 +10,10 @@
   {
     "id": "energy",
     "label": "Energy",
+    "dresses": true,
     "ends": [
-      { "id": "reserved", "label": "reserved", "writing": "Listens more than talks, and warms up slowly in groups.", "resting": "neutral", "aesthetics": ["artsy", "preppy"] },
-      { "id": "outgoing", "label": "outgoing", "writing": "Starts conversations, fills silences, and likes a crowd.", "resting": "smile", "aesthetics": ["sporty", "alternative"] }
+      { "id": "reserved", "label": "reserved", "writing": "Listens more than talks, and warms up slowly in groups.", "resting": "neutral", "aesthetics": ["artsy", "preppy", "elegant"] },
+      { "id": "outgoing", "label": "outgoing", "writing": "Starts conversations, fills silences, and likes a crowd.", "resting": "smile", "aesthetics": ["sporty", "alternative", "rugged"] }
     ]
   },
   {

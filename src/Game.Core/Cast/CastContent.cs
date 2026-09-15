@@ -9,7 +9,11 @@ namespace Game.Core.Cast;
 public sealed record TemperEnd(string Id, string Label, string Writing, string Resting, IReadOnlyList<string> Aesthetics);
 
 /// <summary>One temper axis. Always exactly two ends, so "the other end" is always defined.</summary>
-public sealed record TemperAxis(string Id, string Label, IReadOnlyList<TemperEnd> Ends)
+/// <param name="Dresses">
+/// Whether this axis picks the aesthetic: only its end's leanings are candidates, and the rest of the temper votes among
+/// them (user feedback: the everyday outfit on the map should follow the temper but show the LI's energy). At most one axis.
+/// </param>
+public sealed record TemperAxis(string Id, string Label, IReadOnlyList<TemperEnd> Ends, bool Dresses = false)
 {
     public TemperEnd End(string endId) =>
         Ends.FirstOrDefault(e => string.Equals(e.Id, endId, StringComparison.Ordinal))
@@ -122,6 +126,12 @@ public sealed record CastContent(
                     throw new InvalidOperationException($"Temper end '{end.Id}' has no resting expression.");
                 }
             }
+        }
+
+        if (Temper.Count(a => a.Dresses) > 1)
+        {
+            throw new InvalidOperationException(
+                $"Temper axes {string.Join(", ", Temper.Where(a => a.Dresses).Select(a => $"'{a.Id}'"))} all pick the aesthetic; only one may.");
         }
 
         Unique(Temper.Select(a => a.Id), "temper axis");

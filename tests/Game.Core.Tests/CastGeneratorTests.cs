@@ -72,6 +72,33 @@ public class CastGeneratorTests
 
     private static IEnumerable<long> Seeds() => Enumerable.Range(0, 60).Select(i => (long)(i * 7919 + 13));
 
+    /// <summary>The map shows everyone in their everyday outfit, which should show how outgoing they are.</summary>
+    [Fact]
+    public void Energy_picks_every_members_aesthetic_on_every_seed()
+    {
+        var energy = Shipped().Axis("energy");
+        Assert.True(energy.Dresses);
+
+        foreach (var seed in Seeds())
+        {
+            var (main, cast) = Build(seed);
+
+            foreach (var member in cast.Prepend(main))
+            {
+                Assert.Contains(member.Aesthetic, energy.End(member.Temper["energy"]).Aesthetics);
+            }
+        }
+    }
+
+    [Fact]
+    public void Only_one_temper_axis_may_pick_the_aesthetic()
+    {
+        var content = Shipped();
+        var twice = content with { Temper = [.. content.Temper.Select(a => a with { Dresses = true })] };
+
+        Assert.Throws<InvalidOperationException>(twice.Validate);
+    }
+
     [Fact]
     public void One_member_per_contrast_profile_in_content_order()
     {
