@@ -15,6 +15,20 @@
       "env": {
         "ADATE_Comfy__BaseAddress": "http://192.168.2.33:8188"
       }
+    },
+    {
+      "name": "game-lan",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/Game.Host",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://0.0.0.0:5177"
+      ],
+      "port": 5177
     }
   ]
 }
