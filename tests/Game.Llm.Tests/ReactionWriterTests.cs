@@ -201,6 +201,23 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task A_meeting_at_a_place_nobody_named_is_sent_back_unless_the_answer_adds_it()
+    {
+        var packet = Packet() with { KnownPlaces = ["Riverside Park"] };
+        var llm = new FakeLlm(
+            () => """{ "text": "Maya grins. \"Lead the way, then.\"", "expression": "smile", "tags": [], "meet": { "place": "The Velvet Bean", "inDays": 0, "slot": "Evening" } }""",
+            () => """{ "text": "Maya grins. \"Lead the way, then.\"", "expression": "smile", "tags": [], "meet": { "place": "The Velvet Bean", "inDays": 0, "slot": "Evening" }, "places": [{ "type": "cafe", "name": "The Velvet Bean", "details": [], "owner": "" }] }""");
+
+        var reaction = await Writer(llm).WriteAsync(packet, "Maya looks up.", "Suggest heading to The Velvet Bean", ["adventure"], "Maya takes that in.");
+
+        Assert.False(reaction.Fallback);
+        Assert.Equal(2, reaction.Attempts);
+        Assert.Contains("not a place the player knows", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Equal(new ProposedMeeting("The Velvet Bean", MeetingAgreement.Now, "Evening"), reaction.Meet);
+        Assert.Contains(reaction.Places ?? [], p => p.Name == "The Velvet Bean");
+    }
+
+    [Fact]
     public async Task Without_a_model_the_fallback_is_used_and_chosen_tags_still_count()
     {
         var reaction = await Writer(new FakeLlm(), enabled: false).WriteAsync(Packet(), "Maya looks up.", "Ask about the planner", ["attentiveness"], "Maya takes that in.");

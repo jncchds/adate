@@ -115,8 +115,10 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                       "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n")
             + (alone
                 ? "- meet: null.\n- numbers: false.\n- routines: an empty list.\n"
-                : "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
-                  $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
+                : "- meet: only if the two of them have just agreed to meet again at a set time, or to go somewhere together right now: " +
+                  "the place (one the player knows, or one you add to places), " +
+                  $"in how many days ({MeetingAgreement.Now} for right now, when the time of day is ignored; otherwise 1 to {MeetingAgreement.MaxDaysAhead}) " +
+                  "and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
                   "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
                   + $"- {ScenePacketBuilder.RoutineRule}\n")
@@ -379,6 +381,16 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         if (!packet.Expressions.Contains(response.Expression, StringComparer.OrdinalIgnoreCase))
         {
             reasons.Add($"The expression '{response.Expression}' is not one of {string.Join(", ", packet.Expressions)}.");
+        }
+
+        // The game holds meetings only at places it knows: one named nowhere would be agreed and then lost.
+        if (response.Meet is { Place: { } meetPlace }
+            && !string.IsNullOrWhiteSpace(meetPlace)
+            && packet.KnownPlaces is not null
+            && !packet.KnownPlaces.Any(known => Game.Core.Places.PlaceProposals.SameName(known, meetPlace))
+            && !(response.Places ?? []).Any(p => p is not null && !string.IsNullOrWhiteSpace(p.Name) && Game.Core.Places.PlaceProposals.SameName(p.Name, meetPlace)))
+        {
+            reasons.Add($"meet names '{meetPlace}', which is not a place the player knows. Use a place they know, or add it to places.");
         }
 
         return reasons;

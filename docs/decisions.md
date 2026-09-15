@@ -1617,3 +1617,20 @@ freeform field with a predefined list.
   save's ceiling; at render time any phrase the pack refuses is dropped, as the gate drops story terms.
 * **Every picture of a save** compiles from `CharacterStudio.GetPackAsync(saveId)`; the unstyled pack is
   only read for vocabulary. The invite-card backdrop is drawn per style.
+
+## Going somewhere together now, and places named in passing
+
+User feedback on a small-town save: Samantha answered "Suggest heading to The Velvet Bean" with "Lead the
+way, then", and the map offered no such place, and nothing would have put her there.
+
+* **Why the place was missing:** she named it on day 1 in a reply whose `places` was empty, so it was never
+  stored; the next scene still offered going there as a choice. The place rule now asks for places named in
+  passing and places a choice suggests going to.
+* **Why the agreement was lost:** `meet` took only 1 to 3 days ahead, never now. `inDays` 0 now means going
+  there together straight away: a meeting promise for the next slot, night included, with its own `-now` id,
+  held on top of a later meeting. The existing machinery does the rest: the map says who is going where with
+  the player, turning up there starts the promised meeting (a first date once they have the number), and
+  going elsewhere breaks it.
+* **A meeting at an unknown place** is sent back to the writer unless the same answer adds the place, and the
+  game reads known places again after a reply's places are stored, so a place named and agreed on in one
+  reply holds.

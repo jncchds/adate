@@ -283,8 +283,10 @@ public sealed class WorldService(
                 .Where(p => p.Kind is PromiseKind.Meet)
                 .Select(p => (Promise: p, Person: cast.FirstOrDefault(li => li.Id.ToString() == p.CharacterId), Place: known.FirstOrDefault(k => k.Id == p.PlaceId)))
                 .Where(m => m.Person is not null && m.Place is not null)
-                .Select(m => $"You agreed to meet {m.Person!.Name} at {m.Place!.Name} on day {m.Promise.DueDay}" +
-                             (m.Promise.DueSlot is { } due ? $", {due.ToString().ToLowerInvariant()}." : ".")),
+                .Select(m => m.Promise.DueDay == clock.Day && m.Promise.DueSlot == clock.Slot
+                    ? $"{m.Person!.Name} is going to {m.Place!.Name} with you now."
+                    : $"You agreed to meet {m.Person!.Name} at {m.Place!.Name} on day {m.Promise.DueDay}" +
+                      (m.Promise.DueSlot is { } due ? $", {due.ToString().ToLowerInvariant()}." : ".")),
         ];
 
         // Everyone met who is still around, in cast order: the map's lineup.
@@ -1677,15 +1679,25 @@ public sealed class WorldService(
             ? null
             : ScenePresentation.Expression(reaction.Expression, owner.Member.RestingExpression(castContent), [.. pack.Expressions.Keys]);
 
-        // A meeting agreed in the reaction is held as a promise, if the story can hold it.
+        // A meeting agreed in the reaction is held as a promise, if the story can hold it. Known places are read again:
+        // the reply may have just named the place it agrees on.
         string? agreed = null;
+        var knownNow = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
         if (owner is not null
-            && MeetingAgreement.ToPromise(reaction.Meet, owner.Id.ToString(), scene.Clock, setting.Days, known.Select(p => (p.Id, p.Name))) is { } promise
-            && (await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false)).All(p => p.CharacterId != promise.CharacterId))
+            && MeetingAgreement.ToPromise(reaction.Meet, owner.Id.ToString(), scene.Clock, setting.Days, knownNow.Select(p => (p.Id, p.Name))) is { } promise)
         {
-            await story.AddPromiseAsync(saveId, promise, ct).ConfigureAwait(false);
-            var placeName = known.First(p => p.Id == promise.PlaceId).Name;
-            agreed = $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
+            var heldPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
+            var together = MeetingAgreement.IsNow(promise, scene.Clock);
+
+            // Going somewhere together now is held on top of a later meeting; otherwise one open meeting a person.
+            if (together ? heldPromises.All(p => p.Id != promise.Id) : heldPromises.All(p => p.CharacterId != promise.CharacterId))
+            {
+                await story.AddPromiseAsync(saveId, promise, ct).ConfigureAwait(false);
+                var placeName = knownNow.First(p => p.Id == promise.PlaceId).Name;
+                agreed = together
+                    ? $"{owner.Name} is going to {placeName} with you. Go there next."
+                    : $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
+            }
         }
 
         agreed = swapped is null ? agreed : agreed is null ? swapped : $"{swapped} {agreed}";
