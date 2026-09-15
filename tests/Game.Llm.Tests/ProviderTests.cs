@@ -148,6 +148,21 @@ public class ProviderTests
         Assert.Equal("user", sent["contents"]![0]!["parts"]![0]!["text"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData("gemma-4-31b-it")]
+    [InlineData("models/gemma-4-31b-it")]
+    public async Task Google_sends_Gemma_no_thinking_budget_which_it_refuses(string model)
+    {
+        var options = new LlmOptions { Provider = LlmProviderType.GoogleAi, ApiKey = "k", Model = model, ReasoningEffort = "none" };
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{ "candidates": [ { "content": { "parts": [ { "text": "{\"text\":\"hi\"}" } ] } } ] }""");
+
+        await new GoogleAiClient(Http(handler, options), Options.Create(options)).CompleteJsonAsync(Request());
+
+        var generation = JsonNode.Parse(handler.Sent!)!["generationConfig"]!.AsObject();
+        Assert.False(generation.ContainsKey("thinkingConfig"));
+        Assert.Equal("object", generation["responseJsonSchema"]!["type"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task A_blocked_prompt_from_Google_is_an_exception_with_its_reason()
     {

@@ -1590,7 +1590,8 @@ projects (adnd's `LLMProviderFactory`) but without its presets: one provider per
   same `chat/completions`); OpenAI gets `max_completion_tokens`, which its reasoning models require.
   Ollama uses its native `api/chat` with the schema in `format` and `think: false` for effort `none`.
   Google AI Studio uses `generateContent` with `responseJsonSchema` (full JSON Schema, unlike the
-  OpenAPI-subset `responseSchema`), drops thought parts, and maps effort to a thinking budget.
+  OpenAPI-subset `responseSchema`), drops thought parts, and maps effort to a thinking budget —
+  except for Gemma models, which answer any `thinkingConfig` with a 400.
 * **`Llm:ApiKey`** goes as a bearer token, or `x-goog-api-key`, whenever it is set. An empty
   `Llm:BaseAddress` means the provider's default address. The key sits in the player's settings file
   in plain text, like the addresses: the file is theirs, on their device.
