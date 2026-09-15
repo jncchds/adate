@@ -1576,3 +1576,23 @@ later visit someone at home or invite them over.
 * **Inviting someone over** needs no new mechanism: the writer is told where the player lives, and a
   meeting agreed at the player's home, or at a love interest's once it is known, is held as a promise
   like any other.
+
+## LLM providers: one per game, chosen in settings
+
+User request: stop relying on the OpenAI API shape alone, with the provider concept from the other
+projects (adnd's `LLMProviderFactory`) but without its presets: one provider per game, saved as a setting.
+
+* **`Llm:Provider`** (`LlmProviderType`): `OpenAiCompatible` (the default, and what every earlier
+  config meant), `OpenAi`, `Ollama`, `GoogleAi`. `AddLlm` reads it once and registers that provider's
+  chat and embedding clients, as `Imaging:Provider` picks the image backend; an unknown name fails at
+  start with the known ones. Changing it goes through the settings page, which restarts the game.
+* **Clients** live in `Game.Llm.Providers`. OpenAI and OpenAI-compatible servers share one client (the
+  same `chat/completions`); OpenAI gets `max_completion_tokens`, which its reasoning models require.
+  Ollama uses its native `api/chat` with the schema in `format` and `think: false` for effort `none`.
+  Google AI Studio uses `generateContent` with `responseJsonSchema` (full JSON Schema, unlike the
+  OpenAPI-subset `responseSchema`), drops thought parts, and maps effort to a thinking budget.
+* **`Llm:ApiKey`** goes as a bearer token, or `x-goog-api-key`, whenever it is set. An empty
+  `Llm:BaseAddress` means the provider's default address. The key sits in the player's settings file
+  in plain text, like the addresses: the file is theirs, on their device.
+* **The GPU lease** is held only for providers that run on the GPU the pictures share
+  (OpenAI-compatible and Ollama). A hosted model waiting on the lease would only stall the pictures.

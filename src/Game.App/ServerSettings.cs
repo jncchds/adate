@@ -1,11 +1,21 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Game.Llm;
 using Microsoft.Extensions.Configuration;
 
 namespace Game.App;
 
-/// <summary>The addresses a player may change: where the language model and the image service run.</summary>
-public sealed record ServerSettings(string LlmAddress, string LlmModel, string EmbeddingModel, string ImageAddress)
+/// <summary>
+/// What a player may change about the servers: which language model provider the game writes with and
+/// where it is, and where the image service runs. An empty LLM address means the provider's default.
+/// </summary>
+public sealed record ServerSettings(
+    LlmProviderType LlmProvider,
+    string LlmAddress,
+    string LlmApiKey,
+    string LlmModel,
+    string EmbeddingModel,
+    string ImageAddress)
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
@@ -14,7 +24,9 @@ public sealed record ServerSettings(string LlmAddress, string LlmModel, string E
         ArgumentNullException.ThrowIfNull(configuration);
 
         return new(
+            LlmServiceCollectionExtensions.ProviderFrom(configuration),
             configuration["Llm:BaseAddress"] ?? "",
+            configuration["Llm:ApiKey"] ?? "",
             configuration["Llm:Model"] ?? "",
             configuration["Llm:EmbeddingModel"] ?? "",
             configuration["ZImage:BaseAddress"] ?? "");
@@ -29,7 +41,9 @@ public sealed record ServerSettings(string LlmAddress, string LlmModel, string E
         {
             ["Llm"] = new JsonObject
             {
+                ["Provider"] = LlmProvider.ToString(),
                 ["BaseAddress"] = LlmAddress.Trim(),
+                ["ApiKey"] = LlmApiKey.Trim(),
                 ["Model"] = LlmModel.Trim(),
                 ["EmbeddingModel"] = EmbeddingModel.Trim(),
             },

@@ -27,7 +27,7 @@ public static class MeasureRunner
     public static async Task<int> RunAsync(IServiceProvider services, string[] args)
     {
         var llm = services.GetRequiredService<IOptions<LlmOptions>>().Value;
-        Console.WriteLine($"LLM: {(llm.Enabled ? llm.Model : "disabled")} at {llm.BaseAddress}; embeddings: {(string.IsNullOrEmpty(llm.EmbeddingModel) ? "none" : llm.EmbeddingModel)}");
+        Console.WriteLine($"LLM: {(llm.Enabled ? llm.Model : "disabled")} via {llm.Provider} at {llm.ChatAddress}; embeddings: {(string.IsNullOrEmpty(llm.EmbeddingModel) ? "none" : llm.EmbeddingModel)}");
 
         return args.FirstOrDefault() switch
         {

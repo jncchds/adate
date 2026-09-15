@@ -8,6 +8,7 @@ using Game.Core.Gpu;
 using Game.Core.Scenes;
 using Game.Core.Story;
 using Game.Core.World;
+using Game.Llm.Providers;
 using Microsoft.Extensions.Options;
 
 namespace Game.Llm.Tests;
@@ -535,7 +536,7 @@ public class SceneWriterTests
     {
         var handler = new RecordingHandler(HttpStatusCode.OK, """{ "choices": [ { "message": { "content": "{\"text\":\"hi\"}" } } ] }""");
         var lease = new CountingLease();
-        var http = new HttpClient(handler) { BaseAddress = OpenAiCompatibleClient.EnsureTrailingSlash("http://llm.local/v1") };
+        var http = new HttpClient(handler) { BaseAddress = LlmProviders.EnsureTrailingSlash("http://llm.local/v1") };
         var client = new OpenAiCompatibleClient(http, lease, Options.Create(new LlmOptions { Model = "qwen/qwen3.8-27b", Temperature = 0.5, ReasoningEffort = "none" }));
 
         var answer = await client.CompleteJsonAsync(new LlmRequest("system", "user", "scene", new JsonObject { ["type"] = "object" }, MaxTokens: 700));

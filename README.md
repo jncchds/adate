@@ -25,7 +25,7 @@ is reached through a configured URL.
 | `Game.Core` | Domain types, `SceneIntent`, `IPromptCompiler`, `IGpuLease`, style pack model |
 | `Game.Imaging` | `IImageProvider`, ComfyUI client, workflow patching, content-addressed cache |
 | `Game.Data` | SQLite schema, migrations, repositories |
-| `Game.Llm` | Scene, reaction and epilogue writers, memory, the OpenAI-compatible client |
+| `Game.Llm` | Scene, reaction and epilogue writers, memory, one client per LLM provider (OpenAI-compatible, OpenAI, Ollama, Google AI) |
 | `Game.Play` | The game without a frontend: world, studio, jobs; composed by `AddGame` |
 | `Game.Host` | Blazor Server app, and the `measure` harness |
 | `Game.App` | Avalonia frontend shared by every native head |

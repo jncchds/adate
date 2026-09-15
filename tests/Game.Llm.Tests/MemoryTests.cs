@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Game.Core.Gpu;
 using Game.Core.Story;
+using Game.Llm.Providers;
 using Microsoft.Extensions.Options;
 
 namespace Game.Llm.Tests;

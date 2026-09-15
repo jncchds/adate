@@ -10,8 +10,12 @@
                        Text="The game runs on this device. It asks a language model for the writing and an image service for the pictures, over the network." />
 
             <TextBlock Classes="h2" Text="Language model" />
-            <TextBlock Classes="label" Text="Address (OpenAI-compatible, ending in /v1/)" />
-            <TextBox Text="{Binding LlmAddress}" />
+            <TextBlock Classes="label" Text="Provider" />
+            <ComboBox ItemsSource="{Binding Providers}" SelectedItem="{Binding LlmProvider}" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="label" Text="Address (empty for the provider's default)" />
+            <TextBox Text="{Binding LlmAddress}" PlaceholderText="{Binding AddressHint}" />
+            <TextBlock Classes="label" Text="API key (for providers that need one)" />
+            <TextBox Text="{Binding LlmApiKey}" PasswordChar="•" />
             <TextBlock Classes="label" Text="Scene model" />
             <TextBox Text="{Binding LlmModel}" />
             <TextBlock Classes="label" Text="Embedding model" />

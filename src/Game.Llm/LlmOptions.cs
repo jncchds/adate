@@ -1,8 +1,8 @@
 namespace Game.Llm;
 
 /// <summary>
-/// The chat model the game writes scenes with: any OpenAI-compatible endpoint (LM Studio, llama.cpp,
-/// Ollama, vLLM). Off by default, so a machine without a model plays with placeholder text.
+/// The chat model the game writes scenes with, through one <see cref="LlmProviderType">provider</see> per game.
+/// Off by default, so a machine without a model plays with placeholder text.
 /// </summary>
 public sealed class LlmOptions
 {
@@ -10,11 +10,23 @@ public sealed class LlmOptions
 
     public bool Enabled { get; set; }
 
-    /// <summary>The API root, ending in <c>/v1/</c>.</summary>
-    public string BaseAddress { get; set; } = "http://localhost:1234/v1/";
+    public LlmProviderType Provider { get; set; } = LlmProviderType.OpenAiCompatible;
 
-    /// <summary>The model id the endpoint serves; empty lets servers with one model pick it.</summary>
+    /// <summary>The API root, such as <c>http://host:1234/v1/</c>; empty uses the provider's <see cref="LlmProviders.DefaultAddress">default</see>.</summary>
+    public string BaseAddress { get; set; } = "";
+
+    /// <summary>Sent to providers that take a key; hosted ones need it.</summary>
+    public string ApiKey { get; set; } = "";
+
+    /// <summary>The model id the endpoint serves; empty lets OpenAI-compatible servers with one model pick it.</summary>
     public string Model { get; set; } = "";
+
+    public Uri ChatAddress => LlmProviders.EnsureTrailingSlash(
+        string.IsNullOrWhiteSpace(BaseAddress) ? LlmProviders.DefaultAddress(Provider) : BaseAddress.Trim());
+
+    public Uri EmbeddingAddress => string.IsNullOrWhiteSpace(EmbeddingBaseAddress)
+        ? ChatAddress
+        : LlmProviders.EnsureTrailingSlash(EmbeddingBaseAddress.Trim());
 
     /// <summary>Bounds one completion, including a model loading on first use.</summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(3);

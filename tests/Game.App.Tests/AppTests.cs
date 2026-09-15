@@ -41,11 +41,13 @@ public sealed class AppTests : IDisposable
     [Fact]
     public void Server_addresses_the_player_saves_override_the_shipped_ones()
     {
-        new ServerSettings("http://10.0.0.5:1234/v1/", "some-model", "some-embedding", "http://10.0.0.5:8000").Save(Paths.SettingsFile);
+        new ServerSettings(Game.Llm.LlmProviderType.Ollama, "http://10.0.0.5:11434/", "a-key", "some-model", "some-embedding", "http://10.0.0.5:8000").Save(Paths.SettingsFile);
 
         var settings = ServerSettings.From(GameServices.BuildConfiguration(Paths));
 
-        Assert.Equal("http://10.0.0.5:1234/v1/", settings.LlmAddress);
+        Assert.Equal(Game.Llm.LlmProviderType.Ollama, settings.LlmProvider);
+        Assert.Equal("http://10.0.0.5:11434/", settings.LlmAddress);
+        Assert.Equal("a-key", settings.LlmApiKey);
         Assert.Equal("some-model", settings.LlmModel);
         Assert.Equal("http://10.0.0.5:8000", settings.ImageAddress);
     }
