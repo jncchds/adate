@@ -1596,3 +1596,24 @@ projects (adnd's `LLMProviderFactory`) but without its presets: one provider per
   in plain text, like the addresses: the file is theirs, on their device.
 * **The GPU lease** is held only for providers that run on the GPU the pictures share
   (OpenAI-compatible and Ollama). A hosted model waiting on the lease would only stall the pictures.
+
+## A visual style per game: anime by default, a preset or typed
+
+User request: a game setting for the visual style, anime by default, realistic among the options, as a
+freeform field with a predefined list.
+
+* **Per save, chosen at new game**, next to the narration language, and locked like the pack: a character
+  drawn in one style is a different picture in another. Stored in `save.visual_style` as a preset id or
+  the typed text; NULL (saves from before styles) draws as before.
+* **`VisualStyle` replaces the pack's style prefix and nothing else.** Subjects, age bands, outfits, the
+  sprite background sentence and the content rules stay the pack's. Anime keeps the pack's own wording,
+  so existing pictures and cache stay valid. Only natural-language packs take a style; tag packs keep theirs.
+* **Presets:** Anime, Realistic, Semi-realistic painting, Watercolour, Storybook, Comic book, Cinematic
+  film still. Rendered side by side on Z-Image Turbo with one sprite prompt and seed (a dark-skinned,
+  athletic woman with freckles): every style kept one figure, the declared skin tone, build, adult
+  proportions and outfit. A "1990s anime" preset was dropped because it drew the same as anime. No 3D
+  and no named webtoon style, for the reasons in "The art direction stays anime, prompted directly".
+* **A typed style** is words only, up to 80 characters, and must pass the pack's restricted terms at the
+  save's ceiling; at render time any phrase the pack refuses is dropped, as the gate drops story terms.
+* **Every picture of a save** compiles from `CharacterStudio.GetPackAsync(saveId)`; the unstyled pack is
+  only read for vocabulary. The invite-card backdrop is drawn per style.

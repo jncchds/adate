@@ -24,6 +24,7 @@ public sealed class CharacterStudio(
     IStylePackLoader packs,
     JsonStylePackLoader packText,
     CharacterRepository characters,
+    SaveRepository saves,
     ImageCacheRepository cache,
     PoseCatalog poses,
     JobRunner jobs,
@@ -42,8 +43,19 @@ public sealed class CharacterStudio(
 
     public string StylePackId => _options.StylePackId;
 
+    /// <summary>The pack as configured. For its vocabulary; pictures use <see cref="GetPackAsync(SaveId, CancellationToken)"/>.</summary>
     public async Task<StylePack> GetPackAsync(CancellationToken ct = default) =>
         await packs.LoadAsync(_options.StylePackId, ct).ConfigureAwait(false);
+
+    /// <summary>The pack drawn in the save's visual style, which is what every picture of the save is compiled from.</summary>
+    public async Task<StylePack> GetPackAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var style = await saves.GetVisualStyleAsync(saveId, ct).ConfigureAwait(false);
+        var ceiling = (await saves.GetAsync(saveId, ct).ConfigureAwait(false))?.Ceiling ?? Ceiling.PG13;
+
+        return VisualStyle.Apply(pack, style, ceiling);
+    }
 
     /// <summary>
     /// The content decision for one character, after the game setting, the pack and the age
@@ -110,7 +122,7 @@ public sealed class CharacterStudio(
         CharacterRecord character,
         CancellationToken ct)
     {
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var pack = await GetPackAsync(character.SaveId, ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
         var intent = PortraitIntent();
 
@@ -180,7 +192,7 @@ public sealed class CharacterStudio(
         CharacterRecord character,
         CancellationToken ct)
     {
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var pack = await GetPackAsync(character.SaveId, ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
 
         // Both seed strategies make the shared seed the identity. Only SeedAndTags also
@@ -284,7 +296,7 @@ public sealed class CharacterStudio(
         var character = await characters.GetAsync(characterId, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"No character with id {characterId}.");
 
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var pack = await GetPackAsync(saveId, ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
         var subject = pack.SubjectFor(character.Appearance.Subject);
 
@@ -344,7 +356,7 @@ public sealed class CharacterStudio(
         string weather,
         CancellationToken ct)
     {
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var pack = await GetPackAsync(saveId, ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
         var intent = new SceneIntent(
             place.TypeId, time, "", "", "", Framing.FullBody, place.Details,
@@ -394,15 +406,23 @@ public sealed class CharacterStudio(
     /// Not a place type: the catalog is what the writer may propose, and a backdrop is not somewhere
     /// the story can go. So the prompt is built here from the pack's own style prefix.
     /// </remarks>
-    public Task<string> GenerateBackdropAsync() =>
-        jobs.RunAsync("backdrop", GenerateBackdropCoreAsync);
+    /// <param name="saveId">The save whose visual style it is drawn in; null for the pack's own style.</param>
+    public async Task<string> GenerateBackdropAsync(SaveId? saveId = null)
+    {
+        var pack = saveId is { } id
+            ? await GetPackAsync(id).ConfigureAwait(false)
+            : await GetPackAsync().ConfigureAwait(false);
+
+        // One job per look: saves in the same style share the image.
+        return await jobs.RunAsync($"backdrop:{string.Join("|", pack.PositivePrefix)}", ct => GenerateBackdropCoreAsync(pack, ct))
+            .ConfigureAwait(false);
+    }
 
     /// <summary>Fixed, so the backdrop is the same image on every run and machine.</summary>
     private const long BackdropSeed = 20260914;
 
-    private async Task<string> GenerateBackdropCoreAsync(CancellationToken ct)
+    private async Task<string> GenerateBackdropCoreAsync(StylePack pack, CancellationToken ct)
     {
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
 
         var positive = pack.Dialect is PromptDialect.Booru
@@ -473,7 +493,7 @@ public sealed class CharacterStudio(
 
     private async Task<IReadOnlyList<CastPortrait>> GenerateCastCoreAsync(CharacterRecord main, CancellationToken ct)
     {
-        var pack = await GetPackAsync(ct).ConfigureAwait(false);
+        var pack = await GetPackAsync(main.SaveId, ct).ConfigureAwait(false);
         var compiler = compilers.For(pack.Dialect);
         var subject = pack.SubjectFor(main.Appearance.Subject);
 

@@ -15,6 +15,7 @@ public sealed class SaveRepository(Database database)
     /// <param name="playerName">Used only in the writing; the player is never drawn.</param>
     /// <param name="playerGender">Used only in the writing, for how the story refers to the player.</param>
     /// <param name="narrationLanguage">The language the story is written in; null for English.</param>
+    /// <param name="visualStyle">How the pictures look (<see cref="Game.Core.Style.VisualStyle"/>); null for the pack's own style.</param>
     public async Task<SaveRecord> CreateAsync(
         string stylePackId,
         string packFingerprint,
@@ -23,6 +24,7 @@ public sealed class SaveRepository(Database database)
         string? playerName = null,
         string? playerGender = null,
         string? narrationLanguage = null,
+        string? visualStyle = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stylePackId);
@@ -34,8 +36,8 @@ public sealed class SaveRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            INSERT INTO save (id, style_pack_id, pack_fingerprint, ceiling, created_utc, setting_id, player_name, player_gender, narration_language)
-            VALUES ($id, $pack, $fingerprint, $ceiling, $created, $setting, $playerName, $playerGender, $language);
+            INSERT INTO save (id, style_pack_id, pack_fingerprint, ceiling, created_utc, setting_id, player_name, player_gender, narration_language, visual_style)
+            VALUES ($id, $pack, $fingerprint, $ceiling, $created, $setting, $playerName, $playerGender, $language, $style);
             """;
 
         command.Parameters.AddWithValue("$id", record.Id.ToString());
@@ -47,9 +49,22 @@ public sealed class SaveRepository(Database database)
         command.Parameters.AddWithValue("$playerName", (object?)playerName ?? DBNull.Value);
         command.Parameters.AddWithValue("$playerGender", (object?)playerGender ?? DBNull.Value);
         command.Parameters.AddWithValue("$language", (object?)narrationLanguage ?? DBNull.Value);
+        command.Parameters.AddWithValue("$style", (object?)visualStyle ?? DBNull.Value);
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return record;
+    }
+
+    /// <summary>How the save's pictures look, as chosen at new game; null for saves from before styles (the pack's own).</summary>
+    public async Task<string?> GetVisualStyleAsync(SaveId id, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT visual_style FROM save WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }
 
     /// <summary>The language the story is written in, as typed at new game; null for saves from before languages (English).</summary>

@@ -549,7 +549,7 @@ public sealed partial class PlayViewModel : PageViewModel
         {
             if (Mode is PlayMode.EndingOffer or PlayMode.Ending or PlayMode.Map || People.Count > 0)
             {
-                _backdrop ??= await PictureAsync(await _studio.GenerateBackdropAsync());
+                _backdrop ??= await PictureAsync(await _studio.GenerateBackdropAsync(_saveId));
                 if (Stale())
                 {
                     return;

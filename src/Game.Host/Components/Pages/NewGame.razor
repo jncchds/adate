@@ -61,6 +61,18 @@
             <InputText @bind-Value="_form.NarrationLanguage" placeholder="English" />
             <small>Any language, typed in. The story is written in it; menus stay English.</small>
         </label>
+
+        <label>
+            Visual style
+            <InputText @bind-Value="_form.VisualStyle" list="visual-styles" placeholder="Anime" />
+            <datalist id="visual-styles">
+                @foreach (var preset in VisualStyle.Presets)
+                {
+                    <option value="@preset.Label"></option>
+                }
+            </datalist>
+            <small>Pick one or type your own, such as oil painting. Every picture in the game is drawn in it.</small>
+        </label>
     </div>
 
     <h2>Who you will meet</h2>
@@ -241,6 +253,8 @@
             var appearance = _form.ToAppearance();
             appearance.Validate();
 
+            var visualStyle = VisualStyle.Normalize(_form.VisualStyle, _pack ?? await Studio.GetPackAsync());
+
             var save = await Saves.CreateAsync(
                 Studio.StylePackId,
                 Studio.PackFingerprint(),
@@ -248,7 +262,8 @@
                 _form.SettingId,
                 playerName,
                 _form.PlayerGender,
-                Game.Core.Story.NarrationLanguage.Normalize(_form.NarrationLanguage));
+                Game.Core.Story.NarrationLanguage.Normalize(_form.NarrationLanguage),
+                visualStyle);
 
             var character = await Characters.CreateAsync(save.Id, appearance, liName, _form.Temper);
 
@@ -276,6 +291,7 @@
         public string PlayerName { get; set; } = "";
         public string PlayerGender { get; set; } = "woman";
         public string NarrationLanguage { get; set; } = Game.Core.Story.NarrationLanguage.Default;
+        public string VisualStyle { get; set; } = Game.Core.Style.VisualStyle.LabelFor(Game.Core.Style.VisualStyle.Default);
         public string LiName { get; set; } = "";
         public string Subject { get; set; } = "female";
         public int Age { get; set; } = 24;

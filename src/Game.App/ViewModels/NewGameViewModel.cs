@@ -31,6 +31,9 @@ public sealed partial class NewGameViewModel : PageViewModel
     private string _narrationLanguage = Game.Core.Story.NarrationLanguage.Default;
 
     [ObservableProperty]
+    private string _visualStyle = Game.Core.Style.VisualStyle.LabelFor(Game.Core.Style.VisualStyle.Default);
+
+    [ObservableProperty]
     private string _liName = "";
 
     [ObservableProperty]
@@ -85,6 +88,8 @@ public sealed partial class NewGameViewModel : PageViewModel
     public IReadOnlyList<SettingItem> Settings { get; }
 
     public IReadOnlyList<string> Genders { get; } = ["woman", "man", "nonbinary"];
+
+    public IReadOnlyList<string> VisualStyles { get; } = [.. Game.Core.Style.VisualStyle.Presets.Select(p => p.Label)];
 
     public IReadOnlyList<FeatureField> Features { get; }
 
@@ -161,6 +166,8 @@ public sealed partial class NewGameViewModel : PageViewModel
                 DistinguishingFeature);
             appearance.Validate();
 
+            var visualStyle = Game.Core.Style.VisualStyle.Normalize(VisualStyle, _pack ?? await _studio.GetPackAsync());
+
             var save = await _services.Get<SaveRepository>().CreateAsync(
                 _studio.StylePackId,
                 _studio.PackFingerprint(),
@@ -168,7 +175,8 @@ public sealed partial class NewGameViewModel : PageViewModel
                 Setting?.Id ?? throw new ArgumentException("Choose a setting."),
                 playerName,
                 PlayerGender ?? "woman",
-                Game.Core.Story.NarrationLanguage.Normalize(NarrationLanguage));
+                Game.Core.Story.NarrationLanguage.Normalize(NarrationLanguage),
+                visualStyle);
 
             var temper = Temper.ToDictionary(t => t.Id, t => t.Selected?.Id ?? t.Ends[0].Id, StringComparer.Ordinal);
             var character = await _services.Get<CharacterRepository>().CreateAsync(save.Id, appearance, liName, temper);

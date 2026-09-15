@@ -807,7 +807,7 @@
         {
             if (_mode is Mode.EndingOffer or Mode.Ending or Mode.Map)
             {
-                _backdrop ??= await Studio.GenerateBackdropAsync();
+                _backdrop ??= await Studio.GenerateBackdropAsync(SaveId);
                 if (Stale())
                 {
                     return;

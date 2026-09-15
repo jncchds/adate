@@ -32,6 +32,10 @@
             <TextBlock Classes="label" Text="Narration language" />
             <TextBox Text="{Binding NarrationLanguage}" MaxLength="40" />
             <TextBlock Classes="small" Text="Any language, typed in. The story is written in it; menus stay English." />
+            <TextBlock Classes="label" Text="Visual style" />
+            <AutoCompleteBox Text="{Binding VisualStyle}" ItemsSource="{Binding VisualStyles}"
+                             FilterMode="None" MinimumPrefixLength="0" MaxLength="80" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="small" Text="Pick one or type your own, such as oil painting. Every picture in the game is drawn in it." />
 
             <TextBlock Classes="h2" Text="Who you will meet" />
             <TextBlock Classes="label" Text="Their name" />
