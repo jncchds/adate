@@ -51,7 +51,9 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
             body[settings.Provider == LlmProviderType.OpenAi ? "max_completion_tokens" : "max_tokens"] = maxTokens;
         }
 
-        if (!string.IsNullOrWhiteSpace(settings.ReasoningEffort))
+        // Google's compatibility layer turns the effort into a thinking budget, which Gemma refuses.
+        if (!string.IsNullOrWhiteSpace(settings.ReasoningEffort)
+            && !(LlmProviders.IsGoogle(settings.ChatAddress) && LlmProviders.IsGemma(settings.Model)))
         {
             body["reasoning_effort"] = settings.ReasoningEffort;
         }
@@ -62,8 +64,24 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
 
         var payload = await OpenAiHttp.PostAsync(http, settings, "chat/completions", body, "The LLM endpoint", ct).ConfigureAwait(false);
 
-        return JsonNode.Parse(payload)?["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
+        var content = JsonNode.Parse(payload)?["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
             ?? throw new InvalidOperationException("The LLM endpoint returned no message content.");
+
+        return WithoutThought(content);
+    }
+
+    /// <summary>Google's compatibility layer puts Gemma's reasoning in the content, as a leading <c>&lt;thought&gt;</c> block.</summary>
+    private static string WithoutThought(string content)
+    {
+        const string Close = "</thought>";
+
+        if (!content.TrimStart().StartsWith("<thought>", StringComparison.Ordinal))
+        {
+            return content;
+        }
+
+        var end = content.IndexOf(Close, StringComparison.Ordinal);
+        return end < 0 ? content : content[(end + Close.Length)..].TrimStart();
     }
 }
 

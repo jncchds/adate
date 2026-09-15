@@ -32,8 +32,7 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
             generation["responseJsonSchema"] = request.Schema.DeepClone();
         }
 
-        // Gemma thinks on its own terms and refuses any thinking budget with a 400.
-        if (!IsGemma(settings.Model) && ThinkingBudget(settings.ReasoningEffort) is { } budget)
+        if (!LlmProviders.IsGemma(settings.Model) && ThinkingBudget(settings.ReasoningEffort) is { } budget)
         {
             generation["thinkingConfig"] = new JsonObject { ["thinkingBudget"] = budget };
         }
@@ -71,9 +70,6 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
             : throw new InvalidOperationException(
                 $"Google AI Studio returned no message content (finish reason {candidate["finishReason"]?.GetValue<string>() ?? "unknown"}).");
     }
-
-    private static bool IsGemma(string model) =>
-        model.Trim().Replace("models/", "", StringComparison.Ordinal).StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <c>none</c> turns thinking off where the model allows it (the Flash models; Pro models refuse a zero budget);

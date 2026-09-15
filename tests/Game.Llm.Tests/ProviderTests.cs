@@ -74,6 +74,37 @@ public class ProviderTests
     }
 
     [Fact]
+    public async Task Gemma_through_Googles_OpenAI_layer_gets_no_effort_and_loses_its_thought()
+    {
+        var options = new LlmOptions
+        {
+            BaseAddress = "https://generativelanguage.googleapis.com/v1beta/openai",
+            ApiKey = "k",
+            Model = "gemma-4-31b-it",
+            ReasoningEffort = "none",
+        };
+        var handler = new RecordingHandler(HttpStatusCode.OK, """
+            { "choices": [ { "message": { "content": "<thought>Say hi.</thought>Hi there." } } ] }
+            """);
+
+        var answer = await new OpenAiCompatibleClient(Http(handler, options), new CountingLease(), Options.Create(options)).CompleteTextAsync(Request());
+
+        Assert.Equal("Hi there.", answer);
+        Assert.Null(JsonNode.Parse(handler.Sent!)!["reasoning_effort"]);
+    }
+
+    [Fact]
+    public async Task Gemma_on_a_server_of_your_own_keeps_its_effort()
+    {
+        var options = new LlmOptions { BaseAddress = "http://llm.local/v1/", Model = "google/gemma-4-12b-qat", ReasoningEffort = "none" };
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{ "choices": [ { "message": { "content": "{}" } } ] }""");
+
+        await new OpenAiCompatibleClient(Http(handler, options), new CountingLease(), Options.Create(options)).CompleteJsonAsync(Request());
+
+        Assert.Equal("none", JsonNode.Parse(handler.Sent!)!["reasoning_effort"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task A_server_of_your_own_gets_no_key_unless_one_is_set()
     {
         var options = new LlmOptions { BaseAddress = "http://llm.local/v1/" };

@@ -51,6 +51,13 @@ public static class LlmProviders
     /// </summary>
     public static bool UsesLocalGpu(LlmProviderType provider) => provider is LlmProviderType.OpenAiCompatible or LlmProviderType.Ollama;
 
+    /// <summary>Gemma on Google's API thinks on its own terms and answers any thinking budget with a 400.</summary>
+    internal static bool IsGemma(string model) =>
+        model.Trim().Replace("models/", "", StringComparison.Ordinal).StartsWith("gemma", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsGoogle(Uri address) =>
+        address.Host.Equals("generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase);
+
     public static Uri EnsureTrailingSlash(string address) =>
         new(address.EndsWith('/') ? address : address + "/");
 }
