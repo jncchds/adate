@@ -881,7 +881,8 @@ a.choice small {
     }
 }
 
-.phone {
+/* The panel only: the play area carries the same class while texting. */
+section.phone {
     position: absolute;
     left: 50%;
     top: max(56px, calc(50% - 390px));
