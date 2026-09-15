@@ -1309,7 +1309,9 @@ public sealed class WorldService(
                 JsonEncounterCatalog.InitiativeId =>
                     $"{presented.Name} has come to {place?.Name ?? outcome.PlaceId} looking for the player, of their own accord, after not seeing them for a while. They take the lead in a way that fits their temper and where things stand between them: say why they came, and ask or suggest something the player can answer. Do not decide the player's answer.",
                 JsonEncounterCatalog.QuietAloneId =>
-                    $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}. Show the place at this time of day and in this weather, what is going on around and what there is to do here, without inventing anyone the player could get to know.",
+                    // Strangers in passing are allowed in so: with a happening, the judge read three volunteers at a campfire as
+                    // breaking "without inventing anyone", which only ever meant nobody the player could get to know.
+                    $"Nobody the player knows is at {place?.Name ?? outcome.PlaceId}. Show the place at this time of day and in this weather, what is going on around and what there is to do here. Strangers may be around, busy with their own things, as background: give none of them a name, and make none of them someone the player could get to know.",
                 JsonEncounterCatalog.ChanceMeetingId =>
                     $"{presented.Name} is at {place?.Name ?? outcome.PlaceId}, going about their own day, and the two of them have never met. Something small and natural here brings them into conversation for the first time: {presented.Name} speaks first and says who they are. End on something the player can answer.",
                 JsonEncounterCatalog.PhoneId =>

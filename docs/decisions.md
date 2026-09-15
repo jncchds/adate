@@ -1488,3 +1488,62 @@ User feedback on the activities, shifts and texting:
   and never over a beat above priority 60, an agreed meeting or an invitation. It replaces the planned
   turn with a first meeting that sets `{route}.met` and `{route}.place`, so that route's contact beat
   and schedule follow from there; the authored "regular" meetings now require `!chance.met`.
+## Measuring the writing: material on, two-pass off
+
+User request: raise the quality of the content, trying several approaches, then a bigger model with
+Z-Image stopped. No extra rejection checks (declined), no hosted model for now.
+
+**Material** (each switched in `LlmOptions`):
+
+* **Voices.** How each love interest talks: rhythm, two habits of speech, what they bring up, and a
+  sample line. Written once for the cast in one call (`VoiceWriter`), so the voices differ from each
+  other, and kept in `character.voice` (migration 012).
+* **Happenings.** `content/happenings.json` holds four or five small incidents per place type plus
+  some per weather, some limited to times of day. C# picks one for 75% of ordinary scenes (quiet,
+  company, chance meeting, agreed meeting, initiative), the same for the same save, place and slot.
+* **Loose ends.** Scenes and replies return up to two new loose ends and the numbers of listed ones
+  they settle (`story_thread`, migration 012). Packets carry up to five: about the people present
+  first, then the player's own, none older than ten days. A save's first ones are read once from its
+  last six scenes (`ThreadWriter`).
+* **Varied choices.** The choices rule asks for replies that differ in kind and pick something up.
+
+**Two-pass writing** (`TwoPass`) writes the prose in a plain-text call, then reads the data (facts,
+choices, tags, loose ends) out of it with the schema. The data call is given the story's language
+rules; without them the choices came back in English.
+
+**Replay tool.** `src/Game.Eval` copies a database, picks past scenes across kinds (`cases`), writes
+each again with a variant on a named model without storing anything (`run`, through
+`WorldService.ReplaySceneAsync`/`ReplayReactionAsync`), and has a judge model score the versions of
+each scene side by side, shuffled, on specificity, voice, agency, language, coherence, options and
+overall (`grade`). Output stays in `eval/llm/out`.
+
+**Round one** turned up two bugs: English choices under Russian two-pass scenes, and the 90-character
+reply limit throwing away half the scenes that asked for varied choices (the replies ran to 100-110
+characters and were good). Replies are now allowed 160 characters and a longer one is left out on its
+own, never the scene.
+
+**Round two.** Ten scenes and four replies from the summer camp save (Russian and Ukrainian), each
+variant on Gemma 4 12B QAT and Gemma 4 31B QAT (Z-Image stopped, 200K context), judged by 31B.
+Scenes, overall out of 10 (fallbacks, average attempts):
+
+| | 12B | 31B |
+|---|---|---|
+| Baseline | 5.4 (2, 1.6) | 6.6 (0, 1.0) |
+| Two-pass | 5.9 (0, 1.9) | 6.2 (0, 1.4) |
+| Material | **6.6** (0, 1.8) | **7.1** (0, 1.0) |
+| Both | 5.3 (1, 1.9) | 6.5 (0, 1.1) |
+
+Material raised specificity, voice and options on both models. Two-pass helped 12B less, lowered its
+language score (4.2 to 3.9) and lowered 31B; the judge's notes name English words leaking into its
+Russian and Ukrainian prose ("ispensive", "ко Drew-круге"). Combining them was worse than material
+alone on both. The four replies per variant are too few to rank on. 31B passed every scene on the
+first attempt with the baseline, where 12B needed 1.6 attempts; 12B with material scores the same as
+31B without it.
+
+The material's lowest scores were alone scenes where a happening brought strangers in (volunteers
+arguing over a campfire), which the judge read as breaking "without inventing anyone". That phrase
+meant nobody the player could get to know, so the alone scene now says strangers may be around as
+unnamed background.
+
+So the material is on by default and two-pass stays off. Caveats: ten cases, one save, and a judge
+from the same family that also wrote half the versions.

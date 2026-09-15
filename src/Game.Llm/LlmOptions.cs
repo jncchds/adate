@@ -51,15 +51,19 @@ public sealed class LlmOptions
     /// </summary>
     public bool TwoPass { get; set; }
 
+    // The four kinds of material are on by default: in the replay evaluation (docs/decisions.md, "Measuring the
+    // writing") they raised the judged scene score on both Gemma 12B (5.4 to 6.6) and 31B (6.6 to 7.1). Two-pass
+    // writing stays off: it helped 12B less than the material did, cost language, and lowered 31B.
+
     /// <summary>Gives each love interest a written way of talking, generated once per person, and puts it in every packet.</summary>
-    public bool Voices { get; set; }
+    public bool Voices { get; set; } = true;
 
     /// <summary>Adds one small happening from content to ordinary scenes, so there is something going on to write about.</summary>
-    public bool Happenings { get; set; }
+    public bool Happenings { get; set; } = true;
 
     /// <summary>Keeps the loose ends scenes leave open, and hands the open ones back to later scenes.</summary>
-    public bool Threads { get; set; }
+    public bool Threads { get; set; } = true;
 
     /// <summary>Asks for proposed replies that differ in kind and pick up what the player knows.</summary>
-    public bool VariedChoices { get; set; }
+    public bool VariedChoices { get; set; } = true;
 }
