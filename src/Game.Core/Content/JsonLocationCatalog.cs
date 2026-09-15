@@ -130,29 +130,10 @@ public sealed class JsonLocationCatalog : ILocationCatalog
             Fail($"has dress code '{dress}'. A place's code is one of: {string.Join(", ", DressCode.All.Where(c => c != DressCode.Date))}.");
         }
 
-        var activityIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var activity in entry.Activities ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(activity.Id) || activity.Id.Contains('.', StringComparison.Ordinal) || activity.Id == "shift")
-            {
-                Fail($"has an activity id '{activity.Id}'; ids are non-blank, without dots, and 'shift' is the player's job.");
-            }
-
-            if (!activityIds.Add(activity.Id))
-            {
-                Fail($"declares activity '{activity.Id}' twice.");
-            }
-
-            if (new[] { activity.Label, activity.Trait, activity.Scene, activity.Habit }.Any(string.IsNullOrWhiteSpace))
-            {
-                Fail($"activity '{activity.Id}' needs a label, a trait, a scene and a habit.");
-            }
-        }
-
         return new LocationDefinition(
             entry.Id, entry.DisplayName, entry.Tags, timeTags, entry.Description, timeDescriptions, entry.Details ?? [],
             defaults.WeatherTags, defaults.WeatherDescriptions, defaults.NeutralTimeTags, defaults.NeutralTimeDescriptions,
-            dress.ToLowerInvariant(), defaults.OutfitLayers, entry.Activities ?? []);
+            dress.ToLowerInvariant(), defaults.OutfitLayers);
     }
 
     private sealed record CatalogDocument(
@@ -177,6 +158,5 @@ public sealed class JsonLocationCatalog : ILocationCatalog
         IReadOnlyList<PlaceDetail>? Details = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? TimeTags = null,
         IReadOnlyDictionary<string, string>? TimeDescriptions = null,
-        string? Dress = null,
-        IReadOnlyList<PlaceActivity>? Activities = null);
+        string? Dress = null);
 }

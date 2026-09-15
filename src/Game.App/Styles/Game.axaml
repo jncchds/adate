@@ -70,7 +70,7 @@
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
 
-    <!-- Small buttons: something to do at a place, someone to text. -->
+    <!-- Small buttons: someone to text. -->
     <Style Selector="Button.chip">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Padding" Value="8,4" />

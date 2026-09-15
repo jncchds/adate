@@ -12,6 +12,7 @@
     "place": { "id": "lake-dock", "aloneVisitsBefore": 2 },
     "time": ["Evening"],
     "days": [5, 21],
+    "requires": ["!chance.met"],
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,

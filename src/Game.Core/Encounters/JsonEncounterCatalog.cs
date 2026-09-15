@@ -51,6 +51,9 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
     /// </summary>
     public const string DateAgreedKey = "date.agreed";
 
+    /// <summary>Running into someone not yet met, by chance, instead of what the turn had planned.</summary>
+    public const string ChanceMeetingId = "chance.meet";
+
     /// <summary>A slot spent texting someone whose number the player has: a conversation, from home.</summary>
     public const string PhoneId = "phone.message";
 

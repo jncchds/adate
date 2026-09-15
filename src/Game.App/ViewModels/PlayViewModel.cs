@@ -273,7 +273,7 @@ public sealed partial class PlayViewModel : PageViewModel
         {
             Heading = $"Day {waiting.Clock.Day}, {waiting.Clock.Slot}";
             SceneText = waiting.Text;
-            _view = new SceneView(waiting.Text, null, null, null, null, waiting.Choices);
+            _view = new SceneView(waiting.Text, null, null, null, null, waiting.Choices) { Open = true };
             Mode = PlayMode.Scene;
         }
         else if (state.Ending is { } ending)
@@ -358,16 +358,9 @@ public sealed partial class PlayViewModel : PageViewModel
 
             foreach (var place in state.KnownPlaces)
             {
-                // What there is to do there: the player's shift first when it is now, then the place's own activities.
-                var things = new List<ChoiceItem>();
-                if (state.OnShift && state.Job?.Place == place.Id)
-                {
-                    things.Add(new ChoiceItem("Work your shift", DoCommand, new PlaceActivityChoice(place, PlayerLife.ShiftId)));
-                }
-
-                var type = _placeTypes.Get(place.TypeId);
-                things.AddRange((type.Activities ?? []).Select(a => new ChoiceItem(a.Label, DoCommand, new PlaceActivityChoice(place, a.Id))));
-                Places.Add(new PlaceCardViewModel(place, type.DisplayName, GoCommand, things));
+                // During a shift, the workplace says so: going there works it.
+                var typeName = _placeTypes.Get(place.TypeId).DisplayName;
+                Places.Add(new PlaceCardViewModel(place, state.OnShift && state.Job?.Place == place.Id ? $"{typeName} · your shift" : typeName, GoCommand));
             }
 
             Contacts = [.. (state.Contacts ?? []).Select(c => new ChoiceItem($"Text {c.Name}", TextCommand, new PersonTarget(c.Key, c.Name)))];
@@ -400,7 +393,10 @@ public sealed partial class PlayViewModel : PageViewModel
         var place = state.KnownPlaces.FirstOrDefault(p => p.Id == outcome.PlaceId);
         _stagePlace = place ?? _stagePlace;
         _outcome = outcome with { Text = scene.Text };
-        _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices);
+        _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices)
+        {
+            Open = state.PendingScene is not null,
+        };
 
         Heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
         StageCaption = place?.Name ?? outcome.PlaceId;
@@ -512,9 +508,11 @@ public sealed partial class PlayViewModel : PageViewModel
         {
             authored = choices;
         }
-        else if (_view?.Choices is { Count: > 0 } offered)
+        else if (_view is { Open: true } open)
         {
-            replies = offered;
+            // Nothing proposed still leaves the player's own words, beside Continue (user feedback).
+            replies = open.Choices ?? [];
+            showContinue = replies.Count == 0;
         }
         else
         {
@@ -724,14 +722,6 @@ public sealed partial class PlayViewModel : PageViewModel
         card is null
             ? Task.CompletedTask
             : TurnAsync(card.Place.Name, card.Place, () => _world.TakeTurnAsync(_saveId, card.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite));
-
-    /// <summary>Doing something at a place: one of its activities, or the player's shift.</summary>
-    [RelayCommand(CanExecute = nameof(CanAct))]
-    private Task DoAsync(object? parameter) =>
-        parameter is PlaceActivityChoice choice
-            ? TurnAsync(choice.Place.Name, choice.Place, () => _world.TakeTurnAsync(
-                _saveId, choice.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite, choice.ActivityId))
-            : Task.CompletedTask;
 
     /// <summary>Spending the slot texting someone whose number the player has.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -949,7 +939,7 @@ public sealed partial class PlayViewModel : PageViewModel
         exchange.Reaction = result.View.Text;
         exchange.Popup = result.Popup;
         exchange.Agreed = result.Agreed;
-        _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null };
+        _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null, Open = result.Open };
         IsWriting = false;
         RefreshSceneControls();
         ScrollToEndRequested?.Invoke();

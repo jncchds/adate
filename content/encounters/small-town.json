@@ -12,6 +12,7 @@
     "place": { "id": "town-library", "aloneVisitsBefore": 2 },
     "time": ["Afternoon"],
     "days": [6, 28],
+    "requires": ["!chance.met"],
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,

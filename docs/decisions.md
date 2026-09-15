@@ -1462,3 +1462,29 @@ pending choice and scene, every person (relationship numbers, cast member, profi
 schedule puts them now, rapport), the player's traits and pastimes, hints, all flags, all promises,
 known places, facts with who knows them, memories, and the scene log with its pictures and
 conversations. It reads only; it changes nothing. The same trigger works on the phone.
+## Actions written by the model, the reply box, duty scenes, and a world that moves
+
+User feedback on the activities, shifts and texting:
+
+* **Output tokens raised**: scenes 3000 (5000 in other languages), reactions 2000 (4000), epilogues
+  2500. Still inside the model's context beside a 3K packet.
+* **No predefined activities.** The place-type `activities` and their buttons are gone. A turn at a
+  place with nobody the player knows is written with two or three things the player could do there
+  now, proposed by the model to fit the place, time, weather and any shift, each tagged with the one
+  quality it shows. Picking one (or typing their own) is answered as how it goes, with nobody's
+  reaction; the desire tags of that reply build the player's traits. The writer is told the last three
+  things the player chose to do on their own, from the scene log.
+* **The reply box stays open.** Any scene without authored choices now waits for the player. When the
+  model proposes nothing, or a reply's answer proposes nothing, the text box shows beside Continue,
+  up to the scene's four replies; Continue drops the unsaid reply.
+* **Duty by being there.** During a shift, going to the workplace works it: the outcome carries the
+  job's duty, the packet tells the writer the player is there for their shift so the scene happens at
+  work, and the map marks the workplace. Anywhere else, or texting, is a missed shift as before.
+* **The world moves** (`WorldMoves`). Someone's schedule says where they usually are; 30% of waking
+  slots they are at another place of the setting instead, rolled per save, person and slot so a reload
+  changes nothing. Meeting someone already known at a quiet place follows where they actually are.
+  Someone not met yet (not the main love interest, whose meeting is the opening) can be run into by
+  chance from day 2: 35% when they happen to be at the same place, 5% otherwise, at most one a day,
+  and never over a beat above priority 60, an agreed meeting or an invitation. It replaces the planned
+  turn with a first meeting that sets `{route}.met` and `{route}.place`, so that route's contact beat
+  and schedule follow from there; the authored "regular" meetings now require `!chance.met`.

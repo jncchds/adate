@@ -97,7 +97,6 @@
   "types": [
     {
       "id": "cafe",
-      "activities": [{"id":"read","label":"Read with a coffee","trait":"attentiveness","scene":"read a book over a slow coffee","habit":"reads over a slow coffee at the cafe"},{"id":"chat-staff","label":"Chat with the staff","trait":"kindness","scene":"keep the staff company between orders","habit":"chats with the cafe staff between orders"}],
       "displayName": "Cafe",
       "kind": "indoor",
       "tags": ["cafe interior", "wooden tables", "coffee cups", "large windows", "potted plants", "warm interior"],
@@ -120,7 +119,6 @@
     },
     {
       "id": "park",
-      "activities": [{"id":"run","label":"Go for a run","trait":"adventure","scene":"go for a run along the paths","habit":"goes running in the park"},{"id":"litter-pick","label":"Join the litter pick","trait":"kindness","scene":"help the volunteers clear litter from the paths","habit":"volunteers at the park litter pick"}],
       "displayName": "Park",
       "kind": "outdoor",
       "tags": ["park", "riverbank", "trees", "grass", "footpath", "park bench", "outdoors"],
@@ -141,7 +139,6 @@
     },
     {
       "id": "bar",
-      "activities": [{"id":"open-mic","label":"Sing at open mic","trait":"adventure","scene":"get up and sing at the open mic","habit":"sings at open mic nights"},{"id":"quiz","label":"Join the pub quiz","trait":"humour","scene":"join a table for the pub quiz","habit":"plays in the pub quiz"}],
       "dress": "evening",
       "displayName": "Bar",
       "kind": "indoor",
@@ -155,7 +152,6 @@
     },
     {
       "id": "bookshop",
-      "activities": [{"id":"browse","label":"Browse the shelves","trait":"attentiveness","scene":"browse the shelves for something new","habit":"browses bookshops for hours"},{"id":"book-club","label":"Sit in on the book club","trait":"honesty","scene":"sit in on the book club and its arguments","habit":"argues about books at the book club"}],
       "displayName": "Bookshop",
       "kind": "indoor",
       "tags": ["bookstore", "bookshelves", "books", "reading nook", "wooden floor"],
@@ -168,7 +164,6 @@
     },
     {
       "id": "stairwell",
-      "activities": [{"id":"help-neighbour","label":"Help a neighbour","trait":"kindness","scene":"help a neighbour carry their shopping up","habit":"helps the neighbours out"},{"id":"night-in","label":"Take a night in","trait":"independence","scene":"take a quiet evening at home","habit":"enjoys quiet evenings in"}],
       "dress": "home",
       "displayName": "Apartment stairwell",
       "kind": "indoor",
@@ -182,7 +177,6 @@
     },
     {
       "id": "rooftop",
-      "activities": [{"id":"tend-planters","label":"Tend the planters","trait":"stability","scene":"water and weed the rooftop planters","habit":"looks after the rooftop planters"},{"id":"skyline","label":"Watch the skyline","trait":"independence","scene":"watch the city skyline alone for a while","habit":"watches the skyline from the rooftop"}],
       "dress": "evening",
       "displayName": "Rooftop",
       "kind": "outdoor",
@@ -196,7 +190,6 @@
     },
     {
       "id": "night-market",
-      "activities": [{"id":"street-food","label":"Try the stalls","trait":"adventure","scene":"try food from stalls never tried before","habit":"tries every new stall at the night market"},{"id":"pack-up","label":"Help a stall pack up","trait":"kindness","scene":"help a tired stallholder pack up","habit":"helps the stallholders pack up"}],
       "displayName": "Night market",
       "kind": "outdoor",
       "tags": ["night market", "market stalls", "paper lanterns", "street food stalls", "outdoors"],
@@ -209,7 +202,6 @@
     },
     {
       "id": "office",
-      "activities": [{"id":"stay-late","label":"Stay late on a project","trait":"ambition","scene":"stay late to push a project forward","habit":"stays late to get ahead at work"}],
       "dress": "work",
       "displayName": "Office",
       "kind": "indoor",
@@ -223,7 +215,6 @@
     },
     {
       "id": "diner",
-      "activities": [{"id":"regulars","label":"Split pie with the regulars","trait":"humour","scene":"share a pie and stories with the regulars","habit":"trades stories with the diner regulars"},{"id":"help-counter","label":"Help behind the counter","trait":"kindness","scene":"lend a hand behind the counter in the rush","habit":"helps out at the diner in the rush"}],
       "displayName": "Diner",
       "kind": "indoor",
       "tags": ["diner", "booths", "counter", "bar stools", "checkered floor"],
@@ -236,7 +227,6 @@
     },
     {
       "id": "main-street",
-      "activities": [{"id":"errands","label":"Run errands for a neighbour","trait":"kindness","scene":"run errands along Main Street for an older neighbour","habit":"runs errands for the neighbours"},{"id":"bench","label":"People-watch from a bench","trait":"attentiveness","scene":"sit on a bench and watch the street go by","habit":"people-watches from a bench on Main Street"}],
       "displayName": "Main street",
       "kind": "outdoor",
       "tags": ["small town", "main street", "shop fronts", "sidewalk", "street lamps"],
@@ -249,7 +239,6 @@
     },
     {
       "id": "library",
-      "activities": [{"id":"study","label":"Study for a course","trait":"ambition","scene":"study for an evening course","habit":"studies at the library for a course"},{"id":"volunteer","label":"Volunteer at the desk","trait":"kindness","scene":"volunteer at the returns desk","habit":"volunteers at the library"}],
       "displayName": "Library",
       "kind": "indoor",
       "tags": ["library", "bookshelves", "reading tables", "reading lamps"],
@@ -262,7 +251,6 @@
     },
     {
       "id": "lake-pier",
-      "activities": [{"id":"swim","label":"Swim off the pier","trait":"adventure","scene":"swim off the end of the pier","habit":"swims off the old pier"},{"id":"fish","label":"Fish from the pier","trait":"stability","scene":"fish quietly from the end of the pier","habit":"fishes from the pier"}],
       "dress": "waterfront",
       "displayName": "Lake pier",
       "kind": "outdoor",
@@ -276,7 +264,6 @@
     },
     {
       "id": "fairground",
-      "activities": [{"id":"rides","label":"Ride everything","trait":"adventure","scene":"ride every ride at the fair","habit":"rides everything at the fair"},{"id":"games","label":"Try to win a prize","trait":"humour","scene":"try the fairground games for a prize","habit":"plays the fairground games"}],
       "displayName": "Fairground",
       "kind": "outdoor",
       "tags": ["county fair", "ferris wheel", "game stalls", "string lights", "outdoors"],
@@ -289,7 +276,6 @@
     },
     {
       "id": "hilltop",
-      "activities": [{"id":"hike","label":"Hike to the top","trait":"adventure","scene":"hike up to the top of the hill","habit":"hikes up Lookout Hill"},{"id":"view","label":"Watch the view","trait":"independence","scene":"sit and look out over the valley","habit":"sits alone with the view from the hill"}],
       "displayName": "Hilltop",
       "kind": "outdoor",
       "tags": ["hilltop", "grass", "valley view", "lone tree", "outdoors"],
@@ -302,7 +288,6 @@
     },
     {
       "id": "family-shop",
-      "activities": [{"id":"stock","label":"Stock the shelves","trait":"stability","scene":"help stock the shelves","habit":"helps stock the shelves at the store"}],
       "displayName": "Family shop",
       "kind": "indoor",
       "tags": ["general store", "shop interior", "shelves", "counter", "cash register"],
@@ -315,7 +300,6 @@
     },
     {
       "id": "mess-hall",
-      "activities": [{"id":"kitchen","label":"Help in the kitchen","trait":"kindness","scene":"help the kitchen crew with the washing-up","habit":"helps the kitchen crew"},{"id":"plan","label":"Plan tomorrow\u0027s sessions","trait":"ambition","scene":"plan tomorrow\u0027s sessions","habit":"plans the next day\u0027s sessions ahead of time"}],
       "dress": "camp",
       "displayName": "Mess hall",
       "kind": "indoor",
@@ -329,7 +313,6 @@
     },
     {
       "id": "lake-dock",
-      "activities": [{"id":"swim","label":"Swim across the lake","trait":"adventure","scene":"swim out across the lake","habit":"swims across the lake"},{"id":"canoe","label":"Take a canoe out","trait":"independence","scene":"take a canoe out alone","habit":"takes a canoe out alone"}],
       "dress": "waterfront",
       "displayName": "Lake dock",
       "kind": "outdoor",
@@ -343,7 +326,6 @@
     },
     {
       "id": "campfire-circle",
-      "activities": [{"id":"songs","label":"Lead a campfire song","trait":"humour","scene":"lead a song around the fire","habit":"leads songs at the campfire"},{"id":"firewood","label":"Gather firewood","trait":"stability","scene":"gather and stack firewood for the evening","habit":"keeps the campfire stocked with wood"}],
       "dress": "camp",
       "displayName": "Campfire circle",
       "kind": "outdoor",
@@ -357,7 +339,6 @@
     },
     {
       "id": "forest-trail",
-      "activities": [{"id":"trail-run","label":"Run the trail","trait":"adventure","scene":"run the ridge trail","habit":"runs the ridge trail"}],
       "dress": "camp",
       "displayName": "Forest trail",
       "kind": "outdoor",
@@ -371,7 +352,6 @@
     },
     {
       "id": "boathouse",
-      "activities": [{"id":"repair","label":"Repair a canoe","trait":"stability","scene":"patch up a damaged canoe","habit":"repairs the camp canoes"}],
       "dress": "camp",
       "displayName": "Boathouse",
       "kind": "indoor",
@@ -385,7 +365,6 @@
     },
     {
       "id": "staff-lounge",
-      "activities": [{"id":"cards","label":"Play cards with the staff","trait":"humour","scene":"play cards with whoever is off duty","habit":"plays cards in the staff lounge"},{"id":"letters","label":"Write letters home","trait":"honesty","scene":"write letters home","habit":"writes long letters home"}],
       "dress": "camp",
       "displayName": "Staff lounge",
       "kind": "indoor",
@@ -399,7 +378,6 @@
     },
     {
       "id": "staff-cabin",
-      "activities": [{"id":"journal","label":"Write in your journal","trait":"honesty","scene":"write the day down in a journal","habit":"keeps a journal"},{"id":"rest","label":"Take a quiet hour","trait":"independence","scene":"take a quiet hour alone in the cabin","habit":"takes quiet hours alone"}],
       "dress": "home",
       "displayName": "Staff cabin",
       "kind": "indoor",

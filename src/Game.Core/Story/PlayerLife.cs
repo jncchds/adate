@@ -1,5 +1,4 @@
 using System.Globalization;
-using Game.Core.Content;
 using Game.Core.Settings;
 using Game.Core.World;
 
@@ -7,20 +6,14 @@ namespace Game.Core.Story;
 
 /// <summary>
 /// What the player does between meetings (user feedback: wandering from place to place waiting for the next
-/// morning). Activities and work shifts build traits, named after the qualities people look for, and people
-/// who value a trait warm to a player who has it. Kept as flags, like every other fact of a save.
+/// morning). What they choose to do on their own and the shifts they work build traits, named after the
+/// qualities people look for, and people who value a trait warm to a player who has it. Kept as flags.
 /// </summary>
 public static class PlayerLife
 {
     public const string TraitPrefix = "player.trait.";
-    public const string DidPrefix = "player.did.";
     public const string ShiftsWorkedKey = "player.shifts_worked";
     public const string ShiftsMissedKey = "player.shifts_missed";
-
-    /// <summary>The activity id of working a shift, and the place type it is recorded under.</summary>
-    public const string ShiftId = "shift";
-
-    public const string JobTypeId = "job";
 
     /// <summary>The trait a missed shift costs.</summary>
     public const string MissedShiftTrait = "stability";
@@ -62,51 +55,31 @@ public static class PlayerLife
     public static bool OnShift(PlayerJob? job, ClockState clock) =>
         job is not null && job.Slots.Contains(clock.Slot) && job.Weekdays.Contains(CharacterSchedule.Weekday(clock.Day));
 
-    /// <summary>Working the shift, as an activity at the job's place.</summary>
-    public static PlaceActivity ShiftActivity(PlayerJob job)
+    /// <summary>Adds one showing of each of <paramref name="traits"/>.</summary>
+    public static void Show(Dictionary<string, string> toSet, IReadOnlyDictionary<string, string> flags, IEnumerable<string> traits)
     {
-        ArgumentNullException.ThrowIfNull(job);
-        return new PlaceActivity(ShiftId, "Work your shift", job.Trait, job.Scene, job.Habit);
+        ArgumentNullException.ThrowIfNull(traits);
+
+        foreach (var trait in traits.Distinct(StringComparer.Ordinal))
+        {
+            Increment(toSet, flags, TraitPrefix + trait, 1);
+        }
     }
 
-    /// <summary>Adds what doing <paramref name="activity"/> at a place of <paramref name="typeId"/> changes.</summary>
-    public static void Record(Dictionary<string, string> toSet, IReadOnlyDictionary<string, string> flags, string typeId, PlaceActivity activity)
+    /// <summary>Adds what working a shift of <paramref name="job"/> changes.</summary>
+    public static void WorkShift(Dictionary<string, string> toSet, IReadOnlyDictionary<string, string> flags, PlayerJob job)
     {
-        ArgumentNullException.ThrowIfNull(toSet);
-        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(job);
 
-        Increment(toSet, flags, TraitPrefix + activity.Trait, 1);
-        Increment(toSet, flags, $"{DidPrefix}{typeId}.{activity.Id}", 1);
-        if (activity.Id == ShiftId)
-        {
-            Increment(toSet, flags, ShiftsWorkedKey, 1);
-        }
+        Increment(toSet, flags, ShiftsWorkedKey, 1);
+        Increment(toSet, flags, TraitPrefix + job.Trait, 1);
     }
 
     /// <summary>Adds what missing a shift costs.</summary>
     public static void MissShift(Dictionary<string, string> toSet, IReadOnlyDictionary<string, string> flags)
     {
-        ArgumentNullException.ThrowIfNull(toSet);
-
         Increment(toSet, flags, ShiftsMissedKey, 1);
         Increment(toSet, flags, TraitPrefix + MissedShiftTrait, -1);
-    }
-
-    /// <summary>What the player does most, most often first, as (place type id, activity id), each done at least <paramref name="atLeast"/> times.</summary>
-    public static IReadOnlyList<(string TypeId, string ActivityId)> Pastimes(IReadOnlyDictionary<string, string> flags, int atLeast = 2)
-    {
-        ArgumentNullException.ThrowIfNull(flags);
-
-        return
-        [
-            .. flags
-                .Where(f => f.Key.StartsWith(DidPrefix, StringComparison.Ordinal) && Count(f.Value) >= atLeast)
-                .OrderByDescending(f => Count(f.Value))
-                .ThenBy(f => f.Key, StringComparer.Ordinal)
-                .Select(f => f.Key[DidPrefix.Length..])
-                .Where(k => k.Contains('.', StringComparison.Ordinal))
-                .Select(k => (k[..k.IndexOf('.', StringComparison.Ordinal)], k[(k.IndexOf('.', StringComparison.Ordinal) + 1)..])),
-        ];
     }
 
     private static int Count(string? value) =>
@@ -114,6 +87,9 @@ public static class PlayerLife
 
     private static void Increment(Dictionary<string, string> toSet, IReadOnlyDictionary<string, string> flags, string key, int by)
     {
+        ArgumentNullException.ThrowIfNull(toSet);
+        ArgumentNullException.ThrowIfNull(flags);
+
         var current = toSet.TryGetValue(key, out var pending) ? Count(pending) : Count(flags.GetValueOrDefault(key));
         toSet[key] = Math.Max(0, current + by).ToString(CultureInfo.InvariantCulture);
     }

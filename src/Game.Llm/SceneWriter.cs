@@ -62,14 +62,15 @@ public sealed class SceneWriter(
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>A 1500-character scene with its facts, places, summary, tags and choices, with room to spare.</summary>
-    public const int MaxTokens = 1500;
+    /// <summary>A 1500-character scene with its facts, places, summary, tags and choices, with plenty to spare.</summary>
+    // Raised from 1500 at the user's request, so no answer is cut off before its JSON closes.
+    public const int MaxTokens = 3000;
 
     /// <summary>
     /// Cyrillic and most other scripts take several tokens a word, and a Ukrainian scene was cut off mid-JSON
-    /// at <see cref="MaxTokens"/>. Still well inside the 10K context beside a 3K packet.
+    /// at 1500. Still inside the 10K context beside a 3K packet.
     /// </summary>
-    public const int MaxTokensOtherLanguages = 2500;
+    public const int MaxTokensOtherLanguages = 5000;
 
     public const int MinChoices = 2;
     public const int MaxChoices = 3;

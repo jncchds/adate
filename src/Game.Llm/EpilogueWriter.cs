@@ -38,7 +38,7 @@ internal sealed record EpilogueResponse(string Text);
 public sealed class EpilogueWriter(ILlmClient llm, IOptions<LlmOptions> options)
 {
     public const int MaxLength = 2200;
-    public const int MaxTokens = 1000;
+    public const int MaxTokens = 2500;
 
     public const string SystemPrompt =
         "You write the closing pages of a first-person dating sim, addressed to the player as \"you\". " +

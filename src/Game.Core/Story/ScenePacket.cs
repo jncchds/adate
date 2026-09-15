@@ -17,6 +17,7 @@ public sealed record PacketPerson(string Id, string Name, IReadOnlyList<string> 
 /// <param name="Expressions">The expression slots the pack can draw; the scene must pick one.</param>
 /// <param name="Language">The language the prose is written in; null or English for English.</param>
 /// <param name="PlayerLife">Sentences about the player's job and pastimes, so the people here can bring them up.</param>
+/// <param name="Duty">The work the player is here for now, when it is their shift at this place.</param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -36,7 +37,8 @@ public sealed record ScenePacket(
     bool OffersChoices = false,
     string? PlayerGender = null,
     string? Language = null,
-    IReadOnlyList<string>? PlayerLife = null);
+    IReadOnlyList<string>? PlayerLife = null,
+    string? Duty = null);
 
 public static class ScenePacketBuilder
 {
@@ -129,6 +131,11 @@ public static class ScenePacketBuilder
         {
             text.AppendLine(line);
         }
+
+        if (packet.Duty is { } duty)
+        {
+            text.AppendLine($"{packet.PlayerName} is here for their shift, supposed to {duty}. The scene happens at work: show the work going on around them and what it asks of them.");
+        }
         foreach (var person in packet.Present)
         {
             text.AppendLine($"{person.Name} (id {person.Id}): {StageWords(person.Stage)}. {string.Join(" ", person.Temper)}");
@@ -205,9 +212,13 @@ public static class ScenePacketBuilder
         text.AppendLine("- places: only a place someone names that is not one the player knows, with a place type and up to three details of that type; otherwise an empty list.");
         text.AppendLine("- summary: one sentence a friend would use to remind the player what happened in this scene.");
         text.AppendLine("- tags: why it matters, if it does; first for a first time, conflict for a falling-out.");
-        text.AppendLine(packet.OffersChoices
-            ? "- choices: two or three short, different things the player could say or do next, in the player's own voice (\"Ask about the book\", \"Tease them about the rain\"). Tag each with what it shows about the player, from the list: a quality the other person may value, a dealbreaker when it would hurt, or helps:{want} / hinders:{want} when it touches their want. End the scene open for them."
-            : "- choices: an empty list.");
+        text.AppendLine(!packet.OffersChoices
+            ? "- choices: an empty list."
+            : packet.Present.Count == 0
+                ? "- choices: two or three short, different things the player could do here now, fitting this place, the time of day and the weather" +
+                  (packet.Duty is null ? "" : " and the work they are here for") +
+                  ", in the player's own voice (\"Swim out to the raft\", \"Help carry the crates in\"). Tag each with the one quality doing it shows, from the desires in the list; no dealbreakers and no helps/hinders tags. End the scene open for them."
+                : "- choices: two or three short, different things the player could say or do next, in the player's own voice (\"Ask about the book\", \"Tease them about the rain\"). Tag each with what it shows about the player, from the list: a quality the other person may value, a dealbreaker when it would hurt, or helps:{want} / hinders:{want} when it touches their want. End the scene open for them.");
 
         return text.ToString();
     }

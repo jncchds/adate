@@ -200,9 +200,7 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PlaceCardViewModel">
-                                        <!-- The card passes time there; the chips below it do something. -->
-                                        <StackPanel Spacing="4" Margin="0,0,8,10">
-                                        <Button Classes="card" Margin="0" Command="{Binding Command}" CommandParameter="{Binding}">
+                                        <Button Classes="card" Command="{Binding Command}" CommandParameter="{Binding}">
                                             <StackPanel Spacing="4">
                                                 <Panel Height="90" ClipToBounds="True">
                                                     <Border Classes="wait" />
@@ -214,21 +212,6 @@
                                                 <TextBlock Classes="small" Text="{Binding TypeName}" />
                                             </StackPanel>
                                         </Button>
-                                        <ItemsControl ItemsSource="{Binding Activities}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <WrapPanel />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:ChoiceItem">
-                                                    <Button Classes="chip" Command="{Binding Command}" CommandParameter="{Binding Parameter}">
-                                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

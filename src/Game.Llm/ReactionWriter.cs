@@ -40,11 +40,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
     public const int MaxLength = 1000;
     public const int MaxReplyLength = 300;
 
-    /// <summary>About twice what a 1000-character reaction and its tags take.</summary>
-    public const int MaxTokens = 700;
+    /// <summary>Several times what a 1000-character reaction, its tags and the next replies take.</summary>
+    public const int MaxTokens = 2000;
 
     /// <summary>Other scripts take several tokens a word, as for scenes.</summary>
-    public const int MaxTokensOtherLanguages = 1400;
+    public const int MaxTokensOtherLanguages = 4000;
 
     public const string SystemPrompt =
         "You continue one scene of a first-person dating sim after the player has replied. Write only how " +
@@ -73,21 +73,29 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             return new WrittenReaction(fallbackText, null, chosenTags ?? [], Fallback: true, Attempts: 0, []);
         }
 
+        // On their own, the player's words are something they do; what follows is how it goes, not anyone's reaction.
+        var alone = packet.Present.Count == 0;
         var request = ScenePacketBuilder.Render(packet)
             + "\n## The scene so far\n" + sceneText
             + "\n\n## What the player does or says\n" + playerWords
             + "\n\n## Now\n"
-            + "- Write how the people present react: one or two short paragraphs, in the second person as before.\n"
+            + (alone
+                ? "- Nobody the player knows is here. Write how it goes: what doing this is like here, and what the place, the weather and the people around do. One or two short paragraphs, in the second person as before. Invent nobody the player could get to know.\n"
+                : "- Write how the people present react: one or two short paragraphs, in the second person as before.\n")
             + "- Take the player's reply exactly as written above. Add nothing else the player does, says, thinks or feels.\n"
-            + (chosenTags is null
-                ? "- tags: what the player's reply shows about them, from the schema's list; an empty list if nothing stands out. " +
-                  "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n"
-                : "- tags: an empty list.\n")
-            + "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
-              $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
-            + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
-              "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
-            + Conversation(replyNumber, maxReplies);
+            + (chosenTags is not null
+                ? "- tags: an empty list.\n"
+                : alone
+                    ? "- tags: the quality doing this shows about the player, from the desires in the schema's list; an empty list if none does.\n"
+                    : "- tags: what the player's reply shows about them, from the schema's list; an empty list if nothing stands out. " +
+                      "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n")
+            + (alone
+                ? "- meet: null.\n- numbers: false.\n"
+                : "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
+                  $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
+                  + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
+                  "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n")
+            + Conversation(replyNumber, maxReplies, alone);
 
         var schema = Schema(packet);
         var rejections = new List<string>();
@@ -213,14 +221,18 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
     }
 
     /// <summary>Whether the moment may go on, and what the player could say next when it does.</summary>
-    private static string Conversation(int replyNumber, int maxReplies) =>
+    private static string Conversation(int replyNumber, int maxReplies, bool alone = false) =>
         replyNumber >= maxReplies
             ? "- ends: true. This is the player's last reply here: close the moment naturally, without deciding anything for the player.\n"
               + "- choices: an empty list.\n"
             : $"- This is the player's reply {replyNumber} of at most {maxReplies} in this scene.\n"
-              + "- ends: true when the moment has run its course or someone has to go; otherwise false, ending on something the player can answer.\n"
-              + "- choices: when ends is false, two or three short, different things the player could say or do next, in the player's own voice, "
-              + "each tagged from the list with what it shows about the player (at most one may be helps:{want} or hinders:{want}); an empty list when ends is true.\n";
+              + (alone
+                  ? "- ends: true when there is nothing more to do here for now; otherwise false, ending where the player could do something else.\n"
+                    + "- choices: when ends is false, two or three short, different things the player could do next here, in the player's own voice, "
+                    + "each tagged with the one quality it shows, from the desires in the list; an empty list when ends is true.\n"
+                  : "- ends: true when the moment has run its course or someone has to go; otherwise false, ending on something the player can answer.\n"
+                    + "- choices: when ends is false, two or three short, different things the player could say or do next, in the player's own voice, "
+                    + "each tagged from the list with what it shows about the player (at most one may be helps:{want} or hinders:{want}); an empty list when ends is true.\n");
 
     private static IReadOnlyDictionary<string, string> Names(ScenePacket packet)
     {

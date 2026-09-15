@@ -28,6 +28,7 @@
     "place": { "id": "low-tide", "aloneVisitsBefore": 2 },
     "time": ["Evening", "Night"],
     "days": [8, 28],
+    "requires": ["!chance.met"],
     "sets": ["chance.met", "chance.place={place}"],
     "with": ["variant:chance"],
     "priority": 60,

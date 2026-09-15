@@ -34,6 +34,19 @@ public class ScenePacketTests
     }
 
     [Fact]
+    public void Alone_the_choices_are_things_to_do_here_and_a_shift_makes_the_scene_about_work()
+    {
+        var alone = ScenePacketBuilder.Render(Packet() with { Present = [], OffersChoices = true, Duty = "stock the shelves" });
+        var together = ScenePacketBuilder.Render(Packet() with { OffersChoices = true });
+
+        Assert.Contains("things the player could do here now", alone, StringComparison.Ordinal);
+        Assert.Contains("the work they are here for", alone, StringComparison.Ordinal);
+        Assert.Contains("is here for their shift, supposed to stock the shelves", alone, StringComparison.Ordinal);
+        Assert.Contains("things the player could say or do next", together, StringComparison.Ordinal);
+        Assert.DoesNotContain("here for their shift", together, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void An_english_story_keeps_the_english_second_person_rule_and_nothing_more()
     {
         var text = ScenePacketBuilder.Render(Packet());

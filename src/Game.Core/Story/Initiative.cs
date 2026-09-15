@@ -51,8 +51,8 @@ public static class Initiative
         return chance > 0 && Unit($"{saveKey}|{key}|{clock.Day}|{clock.Slot}|initiative") < chance;
     }
 
-    /// <summary>FNV-1a, then a SplitMix64 finaliser, mapped onto [0, 1).</summary>
-    private static double Unit(string text)
+    /// <summary>FNV-1a, then a SplitMix64 finaliser, mapped onto [0, 1): a roll that is the same for the same text.</summary>
+    public static double Unit(string text)
     {
         var hash = 14695981039346656037UL;
         foreach (var ch in text)
