@@ -33,10 +33,11 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ctl:StageLayout Tall="{Binding !IsScene}">
+    <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsPhone}">
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
-            <Image Source="{Binding StageBackground}" Stretch="UniformToFill" />
+            <Image Source="{Binding StageBackground}" Stretch="UniformToFill" Classes.blurred="{Binding IsPhone}" />
+            <Border Classes="dim" IsVisible="{Binding IsPhone}" />
 
             <!-- On the map: everyone met so far, standing left to right on the backdrop, one slot per person. -->
             <ItemsControl ItemsSource="{Binding Lineup}" IsVisible="{Binding IsMap}">
@@ -64,7 +65,7 @@
         <!-- The person the scene is about, at the left in landscape and over the picture in portrait; and
              while the picture is on its way, a spinner saying what is being drawn, where no text box covers it. -->
         <Panel>
-            <ctl:SpriteFrame>
+            <ctl:SpriteFrame IsVisible="{Binding !IsPhone}">
                 <Image Source="{Binding StageSprite}" />
             </ctl:SpriteFrame>
             <Border Classes="loading" IsVisible="{Binding IsStageLoading}">
@@ -76,7 +77,7 @@
         </Panel>
 
         <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->
-        <Border Classes="textbox">
+        <Border Classes="textbox" IsVisible="{Binding !IsPhone}">
             <Grid RowDefinitions="Auto,*">
                 <Grid ColumnDefinitions="*,Auto" Margin="16,12,16,6">
                     <!-- Ten quick taps on the title open the debug screen. -->
@@ -157,6 +158,23 @@
                                 <Button Content="Reply" Command="{Binding ReplyCommand}" />
                             </StackPanel>
                             <Button Classes="accent" Content="Continue" IsVisible="{Binding ShowContinue}" Command="{Binding ContinueCommand}" />
+
+                            <!-- Once the conversation is over, texting someone from here before moving on. -->
+                            <StackPanel IsVisible="{Binding HasContacts}" Spacing="6">
+                                <TextBlock Classes="small" Text="Or text someone from here" />
+                                <ItemsControl ItemsSource="{Binding Contacts}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ChoiceItem">
+                                            <Button Classes="chip" Content="{Binding Text}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- The map: who comes along, and where to go. -->
@@ -172,22 +190,6 @@
                                             <WrapPanel ItemWidth="128" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <StackPanel IsVisible="{Binding HasContacts}" Spacing="8">
-                                <TextBlock Classes="h2" Text="Message someone" />
-                                <ItemsControl ItemsSource="{Binding Contacts}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ChoiceItem">
-                                            <Button Classes="chip" Content="{Binding Text}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
 
@@ -283,6 +285,65 @@
 
         <!-- Overlays, above the person: back to the saves, the place's name, and the busy line. -->
         <Panel>
+            <!-- A conversation by text: a phone over the place the player is at, blurred behind it, and nobody standing there. -->
+            <Border Classes="phone" IsVisible="{Binding IsPhone}">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Classes="phone-header">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Ellipse Classes="avatar">
+                                <Ellipse.Fill>
+                                    <ImageBrush Source="{Binding PhonePortrait}" SourceRect="33%,2%,34%,23%" Stretch="UniformToFill" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+                                <TextBlock FontWeight="SemiBold" Text="{Binding Speaker}" />
+                                <TextBlock Classes="small" Text="{Binding Heading}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" x:Name="Thread" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="12,10" Spacing="4">
+                            <ItemsControl ItemsSource="{Binding Messages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MessageItem">
+                                        <Border Classes="bubble" Classes.mine="{Binding IsMine}" Classes.note="{Binding IsNote}">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,6,0,0" IsVisible="{Binding IsWriting}">
+                                <ctl:Spinner Classes="spinner small" />
+                                <TextBlock Classes="lede" Text="{Binding WritingText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Classes="phone-keys">
+                        <ItemsControl ItemsSource="{Binding Choices}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ChoiceItem">
+                                    <Button Classes="choice" Command="{Binding Command}" CommandParameter="{Binding Parameter}">
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanReply}">
+                            <TextBox Text="{Binding ReplyText}" MaxLength="300" TextWrapping="Wrap" PlaceholderText="Message…">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding ReplyCommand}" />
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <Button Grid.Column="1" Margin="8,0,0,0" Content="Send" Command="{Binding ReplyCommand}" />
+                        </Grid>
+                        <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Content="Put the phone away" IsVisible="{Binding ShowContinue}" Command="{Binding ContinueCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <Button Classes="back" Content="‹" Command="{Binding HomeCommand}"
                     ToolTip.Tip="Saves" AutomationProperties.Name="Saves" />
             <Border Classes="caption" IsVisible="{Binding StageCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">

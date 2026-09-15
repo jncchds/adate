@@ -245,6 +245,84 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- A conversation by text: the place blurred and darkened behind a phone, with bubbles for the messages. -->
+    <Style Selector="Image.blurred">
+        <Setter Property="Effect">
+            <BlurEffect Radius="36" />
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.dim">
+        <Setter Property="Background" Value="#80000000" />
+    </Style>
+
+    <Style Selector="Border.phone">
+        <Setter Property="Background" Value="#F2141418" />
+        <Setter Property="BorderBrush" Value="#40FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="24" />
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="MaxWidth" Value="420" />
+        <Setter Property="MaxHeight" Value="780" />
+        <Setter Property="Margin" Value="16,56,16,16" />
+    </Style>
+
+    <Style Selector="Border.phone-header">
+        <Setter Property="Padding" Value="14,12" />
+        <Setter Property="BorderBrush" Value="#3D3D3F" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <Style Selector="Ellipse.avatar">
+        <Setter Property="Width" Value="44" />
+        <Setter Property="Height" Value="44" />
+    </Style>
+
+    <Style Selector="StackPanel.phone-keys">
+        <Setter Property="Margin" Value="12,8,12,12" />
+        <Setter Property="Spacing" Value="6" />
+    </Style>
+
+    <Style Selector="StackPanel.phone-keys Button.choice">
+        <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+
+    <Style Selector="Border.bubble">
+        <Setter Property="Background" Value="#2C2C32" />
+        <Setter Property="CornerRadius" Value="16,16,16,4" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Margin" Value="0,3,48,3" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Border.bubble > TextBlock">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="LineHeight" Value="22" />
+    </Style>
+
+    <Style Selector="Border.bubble.mine">
+        <Setter Property="Background" Value="#E8C872" />
+        <Setter Property="CornerRadius" Value="16,16,4,16" />
+        <Setter Property="Margin" Value="48,3,0,3" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <Style Selector="Border.bubble.mine > TextBlock">
+        <Setter Property="Foreground" Value="#1A1A1A" />
+    </Style>
+
+    <Style Selector="Border.bubble.note">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Margin" Value="0,2" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.bubble.note > TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="#D8CFA8" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="ProgressBar.busy">
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="MinHeight" Value="3" />

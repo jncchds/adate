@@ -31,6 +31,9 @@ public static class DebugLines
 /// <summary>Someone to act towards, such as to text.</summary>
 public sealed record PersonTarget(string Key, string Name);
 
+/// <summary>One bubble of a conversation by text: theirs, the player's own, or a note on what came of it.</summary>
+public sealed record MessageItem(string Text, bool IsMine, bool IsNote);
+
 /// <summary>One temper axis in the new-game form, with the writing of whichever end is picked.</summary>
 public sealed partial class TemperAxisItem : ObservableObject
 {

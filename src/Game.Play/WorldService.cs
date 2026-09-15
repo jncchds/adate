@@ -365,9 +365,8 @@ public sealed class WorldService(
     /// optionally bringing someone along by their <see cref="Invitee.Key"/>. When the turn ends a day,
     /// anyone the leaving rules now apply to walks away, in the same transaction.
     /// </summary>
-    /// <param name="textWith">Spend the slot texting this person instead (see <see cref="TextAsync"/>).</param>
     public async Task<TurnOutcome> TakeTurnAsync(
-        SaveId saveId, string placeId, string? invite = null, string? textWith = null, CancellationToken ct = default)
+        SaveId saveId, string placeId, string? invite = null, CancellationToken ct = default)
     {
         var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
 
@@ -423,23 +422,6 @@ public sealed class WorldService(
 
         var outcome = TurnPlanner.Plan(play.Setting, Available(play.Setting, cast, flags), context, place.Name);
 
-        // Texting takes the slot at home, with whoever the player messages, whatever else was planned there.
-        if (textWith is not null)
-        {
-            var texted = cast.FirstOrDefault(li => li.Key == textWith && EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li))
-                ?? throw new InvalidOperationException($"'{textWith}' is not someone the player can message.");
-
-            outcome = outcome with
-            {
-                EncounterId = JsonEncounterCatalog.PhoneId,
-                With = [texted.Ref],
-                Text = $"{texted.Name} and you are texting.",
-                FlagsToSet = new Dictionary<string, string>(StringComparer.Ordinal),
-                Reveals = [],
-                Choices = null,
-            };
-        }
-
         // Someone not met yet can be run into by chance, instead of what was planned here: never over a story beat
         // that matters more than a chance meeting, a meeting the player agreed to, or bringing someone along.
         var plannedPriority = outcome.EncounterId is { } plannedId
@@ -447,8 +429,7 @@ public sealed class WorldService(
             : 0;
         var saveKey = saveId.ToString();
         IReadOnlyList<string> settingPlaces = [.. play.Setting.Places.Select(p => p.Id)];
-        if (textWith is null
-            && invite is null
+        if (invite is null
             && plannedPriority <= ChanceMeetingPriority
             && flags.GetValueOrDefault(ChanceMeetingDayKey) != play.Clock.Day.ToString(System.Globalization.CultureInfo.InvariantCulture)
             && !openPromises.Any(p => Promises.PutsThere(p, play.Clock, place.Id))
@@ -476,7 +457,7 @@ public sealed class WorldService(
         }
 
         // At the workplace during a shift the player is working it, whatever else happens there.
-        if (textWith is null && play.Setting.Job is { } job && job.Place == place.Id && PlayerLife.OnShift(job, play.Clock))
+        if (play.Setting.Job is { } job && job.Place == place.Id && PlayerLife.OnShift(job, play.Clock))
         {
             outcome = outcome with { Duty = job.Scene };
         }
@@ -569,7 +550,7 @@ public sealed class WorldService(
         var toSet = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal);
         var relationships = new Dictionary<Guid, RelationshipState>();
 
-        // Being at work for a shift works it; being anywhere else, or texting, skips it and costs a little.
+        // Being at work for a shift works it; being anywhere else skips it and costs a little.
         var traits = PlayerLife.Traits(flags);
         if (play.Setting.Job is { } shift && PlayerLife.OnShift(shift, play.Clock))
         {
@@ -756,14 +737,60 @@ public sealed class WorldService(
         return sections;
     }
 
-    /// <summary>Spends the slot texting <paramref name="key"/>, someone whose number the player has, from home.</summary>
+    /// <summary>
+    /// Texts <paramref name="key"/>, someone whose number the player has, from the place of the scene on screen, once
+    /// its conversation is over (user feedback: texting took the slot at home, drawn as a scene in the stairwell). It
+    /// takes no time of its own: it is the rest of the slot already spent there, so one a slot, and short. Starts the
+    /// conversation's scene at the same place and slot, closing the one it follows; the clock does not move.
+    /// </summary>
     public async Task<TurnOutcome> TextAsync(SaveId saveId, string key, CancellationToken ct = default)
     {
-        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
-        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
-        var home = known.FirstOrDefault(p => p.Id == (setting.Home ?? setting.RoutinePlace)) ?? known[0];
+        var open = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Texting happens wherever the player is: go somewhere first.");
 
-        return await TakeTurnAsync(saveId, home.Id, invite: null, textWith: key, ct).ConfigureAwait(false);
+        if (open.EncounterId == JsonEncounterCatalog.PhoneId)
+        {
+            throw new InvalidOperationException("There is time for one conversation by text a slot.");
+        }
+
+        if (!open.Written)
+        {
+            throw new InvalidOperationException("The scene is still being written.");
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        if (EncounterEvaluator.Holds(flags, EncounterEvaluator.PendingChoiceKey))
+        {
+            throw new InvalidOperationException("Answer the open choice first.");
+        }
+
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var texted = cast.FirstOrDefault(li => li.Key == key && EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li))
+            ?? throw new InvalidOperationException($"'{key}' is not someone the player can message.");
+
+        var here = TurnOutcomeJson.Deserialize(open.OutcomeJson);
+        if (here.With.Contains(texted.Ref))
+        {
+            throw new InvalidOperationException($"{texted.Name} is right here.");
+        }
+
+        // Leaving the scene's conversation as Continue does, anything unsaid unsaid.
+        await CloseSceneAsync(saveId, ct).ConfigureAwait(false);
+
+        var phone = new TurnOutcome(
+            open.Clock,
+            here.Next,
+            open.PlaceId,
+            JsonEncounterCatalog.PhoneId,
+            $"{texted.Name} and you are texting.",
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [],
+            [texted.Ref],
+            here.GameOver);
+
+        await sceneLog.StartAsync(saveId, phone.VisitedAt, phone.PlaceId, phone.EncounterId, TurnOutcomeJson.Serialize(phone), phone.Text, ct).ConfigureAwait(false);
+        return phone;
     }
 
     /// <summary>A planned beat at or below this priority gives way to running into someone by chance.</summary>
@@ -1343,7 +1370,10 @@ public sealed class WorldService(
                 JsonEncounterCatalog.ChanceMeetingId =>
                     $"{presented.Name} is at {place?.Name ?? outcome.PlaceId}, going about their own day, and the two of them have never met. Something small and natural here brings them into conversation for the first time: {presented.Name} speaks first and says who they are. End on something the player can answer.",
                 JsonEncounterCatalog.PhoneId =>
-                    $"{presented.Name} and the player are texting. Write only {presented.Name}'s messages: a few short text messages in quotes, what prompted them and what they want to say. Describe no place. End on something the player can answer.",
+                    // Shown as bubbles on a phone: anything outside the quotes is not shown at all.
+                    $"{presented.Name} is not with the player; the two of them are texting, while the player is at {place?.Name ?? outcome.PlaceId}. " +
+                    $"Write only {presented.Name}'s text messages and nothing else: two to four short messages, each in quotes on its own line, with a blank line between them, " +
+                    "saying what prompted them and what they want to say. No narration, no description of any place, no phone buzzing. End on something the player can answer.",
                 _ => outcome.Text,
             }),
             ceiling,
@@ -1532,7 +1562,7 @@ public sealed class WorldService(
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var written = await reactionWriter.WriteAsync(
-            built.Packet, stored.Text, reply, null, $"{owner?.Name ?? "They"} takes that in.", 1, SceneConversation.MaxReplies, ct).ConfigureAwait(false);
+            built.Packet, stored.Text, reply, null, $"{owner?.Name ?? "They"} takes that in.", 1, SceneConversation.MaxRepliesFor(stored.EncounterId), ct).ConfigureAwait(false);
         return new ReplayedReaction(stored.Text, reply, ScenePacketBuilder.Render(built.Packet), written, watch.Elapsed.TotalSeconds);
     }
 
@@ -1594,7 +1624,7 @@ public sealed class WorldService(
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
-            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.MaxReplies, ct).ConfigureAwait(false);
+            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.MaxRepliesFor(scene.EncounterId), ct).ConfigureAwait(false);
 
         // "{want}" in a tag means the want of the person the scene is about.
         var tags = reaction.Tags.Select(t => t.Replace(StoryContent.WantToken, owner?.Member.WantId ?? "", StringComparison.Ordinal)).ToList();
@@ -1644,7 +1674,7 @@ public sealed class WorldService(
         // The scene waits again, holding everything said so far, up to a limit: with what the answer proposes the
         // player could say next, or with nothing proposed, for the player's own words beside Continue.
         var transcript = SceneConversation.Transcript(scene.Text, words, reaction.Text);
-        var stillOpen = scene.Replies + 1 < SceneConversation.MaxReplies;
+        var stillOpen = scene.Replies + 1 < SceneConversation.MaxRepliesFor(scene.EncounterId);
         IReadOnlyList<ProposedChoice> next = stillOpen && !reaction.Fallback && !reaction.Ends ? reaction.Choices ?? [] : [];
         if (stillOpen)
         {
@@ -1769,7 +1799,11 @@ public sealed class WorldService(
             present,
             [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
             [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
-            "The player has just replied; see below.",
+            scene.EncounterId == JsonEncounterCatalog.PhoneId && presentPeople.FirstOrDefault() is { } texting
+                ? $"{texting.Name} and the player are texting; they are not together. The player has just replied by text; see below. " +
+                  $"Write only {texting.Name}'s answering text messages and nothing else: one to three short messages, each in quotes on its own line, " +
+                  "with a blank line between them. No narration."
+                : "The player has just replied; see below.",
             ceiling,
             [.. pack.Expressions.Keys],
             KnownPlaces: [.. known.Select(p => p.Name)],

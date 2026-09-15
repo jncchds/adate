@@ -21,7 +21,7 @@
 <PageTitle>@_heading</PageTitle>
 
 <div class="play">
-    <div class="play-area @(_mode == Mode.Scene ? null : "tall")">
+    <div class="play-area @(_mode == Mode.Scene ? null : "tall") @(_isPhone ? "phone" : null)">
         <div class="play-stage">
             @if (_stageBackground is not null)
             {
@@ -155,6 +155,18 @@
                         {
                             <button type="button" class="accent" disabled="@_working" @onclick="ContinueAsync">Continue</button>
                         }
+
+                        @* Once the conversation is over, texting someone from here before moving on. *@
+                        @if (_contacts.Count > 0)
+                        {
+                            <p class="small">Or text someone from here</p>
+                            <div class="chips">
+                                @foreach (var contact in _contacts)
+                                {
+                                    <button type="button" class="chip" disabled="@_working" @onclick="() => TextAsync(contact)">Text @contact.Name</button>
+                                }
+                            </div>
+                        }
                         break;
 
                     case Mode.Map:
@@ -171,17 +183,6 @@
                                 @foreach (var card in _people)
                                 {
                                     @PersonCard(card)
-                                }
-                            </div>
-                        }
-
-                        @if (_contacts.Count > 0)
-                        {
-                            <h2>Message someone</h2>
-                            <div class="chips">
-                                @foreach (var contact in _contacts)
-                                {
-                                    <button type="button" class="chip" disabled="@_working" @onclick="() => TextAsync(contact)">Text @contact.Name</button>
                                 }
                             </div>
                         }
@@ -276,6 +277,49 @@
                 }
             </div>
         </section>
+
+        @* A conversation by text: a phone over the place the player is at, blurred behind it, and nobody standing there. *@
+        @if (_isPhone && _mode == Mode.Scene)
+        {
+            <section class="phone" aria-label="Messages">
+                <header class="phone-header">
+                    <span class="avatar" style="@(_phonePortrait is null ? null : $"background-image: url('{_phonePortrait}')")"></span>
+                    <span class="phone-who">
+                        <strong>@_speaker</strong>
+                        <span class="small">@_heading</span>
+                    </span>
+                </header>
+
+                <div class="thread" @ref="_thread">
+                    @foreach (var message in _messages)
+                    {
+                        <p class="bubble @(message.Mine ? "mine" : null) @(message.Note ? "note" : null)">@message.Text</p>
+                    }
+                    @if (_isWriting)
+                    {
+                        <div class="writing"><span class="spinner small" aria-hidden="true"></span><span class="lede">@_writingText</span></div>
+                    }
+                </div>
+
+                <div class="phone-keys">
+                    @foreach (var choice in _choices)
+                    {
+                        <button type="button" class="choice" disabled="@_working" @onclick="() => PickChoiceAsync(choice)">@choice.Text</button>
+                    }
+                    @if (_canReply)
+                    {
+                        <form class="reply-form" @onsubmit="ReplyAsync">
+                            <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Message…" disabled="@_working" />
+                            <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Send</button>
+                        </form>
+                    }
+                    @if (_showContinue)
+                    {
+                        <button type="button" class="accent" disabled="@_working" @onclick="ContinueAsync">Put the phone away</button>
+                    }
+                </div>
+            </section>
+        }
 
         @* Overlays, above the person: back to the saves, the place's name, and the busy line. *@
         <a class="back" href="/" title="Saves" aria-label="Saves">‹</a>
@@ -375,6 +419,12 @@
     private readonly List<LineupSlot> _lineup = [];
     private IReadOnlyList<Invitee> _contacts = [];
 
+    // A conversation by text: a phone over the blurred place instead of the person and the text box.
+    private bool _isPhone;
+    private string? _phonePortrait;
+    private IReadOnlyList<Message> _messages = [];
+    private ElementReference _thread;
+
     private bool _debugOpen;
     private IReadOnlyList<DebugSection> _debugSections = [];
     private readonly Queue<DateTime> _taps = new();
@@ -395,6 +445,9 @@
 
         public string? Agreed { get; set; }
     }
+
+    /// <summary>One bubble of a conversation by text: theirs, the player's own, or a note on what came of it.</summary>
+    private sealed record Message(string Text, bool Mine, bool Note);
 
     /// <summary>An encounter's own choice, or a proposed reply by its index.</summary>
     private sealed record ChoiceButton(string Text, EncounterChoice? Authored, int? Index);
@@ -476,7 +529,7 @@
             _scrollRequest = null;
             try
             {
-                await JS.InvokeVoidAsync(request, _side);
+                await JS.InvokeVoidAsync(request, _isPhone && _mode == Mode.Scene ? _thread : _side);
             }
             catch (Exception ex) when (ex is JSDisconnectedException or InvalidOperationException or TaskCanceledException)
             {
@@ -531,6 +584,8 @@
         _lineup.Clear();
         _contacts = [];
         _notes = [];
+        _isPhone = false;
+        _phonePortrait = null;
 
         if (state.Scene is { } scene)
         {
@@ -618,8 +673,6 @@
                 });
             }
 
-            _contacts = state.Contacts ?? [];
-
             // Everyone met so far stands on the backdrop, left to right, in one slot for each person the story has.
             var met = state.Met ?? [];
             foreach (var person in met)
@@ -647,6 +700,7 @@
         var place = state.KnownPlaces.FirstOrDefault(p => p.Id == outcome.PlaceId);
         _stagePlace = place ?? _stagePlace;
         _outcome = outcome with { Text = scene.Text };
+        _isPhone = outcome.EncounterId == JsonEncounterCatalog.PhoneId;
         _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices)
         {
             Open = state.PendingScene is not null,
@@ -699,7 +753,18 @@
             }
         }
 
-        if (scene.CharacterId is not null)
+        if (_isPhone)
+        {
+            try
+            {
+                await ShowPortraitAsync(await World.PresentAsync(SaveId, scene.Outcome), token);
+            }
+            catch (Exception)
+            {
+                // The messages work without the picture.
+            }
+        }
+        else if (scene.CharacterId is not null)
         {
             try
             {
@@ -784,6 +849,26 @@
                 : [];
         _canReply = replies is not null;
         _showContinue = showContinue;
+
+        // Once a scene's conversation is over the player can text someone from there: anyone but who is here.
+        _contacts = showContinue && !_isPhone && _outcome is { } here
+            ? [.. (_state?.Contacts ?? []).Where(c => here.With.All(w => Who(w) != c.Name))]
+            : [];
+        _messages = _isPhone ? Messages() : [];
+    }
+
+    /// <summary>A conversation by text as bubbles: their messages, each of the player's replies, and what came of them.</summary>
+    private List<Message> Messages()
+    {
+        List<Message> messages = [.. TextMessages.Split(_sceneText).Select(m => new Message(m, false, false))];
+        foreach (var exchange in _exchanges)
+        {
+            messages.Add(new Message(TextMessages.Unquote(exchange.Reply), true, false));
+            messages.AddRange(TextMessages.Split(exchange.Reaction).Select(m => new Message(m, false, false)));
+            messages.AddRange(new[] { exchange.Popup, exchange.Agreed }.OfType<string>().Select(note => new Message(note, false, true)));
+        }
+
+        return messages;
     }
 
     /// <summary>
@@ -967,13 +1052,14 @@
     private Task GoAsync(PlaceCardItem card) =>
         TurnAsync(card.Place.Name, card.Place, () => World.TakeTurnAsync(SaveId, card.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite));
 
-    /// <summary>Spending the slot texting someone whose number the player has.</summary>
+    /// <summary>Texting someone whose number the player has, from where they are, once the scene's conversation is over.</summary>
     private Task TextAsync(Invitee contact) =>
-        TurnAsync($"Messages · {contact.Name}", null, () => World.TextAsync(SaveId, contact.Key));
+        TurnAsync(_caption ?? contact.Name, _stagePlace, () => World.TextAsync(SaveId, contact.Key), phone: true);
 
-    /// <param name="caption">What the stage says: the place, or the conversation.</param>
-    /// <param name="place">Where the turn is spent, remembered for the stage; null for texting.</param>
-    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take)
+    /// <param name="caption">What the stage says: the place's name.</param>
+    /// <param name="place">Where the turn is spent, remembered for the stage.</param>
+    /// <param name="phone">A conversation by text at the place already on screen: its picture stays, blurred, and nobody stands there.</param>
+    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take, bool phone = false)
     {
         _working = true;
         var token = ++_scene;
@@ -984,7 +1070,13 @@
             // written. The placeholder text never shows unless the model cannot write the scene.
             _outcome = null;
             _view = null;
-            _stageBackground = null;
+            _isPhone = phone;
+            _phonePortrait = null;
+            if (!phone)
+            {
+                _stageBackground = null;
+            }
+
             _stageSprite = null;
             _speaker = null;
             _exchanges.Clear();
@@ -993,8 +1085,8 @@
             _noteLine = null;
             _sceneText = null;
             _caption = caption;
-            _stageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
-            _writingText = place is null ? "Opening your messages…" : $"Seeing who is at {place.Name}…";
+            _stageLoadingText = $"Drawing {caption}…";
+            _writingText = phone ? "Opening your messages…" : $"Seeing who is at {caption}…";
             _isWriting = true;
             _mode = Mode.Scene;
             RefreshSceneControls();
@@ -1024,7 +1116,7 @@
 
             // The picture, the person and the words at once: the image service and the model work side by side.
             var background = ShowBackgroundAsync(token);
-            var sprite = ShowSpriteAsync(presented, token);
+            var sprite = phone ? ShowPortraitAsync(presented, token) : ShowSpriteAsync(presented, token);
             var written = await Task.Run(() => World.WriteSceneAsync(SaveId, outcome, WritingProgress(token)));
 
             if (token != _scene)
@@ -1110,10 +1202,28 @@
         }
     }
 
+    /// <summary>The small round picture at the top of a conversation by text: the person at their resting expression.</summary>
+    private async Task ShowPortraitAsync(SceneView view, int token)
+    {
+        try
+        {
+            var picture = await World.SpriteAsync(SaveId, view);
+            if (token == _scene)
+            {
+                _phonePortrait = picture;
+                await RefreshAsync();
+            }
+        }
+        catch (Exception)
+        {
+            // The messages work without the picture.
+        }
+    }
+
     /// <summary>The written scene replaces the spinner; a different expression brings its own picture.</summary>
     private async Task ApplyWrittenAsync(SceneView written, int token)
     {
-        var expressionChanged = written.CharacterId is not null && written.Expression != _view?.Expression;
+        var expressionChanged = !_isPhone && written.CharacterId is not null && written.Expression != _view?.Expression;
 
         _outcome = _outcome is null ? null : _outcome with { Text = written.Text };
         _view = written;
@@ -1208,7 +1318,7 @@
     /// <summary>A different expression in the answer brings the person's picture for it.</summary>
     private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
     {
-        if (result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
+        if (_isPhone || result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
         {
             return;
         }
@@ -1337,6 +1447,7 @@
         _heading = "Something went wrong";
         _speaker = null;
         _isWriting = false;
+        _isPhone = false;
         _mode = Mode.Error;
     }
 

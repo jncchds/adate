@@ -34,7 +34,7 @@ public sealed record SettingEvent(string Id, string Name, int Day, string Place,
 /// <param name="Tone">Guidance for the writing. Never enters an image prompt.</param>
 /// <param name="Weather">Weights per weather id for this setting; null uses each kind's default weight.</param>
 /// <param name="Job">The player's job here, with its shifts; null for a setting where the player has none.</param>
-/// <param name="Home">Where the player lives, a place known from the start: where texting happens. Null uses the routine place.</param>
+/// <param name="Home">Where the player lives, a place known from the start. Null uses the routine place.</param>
 /// <param name="HomeType">The place type a love interest's home is drawn as here, when the story names it: a home place type.</param>
 public sealed record SettingDefinition(
     string Id,

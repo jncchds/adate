@@ -862,6 +862,120 @@ a.choice small {
     to { left: 100%; }
 }
 
+/* A conversation by text: the place blurred and darkened behind a phone, with bubbles for the messages. */
+.play-area.phone .play-background {
+    filter: blur(18px) brightness(0.5);
+    transform: scale(1.08);
+}
+
+.play-area.phone .play-figure .sprite-frame,
+.play-area.phone .play-textbox {
+    display: none;
+}
+
+/* Upright too, the picture fills the screen behind the phone, as it does behind every other screen. */
+@container play (orientation: portrait) {
+    .play-area.phone .play-stage,
+    .play-area.phone .play-figure {
+        height: 100%;
+    }
+}
+
+.phone {
+    position: absolute;
+    left: 50%;
+    top: max(56px, calc(50% - 390px));
+    bottom: max(16px, calc(50% - 390px));
+    transform: translateX(-50%);
+    width: min(420px, calc(100% - 32px));
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 20, 24, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+    overflow: hidden;
+}
+
+.phone-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+}
+
+.avatar {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: #26262a;
+    background-size: 300% auto;
+    background-position: 50% 3%;
+    background-repeat: no-repeat;
+}
+
+.phone-who {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.thread {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.thread > * {
+    flex: none;
+}
+
+.bubble {
+    align-self: flex-start;
+    max-width: 80%;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 16px 16px 16px 4px;
+    background: #2c2c32;
+    font-size: 16px;
+    line-height: 22px;
+    white-space: pre-line;
+    animation: picture-in 220ms ease-out;
+}
+
+.bubble.mine {
+    align-self: flex-end;
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-radius: 16px 16px 4px 16px;
+}
+
+.bubble.note {
+    align-self: center;
+    background: none;
+    color: var(--note);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.phone-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px 12px;
+    border-top: 1px solid var(--line);
+}
+
+.phone-keys button.choice {
+    margin: 0;
+}
+
 /* The hidden debug screen: opaque, monospace, everything selectable. */
 .debug {
     position: absolute;

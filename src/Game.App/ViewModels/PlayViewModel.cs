@@ -116,7 +116,15 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string? _noteLine;
 
-    /// <summary>People whose number the player has, to text from the map.</summary>
+    /// <summary>A conversation by text: a phone over the place, blurred, instead of the person and the text box.</summary>
+    [ObservableProperty]
+    private bool _isPhone;
+
+    /// <summary>The small round picture of whoever the player is texting.</summary>
+    [ObservableProperty]
+    private Bitmap? _phonePortrait;
+
+    /// <summary>People whose number the player has, to text from where they are once a scene's conversation is over.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContacts))]
     private IReadOnlyList<ChoiceItem> _contacts = [];
@@ -174,6 +182,9 @@ public sealed partial class PlayViewModel : PageViewModel
 
     /// <summary>The scene's conversation: each reply the player gave and the answer to it.</summary>
     public ObservableCollection<ExchangeItem> Exchanges { get; } = [];
+
+    /// <summary>A conversation by text as bubbles, made from its words and exchanges.</summary>
+    public ObservableCollection<MessageItem> Messages { get; } = [];
 
     public bool IsLoading => Mode == PlayMode.Loading;
 
@@ -264,6 +275,8 @@ public sealed partial class PlayViewModel : PageViewModel
         Lineup.Clear();
         Contacts = [];
         NoteLine = null;
+        IsPhone = false;
+        PhonePortrait = null;
 
         if (state.Scene is { } scene)
         {
@@ -363,8 +376,6 @@ public sealed partial class PlayViewModel : PageViewModel
                 Places.Add(new PlaceCardViewModel(place, state.OnShift && state.Job?.Place == place.Id ? $"{typeName} · your shift" : typeName, GoCommand));
             }
 
-            Contacts = [.. (state.Contacts ?? []).Select(c => new ChoiceItem($"Text {c.Name}", TextCommand, new PersonTarget(c.Key, c.Name)))];
-
             // Everyone met so far stands on the backdrop, left to right, in one slot for each person the
             // story has; the row fills the stage once all of them are met.
             var met = state.Met ?? [];
@@ -393,6 +404,7 @@ public sealed partial class PlayViewModel : PageViewModel
         var place = state.KnownPlaces.FirstOrDefault(p => p.Id == outcome.PlaceId);
         _stagePlace = place ?? _stagePlace;
         _outcome = outcome with { Text = scene.Text };
+        IsPhone = outcome.EncounterId == JsonEncounterCatalog.PhoneId;
         _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices)
         {
             Open = state.PendingScene is not null,
@@ -442,7 +454,18 @@ public sealed partial class PlayViewModel : PageViewModel
             }
         }
 
-        if (scene.CharacterId is not null)
+        if (IsPhone)
+        {
+            try
+            {
+                await ShowPortraitAsync(await _world.PresentAsync(_saveId, scene.Outcome), token);
+            }
+            catch (Exception)
+            {
+                // The messages work without the picture.
+            }
+        }
+        else if (scene.CharacterId is not null)
         {
             try
             {
@@ -526,6 +549,43 @@ public sealed partial class PlayViewModel : PageViewModel
                 : [];
         CanReply = replies is not null;
         ShowContinue = showContinue;
+
+        // Once a scene's conversation is over the player can text someone from there: anyone but who is here.
+        Contacts = showContinue && !IsPhone && _outcome is { } here
+            ? [.. (_state?.Contacts ?? [])
+                .Where(c => here.With.All(w => Who(w) != c.Name))
+                .Select(c => new ChoiceItem($"Text {c.Name}", TextCommand, new PersonTarget(c.Key, c.Name)))]
+            : [];
+        RefreshMessages();
+    }
+
+    /// <summary>A conversation by text as bubbles: their messages, each of the player's replies, and what came of them.</summary>
+    private void RefreshMessages()
+    {
+        Messages.Clear();
+        if (!IsPhone)
+        {
+            return;
+        }
+
+        foreach (var message in TextMessages.Split(SceneText))
+        {
+            Messages.Add(new MessageItem(message, false, false));
+        }
+
+        foreach (var exchange in Exchanges)
+        {
+            Messages.Add(new MessageItem(TextMessages.Unquote(exchange.Reply), true, false));
+            foreach (var message in TextMessages.Split(exchange.Reaction))
+            {
+                Messages.Add(new MessageItem(message, false, false));
+            }
+
+            foreach (var note in new[] { exchange.Popup, exchange.Agreed }.OfType<string>())
+            {
+                Messages.Add(new MessageItem(note, false, true));
+            }
+        }
     }
 
     /// <summary>
@@ -723,16 +783,17 @@ public sealed partial class PlayViewModel : PageViewModel
             ? Task.CompletedTask
             : TurnAsync(card.Place.Name, card.Place, () => _world.TakeTurnAsync(_saveId, card.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite));
 
-    /// <summary>Spending the slot texting someone whose number the player has.</summary>
+    /// <summary>Texting someone whose number the player has, from where they are, once the scene's conversation is over.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
     private Task TextAsync(object? parameter) =>
         parameter is PersonTarget target
-            ? TurnAsync($"Messages · {target.Name}", null, () => _world.TextAsync(_saveId, target.Key))
+            ? TurnAsync(StageCaption ?? target.Name, _stagePlace, () => _world.TextAsync(_saveId, target.Key), phone: true)
             : Task.CompletedTask;
 
-    /// <param name="caption">What the stage says: the place, or the conversation.</param>
-    /// <param name="place">Where the turn is spent, remembered for the map; null for texting.</param>
-    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take)
+    /// <param name="caption">What the stage says: the place's name.</param>
+    /// <param name="place">Where the turn is spent, remembered for the map.</param>
+    /// <param name="phone">A conversation by text at the place already on screen: its picture stays, blurred, and nobody stands there.</param>
+    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take, bool phone = false)
     {
         Working = true;
         var token = ++_scene;
@@ -743,7 +804,13 @@ public sealed partial class PlayViewModel : PageViewModel
             // words are written. The placeholder text never shows unless the model cannot write the scene.
             _outcome = null;
             _view = null;
-            StageBackground = null;
+            IsPhone = phone;
+            PhonePortrait = null;
+            if (!phone)
+            {
+                StageBackground = null;
+            }
+
             StageSprite = null;
             Speaker = null;
             Exchanges.Clear();
@@ -752,8 +819,8 @@ public sealed partial class PlayViewModel : PageViewModel
             NoteLine = null;
             SceneText = null;
             StageCaption = caption;
-            StageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
-            WritingText = place is null ? "Opening your messages…" : $"Seeing who is at {place.Name}…";
+            StageLoadingText = $"Drawing {caption}…";
+            WritingText = phone ? "Opening your messages…" : $"Seeing who is at {caption}…";
             IsWriting = true;
             Mode = PlayMode.Scene;
             RefreshSceneControls();
@@ -781,7 +848,7 @@ public sealed partial class PlayViewModel : PageViewModel
 
             // The picture, the person and the words at once: the image service and the model work side by side.
             var background = ShowBackgroundAsync(token);
-            var sprite = ShowSpriteAsync(presented, token);
+            var sprite = phone ? ShowPortraitAsync(presented, token) : ShowSpriteAsync(presented, token);
             var written = await Task.Run(() => _world.WriteSceneAsync(_saveId, outcome, WritingProgress(token)));
 
             if (token != _scene)
@@ -863,10 +930,27 @@ public sealed partial class PlayViewModel : PageViewModel
         }
     }
 
+    /// <summary>The small round picture at the top of a conversation by text: the person at their resting expression.</summary>
+    private async Task ShowPortraitAsync(SceneView view, int token)
+    {
+        try
+        {
+            var picture = await PictureAsync(await _world.SpriteAsync(_saveId, view), 400);
+            if (token == _scene)
+            {
+                PhonePortrait = picture;
+            }
+        }
+        catch (Exception)
+        {
+            // The messages work without the picture.
+        }
+    }
+
     /// <summary>The written scene replaces the spinner; a different expression brings its own picture.</summary>
     private async Task ApplyWrittenAsync(SceneView written, int token)
     {
-        var expressionChanged = written.CharacterId is not null && written.Expression != _view?.Expression;
+        var expressionChanged = !IsPhone && written.CharacterId is not null && written.Expression != _view?.Expression;
 
         _outcome = _outcome is null ? null : _outcome with { Text = written.Text };
         _view = written;
@@ -960,7 +1044,7 @@ public sealed partial class PlayViewModel : PageViewModel
     /// <summary>A different expression in the answer brings the person's picture for it.</summary>
     private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
     {
-        if (result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
+        if (IsPhone || result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
         {
             return;
         }
@@ -1118,6 +1202,7 @@ public sealed partial class PlayViewModel : PageViewModel
         Heading = "Something went wrong";
         Speaker = null;
         IsWriting = false;
+        IsPhone = false;
         Mode = PlayMode.Error;
     }
 

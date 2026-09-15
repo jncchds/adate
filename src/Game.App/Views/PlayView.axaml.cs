@@ -41,8 +41,18 @@ public partial class PlayView : UserControl
         base.OnDataContextChanged(e);
     }
 
-    private void ScrollToTop() => Side.ScrollToHome();
+    private void ScrollToTop()
+    {
+        Side.ScrollToHome();
+        Thread.ScrollToHome();
+    }
 
     // After layout, so the newest words are already measured when the view follows them.
-    private void ScrollToEnd() => Dispatcher.UIThread.Post(() => Side.ScrollToEnd(), DispatcherPriority.Background);
+    private void ScrollToEnd() => Dispatcher.UIThread.Post(
+        () =>
+        {
+            Side.ScrollToEnd();
+            Thread.ScrollToEnd();
+        },
+        DispatcherPriority.Background);
 }

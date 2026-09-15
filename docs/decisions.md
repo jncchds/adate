@@ -1634,3 +1634,26 @@ way, then", and the map offered no such place, and nothing would have put her th
 * **A meeting at an unknown place** is sent back to the writer unless the same answer adds the place, and the
   game reads known places again after a reply's places are stored, so a place named and agreed on in one
   reply holds.
+
+## Texting from where you are, on a phone
+
+User feedback: texting Maya drew her standing in the player's stairwell, with narrated prose in the text box.
+Texting spent the slot at home (`home`), so the player was always in the stairwell, and the conversation went
+through the ordinary stage. The user chose a phone over the place, texting while somewhere, and messages only.
+
+* **Texting while somewhere.** "Text someone" no longer sits on the map. Once a scene's conversation is over
+  (Continue is showing), "Or text someone from here" lists the people whose number the player has, except whoever
+  is in the scene. `WorldService.TextAsync` closes that scene and starts a `phone.message` scene at the same place
+  and slot. The clock does not move and nothing is committed: no shift is missed, no promise resolved, no leaving
+  rule run. The texting is the rest of the slot already spent there. That makes one a slot, since it closes
+  the place's scene, and short: `SceneConversation.PhoneMaxReplies` is 2 against a scene's 4.
+* **A phone over the place.** The scene's background stays, blurred and darkened. The standing person and the
+  text box are hidden. A phone in the middle shows a small round portrait (the resting sprite, cropped to the
+  face), the name and the time. Their messages are bubbles on the left and the player's on the right, with
+  popups and agreements as small notes between. The replies, the message box and "Put the phone away" sit
+  below. Desktop, phone and web alike.
+* **Messages only.** The writer is told the two are texting and not together, where the player is, and to write
+  only the person's messages, each in quotes on its own line with no narration. Reactions are told the same.
+  `TextMessages.Split` turns the words into bubbles, one per quoted message, and leaves out any narration when
+  there are quoted messages. Text without quotes is a bubble a line. The expression still comes back but draws
+  no sprite.

@@ -56,7 +56,10 @@ public sealed class StageLayout : Panel
     public static readonly StyledProperty<bool> TallProperty =
         AvaloniaProperty.Register<StageLayout, bool>(nameof(Tall));
 
-    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty);
+    public static readonly StyledProperty<bool> FullStageProperty =
+        AvaloniaProperty.Register<StageLayout, bool>(nameof(FullStage));
+
+    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty, FullStageProperty);
 
     /// <summary>Whether the words may take nearly the full height: set when no one stands on the stage.</summary>
     public bool Tall
@@ -65,9 +68,19 @@ public sealed class StageLayout : Panel
         set => SetValue(TallProperty, value);
     }
 
+    /// <summary>
+    /// Whether the picture fills the whole area upright too: set when an overlay stands in for the words, such as the
+    /// phone of a conversation by text (user feedback: the background stays fullscreen, as on every other screen).
+    /// </summary>
+    public bool FullStage
+    {
+        get => GetValue(FullStageProperty);
+        set => SetValue(FullStageProperty, value);
+    }
+
     public bool IsStacked { get; private set; }
 
-    public static StageRegions Split(Size size, bool tall)
+    public static StageRegions Split(Size size, bool tall, bool fullStage = false)
     {
         var width = size.Width;
         var height = size.Height;
@@ -92,7 +105,7 @@ public sealed class StageLayout : Panel
         }
 
         var stageHeight = Math.Min(height * StackedStageShare, width);
-        var stage = new Rect(0, 0, width, stageHeight);
+        var stage = fullStage ? new Rect(size) : new Rect(0, 0, width, stageHeight);
         return new StageRegions(stage, stage, new Rect(0, stageHeight, width, height - stageHeight), true);
     }
 
@@ -102,7 +115,7 @@ public sealed class StageLayout : Panel
             double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
 
-        var regions = Split(size, Tall);
+        var regions = Split(size, Tall, FullStage);
         Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
         for (var i = 0; i < Children.Count; i++)
         {
@@ -114,7 +127,7 @@ public sealed class StageLayout : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var regions = Split(finalSize, Tall);
+        var regions = Split(finalSize, Tall, FullStage);
         Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
         for (var i = 0; i < Children.Count; i++)
         {

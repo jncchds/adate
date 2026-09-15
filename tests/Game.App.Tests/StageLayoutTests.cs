@@ -60,6 +60,16 @@ public class StageLayoutTests
         Assert.Equal(866, regions.Side.Bottom, 3);
     }
 
+    [Theory]
+    [InlineData(390, 866)]
+    [InlineData(1280, 720)]
+    public void Behind_a_phone_the_picture_fills_the_screen_whatever_its_shape(double width, double height)
+    {
+        var regions = StageLayout.Split(new Size(width, height), tall: false, fullStage: true);
+
+        Assert.Equal(new Rect(0, 0, width, height), regions.Stage);
+    }
+
     [Fact]
     public void An_upright_tablet_gives_the_picture_less_than_half()
     {

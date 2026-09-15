@@ -1,3 +1,4 @@
+using Game.Core.Encounters;
 using Game.Core.World;
 
 namespace Game.Core.Story;
@@ -32,6 +33,13 @@ public static class SceneConversation
 {
     /// <summary>How many times the player can reply within one scene.</summary>
     public const int MaxReplies = 4;
+
+    /// <summary>How many times the player can reply by text: a few messages between other things, not a scene.</summary>
+    public const int PhoneMaxReplies = 2;
+
+    /// <summary>The reply limit for a scene of this encounter.</summary>
+    public static int MaxRepliesFor(string? encounterId) =>
+        encounterId == JsonEncounterCatalog.PhoneId ? PhoneMaxReplies : MaxReplies;
 
     /// <summary>The scene so far with one more exchange, as the writer reads it for the next reply.</summary>
     public static string Transcript(string sceneText, string reply, string reaction)
