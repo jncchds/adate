@@ -69,6 +69,27 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task A_reply_can_put_a_jacket_on_the_person_and_nothing_changes_otherwise()
+    {
+        var wearing = Outfits.For("Maya", DressCode.Waterfront, firstDate: false, null, null, null) with { Settled = true };
+        var llm = new FakeLlm(
+            () => """
+                { "text": "Maya pulls the jacket round her shoulders.", "expression": "smile", "tags": [], "meet": null, "numbers": false, "ends": true,
+                  "choices": [], "places": [], "routines": [], "outfit": { "dress": "waterfront", "over": "the player's denim jacket" } }
+                """,
+            () => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "outfit": null }""");
+
+        var jacket = await Writer(llm).WriteAsync(Packet() with { Outfit = wearing }, "Maya shivers.", "Offer her your jacket", null, "Fallback.");
+        var nothing = await Writer(llm).WriteAsync(Packet() with { Outfit = wearing }, "Maya waves.", "Tell her a joke", null, "Fallback.");
+
+        Assert.Equal(new Outfit(DressCode.Waterfront, "the player's denim jacket"), jacket.Outfit);
+        Assert.Null(nothing.Outfit);
+        Assert.Contains("Maya is wearing light summer clothes", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("- outfit: only if, in this reaction, Maya changes", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("outfit", Writer(llm).Schema(Packet() with { Outfit = wearing })["required"]!.AsArray().Select(n => n!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task Two_pass_reads_the_data_out_of_prose_written_first()
     {
         var llm = new FakeLlm(

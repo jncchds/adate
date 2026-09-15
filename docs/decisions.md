@@ -1676,3 +1676,28 @@ Velvet Bean" drew as any cafe. The user chose to let the model describe it.
   only word characters. A scene's over-long look goes back to the writer. A reaction's is cut to fit, since a
   reaction's places are not sent back. `ApprovedIntent` filters the look phrase by phrase against the pack's
   restricted terms, like an outfit, and logs what it removes.
+
+## Dressing for the moment, not only the place
+
+User feedback on a small-town save: Samantha wore a swimsuit on the pier every time, though she does not swim. Going
+from the pier to the lookout together, she would have no time to change. And if the player offers her a jacket, the
+picture should show it. The outfit came from the place type alone (`lake-pier` is `waterfront`, which was swimwear).
+
+* **Swimwear is for swimming.** `waterfront` is now light summer clothes with no swimwear. A new `swim` code holds the
+  swimsuits. No place has it as its code: the writer picks it by the water for someone swimming, and never when
+  anything says they do not swim.
+* **C# offers, the writer picks.** `Outfits.For` works out what suits the moment. If the person was with the player
+  in the slot just before (not texting), they keep that outfit, including anything worn over it, since there was no
+  time to change. Otherwise the choices are the place's clothes (dressed up for a first date, as before), what suited
+  where their day had them the slot before, and everyday clothes. Coming from home adds nothing, since they got ready
+  there. Straight from work to a casual place, they are still in work clothes by default. The packet says where they
+  came from or what they still wear. The scene's answer gains `outfit`: a dress code from those offered, and `over`, a
+  few English words for anything worn over it. A code not offered is ignored and the default kept, not sent back.
+* **A conversation can change it.** The reaction packet says what the person is wearing now. Its answer's `outfit`
+  is null unless they change or put something on, like a jacket the player offers. The change is stored and
+  `ReactionResult.Redressed` makes both frontends draw the sprite again, even at the same expression.
+* **Kept with the scene.** `scene_log.dress` and `dress_over` (migration 015) hold it, and the next slot together
+  starts from it. Older scenes have none and are dressed as the moment would dress them. Something worn over the
+  outfit replaces the weather layer, and swimwear takes none.
+* **HANDOFF 1.3 bent as for place looks.** `over` is the only story-written text in a sprite prompt. `Outfits.CleanOver`
+  keeps 60 characters of plain words, and the content gate filters it with the rest of the outfit.

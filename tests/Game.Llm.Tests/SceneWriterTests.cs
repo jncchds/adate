@@ -489,6 +489,30 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task The_scene_picks_what_the_person_wears_among_the_codes_offered_and_a_wrong_pick_costs_nothing()
+    {
+        var packet = Packet() with { Outfit = Outfits.For("Rin", DressCode.Waterfront, firstDate: false, null, null, null) };
+        var schema = Writer(new FakeLlm()).Schema(packet);
+
+        Assert.Equal([DressCode.Waterfront, DressCode.Casual, DressCode.Swim],
+            schema["properties"]!["outfit"]!["properties"]!["dress"]!["enum"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Contains("outfit", schema["required"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.DoesNotContain("outfit", Writer(new FakeLlm()).Schema(Packet())["properties"]!.AsObject().Select(p => p.Key));
+
+        static string Dressed(string dress) =>
+            Answer().TrimEnd('}', ' ') + $$""", "outfit": { "dress": "{{dress}}", "over": "a light cardigan" } }""";
+
+        var llm = new FakeLlm(() => Dressed("casual"), () => Dressed("evening"));
+        var casual = await Writer(llm).WriteAsync(packet, World(), "Placeholder.");
+        var evening = await Writer(llm).WriteAsync(packet, World(), "Placeholder.");
+
+        Assert.Equal(new Outfit(DressCode.Casual, "a light cardigan"), casual.Outfit);
+        Assert.Contains("swim only if Rin is swimming", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.False(evening.Fallback);
+        Assert.Null(evening.Outfit);
+    }
+
+    [Fact]
     public void The_schema_limits_expressions_predicates_and_levels()
     {
         var schema = Writer(new FakeLlm()).Schema(Packet());

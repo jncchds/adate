@@ -18,6 +18,9 @@ public sealed record ProposedRoutine(string Who, string Place, string Slot, stri
 
 public sealed record SceneResponseChoice(string Text, IReadOnlyList<string>? Tags);
 
+/// <summary>What the main person wears, unchecked: C# keeps it only when the dress is one it offered.</summary>
+public sealed record SceneResponseOutfit(string? Dress, string? Over);
+
 /// <summary>The JSON half of a written scene.</summary>
 public sealed record SceneResponse(
     string Text,
@@ -29,7 +32,8 @@ public sealed record SceneResponse(
     IReadOnlyList<SceneResponseChoice>? Choices = null,
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
-    IReadOnlyList<ProposedRoutine>? Routines = null);
+    IReadOnlyList<ProposedRoutine>? Routines = null,
+    SceneResponseOutfit? Outfit = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -39,6 +43,7 @@ public sealed record SceneResponse(
 /// <param name="Threads">New loose ends the scene left open; null when threads are off.</param>
 /// <param name="Resolved">Loose ends from the packet the scene settled.</param>
 /// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
+/// <param name="Outfit">What the main person wears, when the answer picked one of the codes offered.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -52,7 +57,8 @@ public sealed record WrittenScene(
     IReadOnlyList<ProposedChoice>? Choices = null,
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
-    IReadOnlyList<ProposedRoutine>? Routines = null);
+    IReadOnlyList<ProposedRoutine>? Routines = null,
+    Game.Core.Story.Outfit? Outfit = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -230,7 +236,8 @@ public sealed class SceneWriter(
                         choices,
                         packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
                         Settled(packet, response.Resolved),
-                        [.. (response.Routines ?? []).Where(r => r is not null)]);
+                        [.. (response.Routines ?? []).Where(r => r is not null)],
+                        Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over));
                 }
 
                 lastReasons = reasons;
@@ -327,6 +334,12 @@ public sealed class SceneWriter(
         properties["routines"] = RoutineProperty();
         List<string> required = ["text", "expression", "facts", "places", "routines", "summary", "tags", "choices"];
 
+        if (packet.Outfit is { Settled: false } outfit)
+        {
+            properties["outfit"] = OutfitProperty(outfit, nullable: false);
+            required.Add("outfit");
+        }
+
         if (packet.LooseEnds is not null)
         {
             ThreadProperties(properties);
@@ -365,6 +378,20 @@ public sealed class SceneWriter(
             ["required"] = new JsonArray("who", "place", "slot", "days"),
             ["additionalProperties"] = false,
         },
+    };
+
+    /// <summary>The outfit field: a dress code among those offered, and anything worn over it. Shared with the reaction writer's schema.</summary>
+    /// <param name="nullable">True for a reaction, where null means nothing changed.</param>
+    internal static JsonObject OutfitProperty(PacketOutfit outfit, bool nullable) => new()
+    {
+        ["type"] = nullable ? new JsonArray("object", "null") : "object",
+        ["properties"] = new JsonObject
+        {
+            ["dress"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. outfit.Codes.Select(c => (JsonNode)JsonValue.Create(c)!)]) },
+            ["over"] = new JsonObject { ["type"] = "string" },
+        },
+        ["required"] = new JsonArray("dress", "over"),
+        ["additionalProperties"] = false,
     };
 
     /// <summary>The threads and resolved fields, shared with the reaction writer's schema.</summary>

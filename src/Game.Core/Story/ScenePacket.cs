@@ -39,6 +39,7 @@ public enum ScenePart
 /// <param name="LooseEnds">Open loose ends to pick up; null when threads are off, which also leaves them out of the answer.</param>
 /// <param name="Happening">One small thing going on here now, from content.</param>
 /// <param name="VariedChoices">Whether proposed replies are asked to differ in kind.</param>
+/// <param name="Outfit">What the main person here can be wearing; null when nobody here is drawn.</param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -62,7 +63,8 @@ public sealed record ScenePacket(
     string? Duty = null,
     IReadOnlyList<PacketThread>? LooseEnds = null,
     string? Happening = null,
-    bool VariedChoices = false);
+    bool VariedChoices = false,
+    PacketOutfit? Outfit = null);
 
 public static class ScenePacketBuilder
 {
@@ -139,6 +141,36 @@ public static class ScenePacketBuilder
         "routines: whenever someone here says where they usually are at some time, their id, the place's name, the time of day " +
         "(Morning, Midday, Afternoon, Evening or Night) and the days (weekdays, weekend or daily); only what they actually say, an empty list if nothing.";
 
+    /// <summary>What the answer's outfit is for a scene: what the main person wears in it, among the codes that suit.</summary>
+    public static string OutfitRule(PacketOutfit outfit)
+    {
+        ArgumentNullException.ThrowIfNull(outfit);
+
+        var codes = string.Join("; ", outfit.Codes.Select(c => $"{c} ({DressCode.Words(c)})"));
+        var swim = outfit.Codes.Contains(DressCode.Swim)
+            ? $"; swim only if {outfit.Name} is swimming or about to, and never if anything says they do not swim"
+            : "";
+        var over = outfit.Wearing.Over is { } still ? $"\"{still}\" while they still have it on, or " : "";
+
+        return $"outfit: what {outfit.Name} wears here" +
+               (outfit.Kept ? "" : ", fitting where they have come from, this place and what they are doing") +
+               $". dress: one of {codes}. " +
+               (outfit.Kept ? $"Keep {outfit.Wearing.Dress}: there was no time to change" : $"Usually {outfit.Wearing.Dress}") + swim +
+               $". over: {over}anything worn over it in a few English words (a cardigan, a towel round the shoulders), or an empty string.";
+    }
+
+    /// <summary>What the answer's outfit is for a reaction: a change only, such as putting on a jacket the player offers.</summary>
+    public static string OutfitChangeRule(PacketOutfit outfit)
+    {
+        ArgumentNullException.ThrowIfNull(outfit);
+
+        var codes = string.Join("; ", outfit.Codes.Select(c => $"{c} ({DressCode.Words(c)})"));
+        return $"outfit: only if, in this reaction, {outfit.Name} changes what they wear, puts something on or takes it off " +
+               "(puts on a jacket the player offers, takes off a sweater, changes to swim): " +
+               $"dress, one of {codes}, and over: what they now wear over it in a few English words, or an empty string for nothing. " +
+               "Otherwise null.";
+    }
+
     /// <summary>What makes proposed replies worth choosing between, for scenes and reactions alike.</summary>
     public const string VariedChoiceRule =
         " Make them different in kind (for example a question, a playful line, a bold or sincere move, or something to do), " +
@@ -203,6 +235,17 @@ public static class ScenePacketBuilder
             {
                 text.AppendLine($"  {person.Name}'s usual week: {routine}. They may mention it when it comes up naturally.");
             }
+        }
+
+        if (packet.Outfit is { } outfit)
+        {
+            text.AppendLine(outfit switch
+            {
+                { Settled: true } => $"  {outfit.Name} is wearing {Outfits.Describe(outfit.Wearing)}.",
+                { Kept: true } => $"  {outfit.Name} is still wearing {Outfits.Describe(outfit.Wearing)}: they were just with the player and had no time to change.",
+                { CameFrom: { } from } => $"  {outfit.Name} has come here from {from}.",
+                _ => $"  {outfit.Name} has not been anywhere else the player knows of today.",
+            });
         }
 
         text.AppendLine();
@@ -309,6 +352,11 @@ public static class ScenePacketBuilder
         }
 
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
+        if (packet.Outfit is { Settled: false } offered)
+        {
+            text.AppendLine($"- {OutfitRule(offered)}");
+        }
+
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");
         text.AppendLine($"- {PlaceRule}");
         text.AppendLine($"- {RoutineRule}");

@@ -17,7 +17,8 @@ public sealed record ReactionResponse(
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<SceneResponsePlace>? Places = null,
-    IReadOnlyList<ProposedRoutine>? Routines = null);
+    IReadOnlyList<ProposedRoutine>? Routines = null,
+    SceneResponseOutfit? Outfit = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
@@ -25,6 +26,7 @@ public sealed record ReactionResponse(
 /// <param name="Resolved">Loose ends from the packet the reaction settled.</param>
 /// <param name="Places">Places the reaction named, unchecked: C# checks them against the place types and stores the good ones.</param>
 /// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
+/// <param name="Outfit">What the main person changed into or put on in the reaction, such as a jacket the player offered; null for no change.</param>
 public sealed record WrittenReaction(
     string Text,
     string? Expression,
@@ -39,7 +41,8 @@ public sealed record WrittenReaction(
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<Game.Core.Places.PlaceProposal>? Places = null,
-    IReadOnlyList<ProposedRoutine>? Routines = null);
+    IReadOnlyList<ProposedRoutine>? Routines = null,
+    Outfit? Outfit = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -121,7 +124,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                   "and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
                   "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
-                  + $"- {ScenePacketBuilder.RoutineRule}\n")
+                  + $"- {ScenePacketBuilder.RoutineRule}\n"
+                  + (packet.Outfit is { } outfit ? $"- {ScenePacketBuilder.OutfitChangeRule(outfit)}\n" : ""))
             + $"- {ScenePacketBuilder.PlaceRule}\n"
             + Conversation(replyNumber, maxReplies, alone, packet.VariedChoices)
             + (packet.LooseEnds is null ? "" : ScenePacketBuilder.ThreadRules + "\n");
@@ -221,7 +225,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                         .. (response.Places ?? []).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name)).Select(p => new Game.Core.Places.PlaceProposal(
                             p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim(), p.Look)),
                     ],
-                    Routines: [.. (response.Routines ?? []).Where(r => r is not null)]);
+                    Routines: [.. (response.Routines ?? []).Where(r => r is not null)],
+                    Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over));
             }
 
             lastReasons = reasons;
@@ -295,6 +300,12 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         properties["routines"] = SceneWriter.RoutineProperty();
 
         List<string> required = ["text", "expression", "tags", "meet", "numbers", "ends", "choices", "places", "routines"];
+
+        if (packet.Outfit is { } outfit && packet.Present.Count > 0)
+        {
+            properties["outfit"] = SceneWriter.OutfitProperty(outfit, nullable: true);
+            required.Add("outfit");
+        }
 
         if (packet.LooseEnds is not null)
         {

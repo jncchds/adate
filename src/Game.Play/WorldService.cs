@@ -42,13 +42,15 @@ public sealed record SceneView(
 /// <param name="Transcript">The scene so far including this exchange, as the waiting scene now holds it.</param>
 /// <param name="Next">What the player can say next when the conversation goes on; empty when nothing was proposed.</param>
 /// <param name="Open">Whether the scene still takes a reply: the player's own words even when nothing was proposed.</param>
+/// <param name="Redressed">Whether the person put something on or changed, so their sprite is drawn again even at the same expression.</param>
 public sealed record ReactionResult(
     SceneView View,
     string? Popup,
     string? Agreed = null,
     string Transcript = "",
     IReadOnlyList<ProposedChoice>? Next = null,
-    bool Open = false);
+    bool Open = false,
+    bool Redressed = false);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
@@ -1073,7 +1075,7 @@ public sealed class WorldService(
         string? path;
         if (scene is not null && view is { CharacterId: { } id, Expression: { } expression })
         {
-            var (dress, layer) = await WardrobeForAsync(saveId, scene, ct).ConfigureAwait(false);
+            var (dress, layer) = await WardrobeForAsync(saveId, scene, id, ct).ConfigureAwait(false);
             path = await studio.GenerateSceneSpriteAsync(saveId, id, view.Aesthetic ?? "", expression, dress, layer).ConfigureAwait(false);
         }
         else
@@ -1114,27 +1116,66 @@ public sealed class WorldService(
     }
 
     /// <summary>
-    /// What someone in a scene wears (user feedback: the same outfit everywhere looked wrong): the place's
-    /// dress code, dressed up for a first date whatever the place, with a weather layer outdoors.
+    /// What someone in a scene wears (user feedback: the same outfit everywhere looked wrong): what the scene or its
+    /// conversation said, or else what suits the moment, with a weather layer outdoors unless something is worn over it.
     /// </summary>
-    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, CancellationToken ct)
+    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, Guid characterId, CancellationToken ct)
     {
-        if (await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false) is not { } place)
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var outfit = scene.Outfit;
+        if (outfit is null)
         {
-            return (DressCode.Casual, null);
+            var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+            outfit = cast.FirstOrDefault(li => li.Id == characterId) is { } li
+                ? (await OutfitOptionsAsync(saveId, setting, cast, li, scene.Clock, scene.PlaceId, scene.EncounterId, ct).ConfigureAwait(false)).Wearing
+                : new Outfit(DressCode.Casual);
         }
 
-        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
-        var type = placeTypes.Get(place.TypeId);
-        var weather = WeatherOn(saveId, setting, scene.Clock.Day).Id;
+        if (outfit.Over is not null || outfit.Dress is DressCode.Swim
+            || await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false) is not { } place)
+        {
+            return (outfit.Dress, outfit.Over);
+        }
 
-        var firstDate = scene.EncounterId is { } encounterId
-            && (await CastAsync(saveId, setting, ct).ConfigureAwait(false)).Any(li => JsonEncounterCatalog.FirstDateIdFor(li.Key) == encounterId);
+        return (outfit.Dress, placeTypes.Get(place.TypeId).OutfitLayers?.GetValueOrDefault(WeatherOn(saveId, setting, scene.Clock.Day).Id));
+    }
 
-        // A date dresses up where people dress up anyway; at the office, at home, at camp or by the water the
-        // place's own clothes still suit it (user feedback: a flowery dress on the camp's waterfront was wrong).
-        var dressesUp = firstDate && type.Dress is DressCode.Casual or DressCode.Evening;
-        return (dressesUp ? DressCode.Date : type.Dress, type.OutfitLayers?.GetValueOrDefault(weather));
+    /// <summary>
+    /// What <paramref name="li"/> can be wearing at a place and time (user feedback: a swimsuit on the pier every time,
+    /// and no time to change on the way to the lookout together): what they wore with the player in the slot just before,
+    /// or else the place's clothes, with what suited where their day had them before.
+    /// </summary>
+    private async Task<PacketOutfit> OutfitOptionsAsync(
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, LoveInterest li, ClockState clock, string placeId, string? encounterId,
+        CancellationToken ct)
+    {
+        var place = await places.GetAsync(saveId, placeId, ct).ConfigureAwait(false);
+        var placeDress = place is null ? DressCode.Casual : placeTypes.Get(place.TypeId).Dress;
+        var firstDate = encounterId is { } id && cast.Any(c => JsonEncounterCatalog.FirstDateIdFor(c.Key) == id);
+
+        // Mornings start from home, where they got ready for the day.
+        if (clock.Slot is TimeOfDay.Morning)
+        {
+            return Outfits.For(li.Name, placeDress, firstDate, null, null, null);
+        }
+
+        var before = new ClockState(clock.Day, clock.Slot - 1);
+
+        // The slot just before spent with the player, anywhere but on the phone: no time to change since.
+        var together = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
+            .LastOrDefault(s => s.CharacterId == li.Id && s.Clock == before && s.EncounterId != JsonEncounterCatalog.PhoneId);
+        if (together is not null)
+        {
+            var kept = together.Outfit
+                ?? (await OutfitOptionsAsync(saveId, setting, cast, li, together.Clock, together.PlaceId, together.EncounterId, ct).ConfigureAwait(false)).Wearing;
+            var there = together.PlaceId == placeId ? null : (await places.GetAsync(saveId, together.PlaceId, ct).ConfigureAwait(false))?.Name;
+            return Outfits.For(li.Name, placeDress, firstDate, kept, null, there);
+        }
+
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var fromId = WorldMoves.Where(saveId.ToString(), ScheduleFor(saveId, setting, li, flags), [.. setting.Places.Select(p => p.Id)], before);
+        var from = fromId is null || fromId == placeId ? null : await places.GetAsync(saveId, fromId, ct).ConfigureAwait(false);
+        return Outfits.For(li.Name, placeDress, firstDate, null, from is null ? null : placeTypes.Get(from.TypeId).Dress, from?.Name);
     }
 
     /// <summary>
@@ -1204,12 +1245,19 @@ public sealed class WorldService(
 
         await StoreWrittenSceneAsync(saveId, outcome, written, presentIds, ct).ConfigureAwait(false);
 
+        // Kept with the scene: the sprite is drawn in it, and the next slot spent together starts from it.
+        if (sceneId is { } dressedId && packet.Outfit is { } offered)
+        {
+            await sceneLog.SetOutfitAsync(dressedId, written.Outfit ?? offered.Wearing, ct).ConfigureAwait(false);
+        }
+
         await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
         {
             outcome.EncounterId,
             Packet = ScenePacketBuilder.Render(packet),
             written.Text,
             written.Expression,
+            written.Outfit,
             written.Summary,
             written.Tags,
             Memories = memoryLines,
@@ -1345,6 +1393,14 @@ public sealed class WorldService(
             memoryLines.Add($"The week up to day {lastWeek.Day}: {lastWeek.Summary}");
         }
 
+        // What the person drawn here can be wearing; texting draws nobody.
+        var dressed = presented.CharacterId is { } drawnId && outcome.EncounterId != JsonEncounterCatalog.PhoneId
+            ? cast.FirstOrDefault(li => li.Id == drawnId)
+            : null;
+        var outfit = dressed is null
+            ? null
+            : await OutfitOptionsAsync(saveId, setting, cast, dressed, outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, ct).ConfigureAwait(false);
+
         var packet = new ScenePacket(
             setting.DisplayName,
             setting.Tone,
@@ -1392,7 +1448,8 @@ public sealed class WorldService(
                 or JsonEncounterCatalog.QuietCompanyId or JsonEncounterCatalog.ChanceMeetingId or JsonEncounterCatalog.PromisedMeetingId or JsonEncounterCatalog.InitiativeId
                 ? happenings.Pick(saveId.ToString(), place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt)
                 : null,
-            VariedChoices: quality.VariedChoices);
+            VariedChoices: quality.VariedChoices,
+            Outfit: outfit);
 
         var world = new SceneWorld(
             facts,
@@ -1697,6 +1754,7 @@ public sealed class WorldService(
             Tags = tags,
             reaction.Text,
             reaction.Expression,
+            reaction.Outfit,
             reaction.Attempts,
             reaction.Rejections,
         }, ct).ConfigureAwait(false);
@@ -1732,9 +1790,18 @@ public sealed class WorldService(
 
         agreed = swapped is null ? agreed : agreed is null ? swapped : $"{swapped} {agreed}";
 
+        var redressed = false;
         if (openScene is not null)
         {
             await sceneLog.AddExchangeAsync(openScene.Id, new SceneExchange(words, reaction.Text, popup, agreed), ct).ConfigureAwait(false);
+
+            // Something put on or changed into in the conversation, like a jacket the player offered, is drawn from now on
+            // and kept into the next slot together.
+            if (reaction.Outfit is { } now && packet.Outfit is { } was && now != was.Wearing)
+            {
+                await sceneLog.SetOutfitAsync(openScene.Id, now, ct).ConfigureAwait(false);
+                redressed = true;
+            }
         }
 
         return new ReactionResult(
@@ -1743,7 +1810,8 @@ public sealed class WorldService(
             agreed,
             transcript,
             next,
-            stillOpen);
+            stillOpen,
+            redressed);
     }
 
     private sealed record BuiltReaction(
@@ -1789,6 +1857,17 @@ public sealed class WorldService(
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var place = known.FirstOrDefault(p => p.Id == scene.PlaceId);
+
+        // What the person here is wearing now, as the scene or an earlier reply left it, and what they could change into.
+        PacketOutfit? outfit = null;
+        if (Owner(cast, scene.With) is { } dressed && scene.EncounterId != JsonEncounterCatalog.PhoneId)
+        {
+            var offered = await OutfitOptionsAsync(saveId, setting, cast, dressed, scene.Clock, scene.PlaceId, scene.EncounterId, ct).ConfigureAwait(false);
+            var wearing = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
+                .LastOrDefault(s => s.Clock == scene.Clock && s.PlaceId == scene.PlaceId)?.Outfit ?? offered.Wearing;
+            outfit = offered with { Wearing = wearing, Codes = [.. offered.Codes.Append(wearing.Dress).Distinct(StringComparer.Ordinal)], Settled = true };
+        }
+
         var packet = new ScenePacket(
             setting.DisplayName,
             setting.Tone,
@@ -1813,7 +1892,8 @@ public sealed class WorldService(
             PlayerLife: await PlayerLifeLinesAsync(saveId, setting, known, names.Player, ct).ConfigureAwait(false),
             Duty: duty,
             LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, scene.Clock.Day, looseEndsOverride, ct).ConfigureAwait(false) : null,
-            VariedChoices: quality.VariedChoices);
+            VariedChoices: quality.VariedChoices,
+            Outfit: outfit);
 
         return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
     }

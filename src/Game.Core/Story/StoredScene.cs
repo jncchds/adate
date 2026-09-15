@@ -11,6 +11,7 @@ namespace Game.Core.Story;
 /// <param name="BackgroundPath">The place's picture, once drawn; the same stored image path every frontend uses.</param>
 /// <param name="SpritePath">The person as last shown, once drawn.</param>
 /// <param name="Exchanges">Every reply the player gave in the scene and the answer to it, in order.</param>
+/// <param name="Outfit">What the person wears, once the scene or a change in its conversation has said; null before.</param>
 public sealed record StoredScene(
     long Id,
     ClockState Clock,
@@ -25,4 +26,5 @@ public sealed record StoredScene(
     string? Expression,
     string? SpritePath,
     IReadOnlyList<SceneExchange> Exchanges,
-    bool Closed);
+    bool Closed,
+    Outfit? Outfit = null);

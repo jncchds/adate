@@ -19,7 +19,7 @@ public sealed class SceneLogRepository(Database database)
 
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
-        speaker, expression, sprite_path, exchanges_json, closed
+        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -133,6 +133,13 @@ public sealed class SceneLogRepository(Database database)
     public Task SetWrittenAsync(long sceneId, string text, string? expression, CancellationToken ct = default) =>
         UpdateAsync(sceneId, "written = 1, text = $text, expression = COALESCE($expression, expression)", ct, ("$text", text), ("$expression", expression));
 
+    /// <summary>What the person wears: as the scene was written, or as the conversation changed it.</summary>
+    public Task SetOutfitAsync(long sceneId, Outfit outfit, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(outfit);
+        return UpdateAsync(sceneId, "dress = $dress, dress_over = $over", ct, ("$dress", outfit.Dress), ("$over", outfit.Over));
+    }
+
     /// <summary>Adds one exchange of the conversation to the end, in a single statement.</summary>
     public Task AddExchangeAsync(long sceneId, SceneExchange exchange, CancellationToken ct = default)
     {
@@ -189,6 +196,7 @@ public sealed class SceneLogRepository(Database database)
             Text(11),
             Text(12),
             Text(13) is { } exchanges ? JsonSerializer.Deserialize<List<SceneExchange>>(exchanges, Json) ?? [] : [],
-            reader.GetInt64(14) == 1);
+            reader.GetInt64(14) == 1,
+            Text(15) is { } dress ? new Outfit(dress, Text(16)) : null);
     }
 }

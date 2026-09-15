@@ -122,10 +122,18 @@
           "artsy": ["a tie-dye t-shirt", "denim overall shorts"]
         },
         "waterfront": {
+          "sporty": ["a white racerback tank top", "navy running shorts", "sneakers"],
+          "preppy": ["a navy and white striped boat-neck top", "white linen shorts"],
+          "alternative": ["a black cropped t-shirt", "frayed denim shorts"],
+          "rugged": ["an olive tank top", "denim shorts", "sandals"],
+          "elegant": ["a white linen sundress", "flat sandals"],
+          "artsy": ["a loose patterned cotton blouse", "high-waisted denim shorts"]
+        },
+        "swim": {
           "sporty": ["a navy one-piece swimsuit", "loose white board shorts"],
           "preppy": ["a striped one-piece swimsuit under an open white linen shirt"],
           "alternative": ["a black one-piece swimsuit", "frayed denim shorts"],
-          "rugged": ["an olive tank top", "denim shorts", "sandals"],
+          "rugged": ["an olive one-piece swimsuit", "denim shorts"],
           "elegant": ["a white one-piece swimsuit under a loose linen cover-up shirt"],
           "artsy": ["a patterned one-piece swimsuit", "a loose open cotton shirt"]
         },
@@ -295,12 +303,20 @@
           "artsy": ["a tie-dye t-shirt", "rolled canvas shorts"]
         },
         "waterfront": {
+          "sporty": ["a white tank top", "navy athletic shorts", "sneakers"],
+          "preppy": ["a short-sleeved linen shirt", "khaki shorts"],
+          "alternative": ["a black t-shirt", "black cargo shorts"],
+          "rugged": ["an olive tank top", "cargo shorts", "sandals"],
+          "elegant": ["a white linen shirt with rolled sleeves", "tan linen shorts"],
+          "artsy": ["a loose patterned short-sleeved shirt", "canvas shorts"]
+        },
+        "swim": {
           "sporty": ["a white tank top", "navy swim trunks"],
           "preppy": ["an open short-sleeved linen shirt", "striped swim trunks"],
           "alternative": ["a black tank top", "black swim trunks"],
-          "rugged": ["an olive tank top", "board shorts", "sandals"],
+          "rugged": ["an olive tank top", "khaki swim trunks"],
           "elegant": ["an open white linen shirt", "tan swim shorts"],
-          "artsy": ["a loose patterned short-sleeved shirt", "board shorts"]
+          "artsy": ["a loose patterned short-sleeved shirt", "patterned swim shorts"]
         },
         "date": {
           "sporty": ["a crisp white t-shirt under a light denim jacket", "black chinos"],

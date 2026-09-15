@@ -61,6 +61,10 @@ public class WardrobeTests
                 }
 
                 Assert.NotEqual(subject.OutfitFor(aesthetic, DressCode.Casual), subject.OutfitFor(aesthetic, DressCode.Date));
+
+                // User feedback: a swimsuit on the pier every time. Swimwear is only for swimming.
+                Assert.DoesNotContain(subject.OutfitFor(aesthetic, DressCode.Waterfront), p => p.Contains("swim", StringComparison.OrdinalIgnoreCase));
+                Assert.Contains(subject.OutfitFor(aesthetic, DressCode.Swim), p => p.Contains("swim", StringComparison.OrdinalIgnoreCase));
             }
         }
     }

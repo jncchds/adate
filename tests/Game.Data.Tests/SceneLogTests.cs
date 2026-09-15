@@ -43,6 +43,13 @@ public class SceneLogTests
         Assert.Equal(("Rin smiles.", "Rin liked that."), (shown.Exchanges[0].Reaction, shown.Exchanges[0].Popup));
         Assert.Equal("You agreed to meet Rin.", shown.Exchanges[1].Agreed);
         Assert.Equal(new ClockState(2, TimeOfDay.Evening), shown.Clock);
+        Assert.Null(shown.Outfit);
+
+        await log.SetOutfitAsync(id, new Outfit(DressCode.Waterfront, "the player's denim jacket"));
+        Assert.Equal(new Outfit(DressCode.Waterfront, "the player's denim jacket"), (await log.GetOpenAsync(save.Id))!.Outfit);
+
+        await log.SetOutfitAsync(id, new Outfit(DressCode.Waterfront));
+        Assert.Equal(new Outfit(DressCode.Waterfront), (await log.ListAsync(save.Id)).Single().Outfit);
     }
 
     [Fact]

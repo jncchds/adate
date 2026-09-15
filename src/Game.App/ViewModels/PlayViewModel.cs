@@ -1044,7 +1044,7 @@ public sealed partial class PlayViewModel : PageViewModel
     /// <summary>A different expression in the answer brings the person's picture for it.</summary>
     private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
     {
-        if (IsPhone || result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
+        if (IsPhone || result.View.CharacterId is null || _view is null || (result.View.Expression == _view.Expression && !result.Redressed))
         {
             return;
         }
