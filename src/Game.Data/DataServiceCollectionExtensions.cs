@@ -22,6 +22,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<StoryStateRepository>();
         services.AddSingleton<MemoryRepository>();
         services.AddSingleton<SceneLogRepository>();
+        services.AddSingleton<ThreadRepository>();
 
         return services;
     }

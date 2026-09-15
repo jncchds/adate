@@ -21,13 +21,17 @@ public sealed record SceneResponse(
     IReadOnlyList<SceneResponsePlace>? Places = null,
     string? Summary = null,
     IReadOnlyList<string>? Tags = null,
-    IReadOnlyList<SceneResponseChoice>? Choices = null);
+    IReadOnlyList<SceneResponseChoice>? Choices = null,
+    IReadOnlyList<string>? Threads = null,
+    IReadOnlyList<long>? Resolved = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
 /// <param name="Rejections">Why each rejected attempt failed, in order; kept for the turn log.</param>
 /// <param name="Summary">One sentence to remember the scene by; null for the fallback.</param>
 /// <param name="Tags">Salience tags from <see cref="MemoryTags.All"/>.</param>
+/// <param name="Threads">New loose ends the scene left open; null when threads are off.</param>
+/// <param name="Resolved">Loose ends from the packet the scene settled.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -38,13 +42,16 @@ public sealed record WrittenScene(
     IReadOnlyList<string> Rejections,
     string? Summary = null,
     IReadOnlyList<string>? Tags = null,
-    IReadOnlyList<ProposedChoice>? Choices = null);
+    IReadOnlyList<ProposedChoice>? Choices = null,
+    IReadOnlyList<string>? Threads = null,
+    IReadOnlyList<long>? Resolved = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
 /// it against the state it owns, optionally asks the judge about the prose, and retries with the
 /// reasons. After the retries run out, the encounter's authored text is used, so the game never waits
-/// on or trusts a bad answer.
+/// on or trusts a bad answer. With <see cref="LlmOptions.TwoPass"/>, the prose is written in plain text first
+/// and its data read out of it in a second call.
 /// </summary>
 public sealed class SceneWriter(
     ILlmClient llm,
@@ -59,6 +66,15 @@ public sealed class SceneWriter(
         "You write single scenes for a first-person dating sim. You are given the situation, who is " +
         "present, what each of them knows, and what must happen. Write only that scene, stay inside " +
         "what you are told, and answer with JSON matching the schema.";
+
+    public const string ProseSystemPrompt =
+        "You write single scenes for a first-person dating sim. You are given the situation, who is " +
+        "present, what each of them knows, and what must happen. Write only that scene, stay inside " +
+        "what you are told, and answer with the scene's prose alone.";
+
+    public const string ExtractSystemPrompt =
+        "You read a scene of a dating sim that has already been written, and fill in its data from what it says. " +
+        "Answer with JSON matching the schema.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -95,8 +111,10 @@ public sealed class SceneWriter(
             return Fallback(fallbackText, 0, []);
         }
 
-        var request = ScenePacketBuilder.Render(packet);
-        var schema = Schema(packet);
+        var twoPass = settings.TwoPass;
+        var request = ScenePacketBuilder.Render(packet, twoPass ? ScenePart.Prose : ScenePart.All);
+        var extractRequest = twoPass ? ScenePacketBuilder.Render(packet, ScenePart.Extract) : "";
+        var schema = Schema(packet, withText: !twoPass);
         var rejections = new List<string>();
         IReadOnlyList<string> lastReasons = [];
         var attempts = 0;
@@ -104,15 +122,26 @@ public sealed class SceneWriter(
         for (var attempt = 0; attempt <= settings.MaxRetries; attempt++)
         {
             attempts++;
-            var user = lastReasons.Count == 0
-                ? request
-                : request + "\n\n## Your previous answer was rejected\n" + string.Join("\n", lastReasons.Select(r => "- " + r));
+            var feedback = lastReasons.Count == 0
+                ? ""
+                : "\n\n## Your previous answer was rejected\n" + string.Join("\n", lastReasons.Select(r => "- " + r));
 
             string raw;
+            string? prose = null;
             try
             {
                 var maxTokens = NarrationLanguage.IsEnglish(packet.Language) ? MaxTokens : MaxTokensOtherLanguages;
-                raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "scene", schema, maxTokens), ct).ConfigureAwait(false);
+                if (twoPass)
+                {
+                    prose = (await llm.CompleteTextAsync(new LlmRequest(ProseSystemPrompt, request + feedback, "scene-prose", new JsonObject(), maxTokens), ct)
+                        .ConfigureAwait(false)).Trim();
+                    raw = await llm.CompleteJsonAsync(
+                        new LlmRequest(ExtractSystemPrompt, extractRequest + "\n## The scene as written\n" + prose, "scene", schema, maxTokens), ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, request + feedback, "scene", schema, maxTokens), ct).ConfigureAwait(false);
+                }
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -127,6 +156,10 @@ public sealed class SceneWriter(
             try
             {
                 response = JsonSerializer.Deserialize<SceneResponse>(raw, Json);
+                if (response is not null && prose is not null)
+                {
+                    response = response with { Text = prose };
+                }
             }
             catch (JsonException ex)
             {
@@ -182,7 +215,9 @@ public sealed class SceneWriter(
                         rejections,
                         string.IsNullOrWhiteSpace(response.Summary) ? null : response.Summary.Trim(),
                         [.. (response.Tags ?? []).Where(t => MemoryTags.All.Contains(t, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal)],
-                        choices);
+                        choices,
+                        packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
+                        Settled(packet, response.Resolved));
                 }
 
                 lastReasons = reasons;
@@ -194,84 +229,114 @@ public sealed class SceneWriter(
         return Fallback(fallbackText, attempts, rejections);
     }
 
+    /// <summary>The loose ends an answer says it settled, among those the packet listed.</summary>
+    internal static IReadOnlyList<long> Settled(ScenePacket packet, IReadOnlyList<long>? resolved) =>
+        packet.LooseEnds is not { } listed
+            ? []
+            : [.. (resolved ?? []).Where(id => listed.Any(t => t.Id == id)).Distinct()];
+
     /// <summary>The answer schema, with the pack's expressions, the predicate list and the place types as enums.</summary>
-    public JsonObject Schema(ScenePacket packet)
+    /// <param name="withText">False when the prose was written separately, and only its data is asked for.</param>
+    public JsonObject Schema(ScenePacket packet, bool withText = true)
     {
         ArgumentNullException.ThrowIfNull(packet);
 
         static JsonArray Strings(IEnumerable<string> values) => new([.. values.Select(v => (JsonNode)JsonValue.Create(v)!)]);
 
+        var properties = new JsonObject
+        {
+            ["text"] = new JsonObject { ["type"] = "string" },
+            ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
+            ["facts"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["subject"] = new JsonObject { ["type"] = "string" },
+                        ["predicate"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.Predicates.Select(p => p.Id)) },
+                        ["object"] = new JsonObject { ["type"] = "string" },
+                        ["level"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Established", "Claimed"]) },
+                    },
+                    ["required"] = Strings(["subject", "predicate", "object", "level"]),
+                    ["additionalProperties"] = false,
+                },
+            },
+            ["choices"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["text"] = new JsonObject { ["type"] = "string" },
+                        ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                    },
+                    ["required"] = Strings(["text", "tags"]),
+                    ["additionalProperties"] = false,
+                },
+            },
+            ["summary"] = new JsonObject { ["type"] = "string" },
+            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(MemoryTags.All) } },
+            ["places"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
+                        ["name"] = new JsonObject { ["type"] = "string" },
+                        // Detail ids as an enum: in other languages Gemma translated them ("кадки с растениями" for
+                        // planters) even when told not to. Whether a detail fits the type is still checked below.
+                        ["details"] = new JsonObject
+                        {
+                            ["type"] = "array",
+                            ["items"] = new JsonObject
+                            {
+                                ["type"] = "string",
+                                ["enum"] = Strings(placeTypes.All().SelectMany(t => t.Details ?? []).Select(d => d.Id).Distinct(StringComparer.Ordinal)),
+                            },
+                        },
+                    },
+                    ["required"] = Strings(["type", "name", "details"]),
+                    ["additionalProperties"] = false,
+                },
+            },
+        };
+
+        List<string> required = ["text", "expression", "facts", "places", "summary", "tags", "choices"];
+
+        if (packet.LooseEnds is not null)
+        {
+            ThreadProperties(properties);
+            required.AddRange(["threads", "resolved"]);
+        }
+
+        if (!withText)
+        {
+            properties.Remove("text");
+            required.Remove("text");
+        }
+
         return new JsonObject
         {
             ["type"] = "object",
-            ["properties"] = new JsonObject
-            {
-                ["text"] = new JsonObject { ["type"] = "string" },
-                ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
-                ["facts"] = new JsonObject
-                {
-                    ["type"] = "array",
-                    ["items"] = new JsonObject
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new JsonObject
-                        {
-                            ["subject"] = new JsonObject { ["type"] = "string" },
-                            ["predicate"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.Predicates.Select(p => p.Id)) },
-                            ["object"] = new JsonObject { ["type"] = "string" },
-                            ["level"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Established", "Claimed"]) },
-                        },
-                        ["required"] = Strings(["subject", "predicate", "object", "level"]),
-                        ["additionalProperties"] = false,
-                    },
-                },
-                ["choices"] = new JsonObject
-                {
-                    ["type"] = "array",
-                    ["items"] = new JsonObject
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new JsonObject
-                        {
-                            ["text"] = new JsonObject { ["type"] = "string" },
-                            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
-                        },
-                        ["required"] = Strings(["text", "tags"]),
-                        ["additionalProperties"] = false,
-                    },
-                },
-                ["summary"] = new JsonObject { ["type"] = "string" },
-                ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(MemoryTags.All) } },
-                ["places"] = new JsonObject
-                {
-                    ["type"] = "array",
-                    ["items"] = new JsonObject
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new JsonObject
-                        {
-                            ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
-                            ["name"] = new JsonObject { ["type"] = "string" },
-                            // Detail ids as an enum: in other languages Gemma translated them ("кадки с растениями" for
-                            // planters) even when told not to. Whether a detail fits the type is still checked below.
-                            ["details"] = new JsonObject
-                            {
-                                ["type"] = "array",
-                                ["items"] = new JsonObject
-                                {
-                                    ["type"] = "string",
-                                    ["enum"] = Strings(placeTypes.All().SelectMany(t => t.Details ?? []).Select(d => d.Id).Distinct(StringComparer.Ordinal)),
-                                },
-                            },
-                        },
-                        ["required"] = Strings(["type", "name", "details"]),
-                        ["additionalProperties"] = false,
-                    },
-                },
-            },
-            ["required"] = Strings(["text", "expression", "facts", "places", "summary", "tags", "choices"]),
+            ["properties"] = properties,
+            ["required"] = Strings(required),
             ["additionalProperties"] = false,
         };
+    }
+
+    /// <summary>The threads and resolved fields, shared with the reaction writer's schema.</summary>
+    internal static void ThreadProperties(JsonObject properties)
+    {
+        properties["threads"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } };
+        properties["resolved"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "integer" } };
     }
 
     /// <summary>Two or three distinct replies, short, each carrying at least one tag the story can score.</summary>

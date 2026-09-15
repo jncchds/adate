@@ -44,4 +44,22 @@ public sealed class LlmOptions
 
     /// <summary>Whether a second, short call reads each scene's prose against the facts that cannot change.</summary>
     public bool UseJudge { get; set; } = true;
+
+    /// <summary>
+    /// Writes a scene or reaction's prose in one plain-text call and reads its data (facts, choices, tags) out in a
+    /// second, so the prose is not written under the schema.
+    /// </summary>
+    public bool TwoPass { get; set; }
+
+    /// <summary>Gives each love interest a written way of talking, generated once per person, and puts it in every packet.</summary>
+    public bool Voices { get; set; }
+
+    /// <summary>Adds one small happening from content to ordinary scenes, so there is something going on to write about.</summary>
+    public bool Happenings { get; set; }
+
+    /// <summary>Keeps the loose ends scenes leave open, and hands the open ones back to later scenes.</summary>
+    public bool Threads { get; set; }
+
+    /// <summary>Asks for proposed replies that differ in kind and pick up what the player knows.</summary>
+    public bool VariedChoices { get; set; }
 }

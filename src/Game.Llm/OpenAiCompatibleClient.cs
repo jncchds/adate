@@ -13,7 +13,11 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
 {
     public const string HttpClientName = "llm";
 
-    public async Task<string> CompleteJsonAsync(LlmRequest request, CancellationToken ct = default)
+    public Task<string> CompleteJsonAsync(LlmRequest request, CancellationToken ct = default) => CompleteAsync(request, json: true, ct);
+
+    public Task<string> CompleteTextAsync(LlmRequest request, CancellationToken ct = default) => CompleteAsync(request, json: false, ct);
+
+    private async Task<string> CompleteAsync(LlmRequest request, bool json, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -25,7 +29,11 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
             ["messages"] = new JsonArray(
                 new JsonObject { ["role"] = "system", ["content"] = request.System },
                 new JsonObject { ["role"] = "user", ["content"] = request.User }),
-            ["response_format"] = new JsonObject
+        };
+
+        if (json)
+        {
+            body["response_format"] = new JsonObject
             {
                 ["type"] = "json_schema",
                 ["json_schema"] = new JsonObject
@@ -34,8 +42,8 @@ public sealed class OpenAiCompatibleClient(HttpClient http, IGpuLease lease, IOp
                     ["strict"] = true,
                     ["schema"] = request.Schema.DeepClone(),
                 },
-            },
-        };
+            };
+        }
 
         if (request.MaxTokens is { } maxTokens)
         {

@@ -305,6 +305,30 @@ public sealed class StoryStateRepository(Database database)
         return (await GetProfileAsync(characterId, ct).ConfigureAwait(false))!;
     }
 
+    /// <summary>How a love interest talks (migration 012), or null before it is written.</summary>
+    public async Task<string?> GetVoiceAsync(Guid characterId, CancellationToken ct = default)
+    {
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "SELECT voice FROM character WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", characterId.ToString());
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
+    }
+
+    public async Task SetVoiceAsync(Guid characterId, string voice, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(voice);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = "UPDATE character SET voice = $voice WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", characterId.ToString());
+        command.Parameters.AddWithValue("$voice", voice);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     // -------------------------------------------------------------------- schedules
 
     public async Task SaveScheduleAsync(SaveId saveId, CharacterSchedule schedule, CancellationToken ct = default)

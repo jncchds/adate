@@ -51,6 +51,29 @@ public class ReactionWriterTests
         $$"""{ "text": "{{text}}", "expression": "{{expression}}", "tags": {{tags}} }""";
 
     [Fact]
+    public async Task Two_pass_reads_the_data_out_of_prose_written_first()
+    {
+        var llm = new FakeLlm(
+            () => "Maya laughs and shakes her head.",
+            () => """{ "expression": "smile", "tags": ["humour"], "meet": null, "numbers": false, "ends": true, "choices": [], "threads": ["Maya wants to hear how the report went."], "resolved": [3, 99] }""");
+        var writer = new ReactionWriter(llm, Story, Cast, Options.Create(new LlmOptions { Enabled = true, MaxRetries = 2, TwoPass = true }));
+
+        var reaction = await writer.WriteAsync(
+            Packet() with { LooseEnds = [new PacketThread(3, "Maya asked about the report.", 5)] }, "Maya waves.", "Tell her a joke", null, "Fallback.");
+
+        Assert.False(reaction.Fallback);
+        Assert.Equal("Maya laughs and shakes her head.", reaction.Text);
+        Assert.Equal(["humour"], reaction.Tags);
+        Assert.Equal(["Maya wants to hear how the report went."], reaction.Threads);
+        Assert.Equal([3L], reaction.Resolved);
+        Assert.Contains("prose only", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.DoesNotContain("- numbers:", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("Maya laughs and shakes her head.", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.Contains("- numbers:", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.False(llm.Requests[1].Schema["properties"]!.AsObject().ContainsKey("text"));
+    }
+
+    [Fact]
     public async Task In_another_language_the_judge_sends_back_a_reaction_that_adds_player_actions()
     {
         var llm = new FakeLlm(

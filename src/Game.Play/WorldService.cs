@@ -134,6 +134,7 @@ public sealed class WorldService(
     GameStateRepository state,
     StoryStateRepository story,
     SceneLogRepository sceneLog,
+    ThreadRepository threads,
     Game.Core.Content.ILocationCatalog placeTypes,
     ISettingCatalog settings,
     IEncounterCatalog encounters,
@@ -142,10 +143,13 @@ public sealed class WorldService(
     RouteContent routes,
     EndingContent endingContent,
     WeatherContent weatherContent,
+    HappeningContent happenings,
     SceneWriter sceneWriter,
     ReactionWriter reactionWriter,
     EpilogueWriter epilogueWriter,
     BibleWriter bibleWriter,
+    VoiceWriter voiceWriter,
+    ThreadWriter threadWriter,
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
     IEmbeddingClient embeddings,
@@ -678,7 +682,8 @@ public sealed class WorldService(
             var schedule = ScheduleFor(saveId, play.Setting, li, flags);
             var now = WorldMoves.Where(saveId.ToString(), schedule, [.. play.Setting.Places.Select(p => p.Id)], play.Clock);
             people.Add($"  usually at: {schedule.Where(play.Clock) ?? "-"}   now at: {now ?? "-"}   met: {EncounterEvaluator.Holds(flags, $"{li.Key}.met")}   left: {HasLeft(flags, li)}");
-            people.Add($"  rapport now: {PlayerLife.Rapport(li.Profile.WeightOf, PlayerLife.Traits(flags), storyContent.Rules)}");
+            people.Add($"  voice: {await story.GetVoiceAsync(li.Id, ct).ConfigureAwait(false) ?? "-"}");
+            people.Add($"  rapport now:{PlayerLife.Rapport(li.Profile.WeightOf, PlayerLife.Traits(flags), storyContent.Rules)}");
         }
 
         sections.Add(new("People", people));
@@ -689,6 +694,11 @@ public sealed class WorldService(
             .. await PlayerLifeLinesAsync(saveId, play.Setting, play.KnownPlaces, "the player", ct).ConfigureAwait(false),
         ]));
         sections.Add(new("Hints", play.Hints));
+        sections.Add(new("Loose ends",
+        [
+            .. (await threads.ListAsync(saveId, openOnly: false, ct).ConfigureAwait(false)).Select(t =>
+                $"#{t.Id} day {t.OpenedDay}{(t.ClosedDay is { } closed ? $", settled day {closed}" : "")} about {NameOf(t.CharacterId)}: {t.Text}"),
+        ]));
         sections.Add(new("Flags", [.. flags.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => $"{f.Key} = {f.Value}")]));
         sections.Add(new("Promises",
         [
@@ -1101,6 +1111,133 @@ public sealed class WorldService(
             return presented;
         }
 
+        var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct).ConfigureAwait(false);
+        var (known, packet, world, memoryLines) = (built.Known, built.Packet, built.World, built.MemoryLines);
+        var presentIds = packet.Present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+        var day = outcome.VisitedAt.Day;
+
+        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], packet.OffersChoices, ct).ConfigureAwait(false);
+
+        if (!written.Fallback && packet.LooseEnds is not null)
+        {
+            await KeepThreadsAsync(saveId, Owner(built.Cast, outcome.With)?.Id, written.Threads, written.Resolved, day, ct).ConfigureAwait(false);
+        }
+
+        foreach (var fact in written.Facts)
+        {
+            await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
+        }
+
+        await StoreWrittenSceneAsync(saveId, outcome, written, presentIds, ct).ConfigureAwait(false);
+
+        await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
+        {
+            outcome.EncounterId,
+            Packet = ScenePacketBuilder.Render(packet),
+            written.Text,
+            written.Expression,
+            written.Summary,
+            written.Tags,
+            Memories = memoryLines,
+            Places = written.Places.Select(p => $"{p.Type}: {p.Name}"),
+            written.Choices,
+            written.Threads,
+            written.Resolved,
+            written.Attempts,
+            written.Rejections,
+        }, ct).ConfigureAwait(false);
+
+        // A scene without authored choices waits for the player: a proposed reply or their own words, or Continue
+        // when nothing was proposed (user feedback: no options should still leave the text box).
+        IReadOnlyList<ProposedChoice> choices = !written.Fallback && packet.OffersChoices ? written.Choices ?? [] : [];
+        if (packet.OffersChoices)
+        {
+            await state.SavePendingSceneAsync(
+                saveId,
+                new PendingScene(outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, outcome.With, written.Text, choices),
+                ct).ConfigureAwait(false);
+        }
+
+        var result = presented with
+        {
+            Text = written.Text,
+            Expression = presented.Expression is null
+                ? null
+                : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
+            Choices = choices,
+            Open = packet.OffersChoices,
+        };
+
+        // Marked written last, so an interrupted scene is written again rather than left half-done.
+        if (sceneId is { } writtenId)
+        {
+            await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, ct).ConfigureAwait(false);
+        }
+
+        return result;
+    }
+
+    /// <summary>The scene's new places and its memory, kept once it is written.</summary>
+    private async Task StoreWrittenSceneAsync(SaveId saveId, TurnOutcome outcome, WrittenScene written, IReadOnlyCollection<string> presentIds, CancellationToken ct)
+    {
+        var day = outcome.VisitedAt.Day;
+
+        // A named place the setting already has but the player did not know is revealed, not
+        // duplicated; anything else becomes a story place (plan §10).
+        if (written.Places.Count > 0)
+        {
+            var all = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
+            var ids = all.Select(p => p.Id).ToList();
+
+            foreach (var proposal in written.Places)
+            {
+                if (all.FirstOrDefault(p => string.Equals(p.Name, proposal.Name, StringComparison.OrdinalIgnoreCase)) is { } existing)
+                {
+                    await places.MarkKnownAsync(saveId, existing.Id, outcome.VisitedAt.Day, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                var record = PlaceProposals.ToRecord(saveId, proposal, ids, outcome.VisitedAt.Day);
+                ids.Add(record.Id);
+                await places.AddAsync([record], ct).ConfigureAwait(false);
+            }
+        }
+
+        if (!written.Fallback && written.Summary is { } summary)
+        {
+            await memoryStore.AddAsync(
+                saveId,
+                new MemoryEntry(0, MemoryScope.Scene, day, summary, [.. presentIds], written.Tags ?? [], await EmbedAsync(summary, ct).ConfigureAwait(false)),
+                ct).ConfigureAwait(false);
+
+            foreach (var group in MemoryRetrieval.CompactionGroups(await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false), day))
+            {
+                var folded = await compactor.SummariseAsync(group.Members, useModel: true, ct).ConfigureAwait(false);
+                var people = group.Members.SelectMany(m => m.People).Distinct(StringComparer.Ordinal).ToList();
+
+                await memoryStore.CompactAsync(
+                    saveId,
+                    new MemoryEntry(0, group.Into, group.Day, folded, people, [], await EmbedAsync(folded, ct).ConfigureAwait(false)),
+                    [.. group.Members.Select(m => m.Id)],
+                    ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <param name="Known">Places the player knows.</param>
+    /// <param name="MemoryLines">What the packet remembers, kept for the turn log.</param>
+    private sealed record BuiltScene(IReadOnlyList<LoveInterest> Cast, IReadOnlyList<PlaceRecord> Known, ScenePacket Packet, SceneWorld World, List<string> MemoryLines);
+
+    /// <summary>
+    /// Everything the writer is given for a turn's scene, with the quality material that is switched on: each
+    /// person's voice, a small happening at the place, and the loose ends to pick up.
+    /// </summary>
+    /// <param name="looseEndsOverride">Loose ends to use instead of the save's own, for replaying a past scene.</param>
+    private async Task<BuiltScene> BuildScenePacketAsync(
+        SaveId saveId, TurnOutcome outcome, SceneView presented, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct)
+    {
+        var quality = llmOptions.Value;
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
         var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
         await EnsureBibleAsync(saveId, setting, cast, ct).ConfigureAwait(false);
@@ -1109,6 +1246,7 @@ public sealed class WorldService(
         var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
         var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
         var place = known.FirstOrDefault(p => p.Id == outcome.PlaceId);
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
 
         var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var duty = outcome.Duty;
@@ -1123,10 +1261,10 @@ public sealed class WorldService(
                 li.Name,
                 [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
                 relationship.Stage,
-                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null));
+                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
+                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null));
         }
 
-        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
@@ -1188,7 +1326,13 @@ public sealed class WorldService(
             PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
             Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
             PlayerLife: await PlayerLifeLinesAsync(saveId, setting, known, names.Player, ct).ConfigureAwait(false),
-            Duty: duty);
+            Duty: duty,
+            LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, day, looseEndsOverride, ct).ConfigureAwait(false) : null,
+            Happening: quality.Happenings && place is not null && outcome.EncounterId is JsonEncounterCatalog.QuietAloneId
+                or JsonEncounterCatalog.QuietCompanyId or JsonEncounterCatalog.ChanceMeetingId or JsonEncounterCatalog.PromisedMeetingId or JsonEncounterCatalog.InitiativeId
+                ? happenings.Pick(saveId.ToString(), place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt)
+                : null,
+            VariedChoices: quality.VariedChoices);
 
         var world = new SceneWorld(
             facts,
@@ -1197,97 +1341,166 @@ public sealed class WorldService(
             stages,
             Summoned: presentIds);
 
-        var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], packet.OffersChoices, ct).ConfigureAwait(false);
+        return new BuiltScene(cast, known, packet, world, memoryLines);
+    }
 
-        foreach (var fact in written.Facts)
+    /// <summary>
+    /// How <paramref name="li"/> talks, writing the voices of everyone in the cast who has none yet, in one call, the first
+    /// time one is needed. Null when no voice could be written.
+    /// </summary>
+    private async Task<string?> VoiceOfAsync(
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, LoveInterest li, IReadOnlyList<KnownFact> facts, CancellationToken ct)
+    {
+        if (await story.GetVoiceAsync(li.Id, ct).ConfigureAwait(false) is { } voice)
         {
-            await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
+            return voice;
         }
 
-        // A named place the setting already has but the player did not know is revealed, not
-        // duplicated; anything else becomes a story place (plan §10).
-        if (written.Places.Count > 0)
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var people = new List<VoicePerson>();
+        foreach (var member in cast)
         {
-            var all = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
-            var ids = all.Select(p => p.Id).ToList();
-
-            foreach (var proposal in written.Places)
+            if (await story.GetVoiceAsync(member.Id, ct).ConfigureAwait(false) is not null)
             {
-                if (all.FirstOrDefault(p => string.Equals(p.Name, proposal.Name, StringComparison.OrdinalIgnoreCase)) is { } existing)
-                {
-                    await places.MarkKnownAsync(saveId, existing.Id, outcome.VisitedAt.Day, ct).ConfigureAwait(false);
-                    continue;
-                }
+                continue;
+            }
 
-                var record = PlaceProposals.ToRecord(saveId, proposal, ids, outcome.VisitedAt.Day);
-                ids.Add(record.Id);
-                await places.AddAsync([record], ct).ConfigureAwait(false);
+            var id = member.Id.ToString();
+            people.Add(new VoicePerson(
+                id,
+                member.Name,
+                facts.FirstOrDefault(f => f.Fact.Subject == id && f.Fact.Predicate == "works-as")?.Fact.Object ?? "something they rarely talk about",
+                [.. member.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
+                [.. facts.Where(f => f.Fact.Subject == id && f.Fact.Predicate == "likes" && f.Fact.Level is FactLevel.Core).Select(f => f.Fact.Object)]));
+        }
+
+        foreach (var (id, written) in await voiceWriter.WriteAsync(setting.DisplayName, setting.Tone, people, ct).ConfigureAwait(false))
+        {
+            await story.SetVoiceAsync(Guid.Parse(id), written, ct).ConfigureAwait(false);
+        }
+
+        return await story.GetVoiceAsync(li.Id, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The loose ends a scene with <paramref name="presentIds"/> picks up: the save's open ones, read once from its recent
+    /// scene log the first time, or the ones given for a replay.
+    /// </summary>
+    private async Task<IReadOnlyList<PacketThread>> LooseEndsAsync(
+        SaveId saveId, IReadOnlyList<LoveInterest> cast, IReadOnlyCollection<string> presentIds, int day, IReadOnlyList<StoryThread>? given, CancellationToken ct)
+    {
+        if (given is null && await threads.MarkSeededAsync(saveId, ct).ConfigureAwait(false))
+        {
+            foreach (var seeded in await ReadLooseEndsAsync(saveId, cast, beforeSceneId: null, ct).ConfigureAwait(false))
+            {
+                await threads.AddAsync(saveId, string.IsNullOrEmpty(seeded.About) ? null : seeded.About, seeded.Text, day, ct).ConfigureAwait(false);
             }
         }
 
-        if (!written.Fallback && written.Summary is { } summary)
+        var open = given ?? await threads.ListAsync(saveId, ct: ct).ConfigureAwait(false);
+        return [.. StoryThreads.ForScene(open, presentIds, day).Select(t => new PacketThread(t.Id, t.Text, t.OpenedDay))];
+    }
+
+    /// <summary>The loose ends the last few written scenes (before <paramref name="beforeSceneId"/>, when given) left open, read by the model.</summary>
+    private async Task<IReadOnlyList<SeededThread>> ReadLooseEndsAsync(SaveId saveId, IReadOnlyList<LoveInterest> cast, long? beforeSceneId, CancellationToken ct)
+    {
+        const int Scenes = 6;
+        const int PerScene = 2500;
+
+        var recent = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
+            .Where(s => s.Written && (beforeSceneId is null || s.Id < beforeSceneId))
+            .TakeLast(Scenes)
+            .Select(s => $"Day {s.Clock.Day}, {s.Clock.Slot}, at {s.PlaceId}:\n{s.Text}" + string.Concat(s.Exchanges.Select(e => $"\n\nYou: {e.Reply}\n\n{e.Reaction}")))
+            .Select(text => text.Length > PerScene ? text[..PerScene] : text)
+            .ToList();
+
+        return await threadWriter.FromHistoryAsync(recent, [.. cast.Select(li => (li.Id.ToString(), li.Name))], ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Keeps what an answer opened and settles what it said it settled.</summary>
+    private async Task KeepThreadsAsync(SaveId saveId, Guid? about, IReadOnlyList<string>? opened, IReadOnlyList<long>? settled, int day, CancellationToken ct)
+    {
+        if (settled is { Count: > 0 })
         {
-            await memoryStore.AddAsync(
-                saveId,
-                new MemoryEntry(0, MemoryScope.Scene, day, summary, [.. presentIds], written.Tags ?? [], await EmbedAsync(summary, ct).ConfigureAwait(false)),
-                ct).ConfigureAwait(false);
-
-            foreach (var group in MemoryRetrieval.CompactionGroups(await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false), day))
-            {
-                var folded = await compactor.SummariseAsync(group.Members, useModel: true, ct).ConfigureAwait(false);
-                var people = group.Members.SelectMany(m => m.People).Distinct(StringComparer.Ordinal).ToList();
-
-                await memoryStore.CompactAsync(
-                    saveId,
-                    new MemoryEntry(0, group.Into, group.Day, folded, people, [], await EmbedAsync(folded, ct).ConfigureAwait(false)),
-                    [.. group.Members.Select(m => m.Id)],
-                    ct).ConfigureAwait(false);
-            }
+            await threads.CloseAsync(saveId, settled, day, ct).ConfigureAwait(false);
         }
 
-        await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
+        foreach (var text in opened ?? [])
         {
-            outcome.EncounterId,
-            Packet = ScenePacketBuilder.Render(packet),
-            written.Text,
-            written.Expression,
-            written.Summary,
-            written.Tags,
-            Memories = memoryLines,
-            Places = written.Places.Select(p => $"{p.Type}: {p.Name}"),
-            written.Choices,
-            written.Attempts,
-            written.Rejections,
-        }, ct).ConfigureAwait(false);
+            await threads.AddAsync(saveId, about?.ToString(), text, day, ct).ConfigureAwait(false);
+        }
+    }
 
-        // A scene without authored choices waits for the player: a proposed reply or their own words, or Continue
-        // when nothing was proposed (user feedback: no options should still leave the text box).
-        IReadOnlyList<ProposedChoice> choices = !written.Fallback && packet.OffersChoices ? written.Choices ?? [] : [];
-        if (packet.OffersChoices)
+    /// <summary>A past scene written again with the current settings, stored nowhere: for comparing ways of writing.</summary>
+    /// <param name="Packet">The packet as the writer saw it.</param>
+    public sealed record ReplayedScene(string Packet, WrittenScene Written, double Seconds);
+
+    /// <summary>A past scene's first reply answered again with the current settings, stored nowhere.</summary>
+    public sealed record ReplayedReaction(string SceneText, string Reply, string Packet, WrittenReaction Written, double Seconds);
+
+    /// <summary>Makes sure a save has what replays need written once and kept: its story bible, and voices when they are on.</summary>
+    public async Task PrepareReplayAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        await EnsureBibleAsync(saveId, setting, cast, ct).ConfigureAwait(false);
+
+        if (cast.Count > 0)
         {
-            await state.SavePendingSceneAsync(
-                saveId,
-                new PendingScene(outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, outcome.With, written.Text, choices),
-                ct).ConfigureAwait(false);
+            await VoiceOfAsync(saveId, setting, cast, cast[0], await story.GetFactsAsync(saveId, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The loose ends open just before a past scene, read from the scenes before it, numbered from 1; for replays.</summary>
+    public async Task<IReadOnlyList<StoryThread>> LooseEndsBeforeAsync(SaveId saveId, long sceneId, CancellationToken ct = default)
+    {
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var scene = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == sceneId)
+            ?? throw new InvalidOperationException($"Save '{saveId}' has no scene {sceneId}.");
+
+        return
+        [
+            .. (await ReadLooseEndsAsync(saveId, cast, sceneId, ct).ConfigureAwait(false))
+                .Select((t, i) => new StoryThread(i + 1, string.IsNullOrEmpty(t.About) ? null : t.About, t.Text, scene.Clock.Day, null)),
+        ];
+    }
+
+    /// <summary>Writes a past scene again with the current settings and returns it, storing nothing.</summary>
+    public async Task<ReplayedScene> ReplaySceneAsync(SaveId saveId, long sceneId, IReadOnlyList<StoryThread>? looseEnds, CancellationToken ct = default)
+    {
+        var stored = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == sceneId)
+            ?? throw new InvalidOperationException($"Save '{saveId}' has no scene {sceneId}.");
+        var outcome = TurnOutcomeJson.Deserialize(stored.OutcomeJson);
+        var presented = await PresentAsync(saveId, outcome, ct).ConfigureAwait(false);
+        var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEnds ?? [], ct).ConfigureAwait(false);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var written = await sceneWriter.WriteAsync(built.Packet, built.World, outcome.Text, [.. built.Known.Select(p => p.Name)], built.Packet.OffersChoices, ct)
+            .ConfigureAwait(false);
+        return new ReplayedScene(ScenePacketBuilder.Render(built.Packet), written, watch.Elapsed.TotalSeconds);
+    }
+
+    /// <summary>Answers a past scene's first reply again with the current settings and returns it, storing nothing; null for a scene nobody replied to.</summary>
+    public async Task<ReplayedReaction?> ReplayReactionAsync(SaveId saveId, long sceneId, IReadOnlyList<StoryThread>? looseEnds, CancellationToken ct = default)
+    {
+        var stored = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == sceneId)
+            ?? throw new InvalidOperationException($"Save '{saveId}' has no scene {sceneId}.");
+        if (stored.Exchanges.Count == 0 || !stored.Written)
+        {
+            return null;
         }
 
-        var result = presented with
-        {
-            Text = written.Text,
-            Expression = presented.Expression is null
-                ? null
-                : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
-            Choices = choices,
-            Open = packet.OffersChoices,
-        };
+        var outcome = TurnOutcomeJson.Deserialize(stored.OutcomeJson);
+        var pending = new PendingScene(stored.Clock, stored.PlaceId, stored.EncounterId, outcome.With, stored.Text, []);
+        var built = await BuildReactionPacketAsync(saveId, pending, outcome.Duty, looseEnds ?? [], ct).ConfigureAwait(false);
+        var owner = Owner(built.Cast, pending.With);
+        var reply = stored.Exchanges[0].Reply;
 
-        // Marked written last, so an interrupted scene is written again rather than left half-done.
-        if (sceneId is { } writtenId)
-        {
-            await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, ct).ConfigureAwait(false);
-        }
-
-        return result;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var written = await reactionWriter.WriteAsync(
+            built.Packet, stored.Text, reply, null, $"{owner?.Name ?? "They"} takes that in.", 1, SceneConversation.MaxReplies, ct).ConfigureAwait(false);
+        return new ReplayedReaction(stored.Text, reply, ScenePacketBuilder.Render(built.Packet), written, watch.Elapsed.TotalSeconds);
     }
 
     /// <summary>
@@ -1339,53 +1552,12 @@ public sealed class WorldService(
         string? choicePopup,
         CancellationToken ct)
     {
-        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
-        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
-        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
-        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
-        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
-        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
-        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
-        var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
-
-        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var duty = openScene is null ? null : TurnOutcomeJson.Deserialize(openScene.OutcomeJson).Duty;
-        var presentPeople = cast.Where(li => scene.With.Contains(li.Ref)).ToList();
-        var present = new List<PacketPerson>();
-        var before = new Dictionary<Guid, RelationshipState>();
-        foreach (var li in presentPeople)
-        {
-            before[li.Id] = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
-            present.Add(new PacketPerson(
-                li.Id.ToString(),
-                li.Name,
-                [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
-                before[li.Id].Stage,
-                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null));
-        }
-
-        var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
-        var place = known.FirstOrDefault(p => p.Id == scene.PlaceId);
-        var packet = new ScenePacket(
-            setting.DisplayName,
-            setting.Tone,
-            scene.Clock,
-            scene.PlaceId,
-            place?.Name ?? scene.PlaceId,
-            names.Player,
-            present,
-            [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
-            [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
-            "The player has just replied; see below.",
-            ceiling,
-            [.. pack.Expressions.Keys],
-            KnownPlaces: [.. known.Select(p => p.Name)],
-            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
-            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
-            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
-            PlayerLife: await PlayerLifeLinesAsync(saveId, setting, known, names.Player, ct).ConfigureAwait(false),
-            Duty: duty);
+        var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct).ConfigureAwait(false);
+        var (setting, cast, flags, known, presentPeople, before, packet) =
+            (built.Setting, built.Cast, built.Flags, built.Known, built.PresentPeople, built.Before, built.Packet);
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
@@ -1416,6 +1588,11 @@ public sealed class WorldService(
         if (presentPeople.Count == 0)
         {
             PlayerLife.Show(toSet, flags, tags.Where(t => storyContent.Values.Desires.Any(d => d.Id == t)));
+        }
+
+        if (!reaction.Fallback && packet.LooseEnds is not null)
+        {
+            await KeepThreadsAsync(saveId, owner?.Id, reaction.Threads, reaction.Resolved, scene.Clock.Day, ct).ConfigureAwait(false);
         }
 
         await state.ResolvePendingSceneAsync(saveId, relationships, toSet, ct).ConfigureAwait(false);
@@ -1483,6 +1660,73 @@ public sealed class WorldService(
             transcript,
             next,
             stillOpen);
+    }
+
+    private sealed record BuiltReaction(
+        SettingDefinition Setting,
+        IReadOnlyList<LoveInterest> Cast,
+        IReadOnlyDictionary<string, string> Flags,
+        IReadOnlyList<PlaceRecord> Known,
+        List<LoveInterest> PresentPeople,
+        Dictionary<Guid, RelationshipState> Before,
+        ScenePacket Packet);
+
+    /// <summary>Everything the writer is given to answer a reply in a waiting scene, with the quality material that is switched on.</summary>
+    /// <param name="looseEndsOverride">Loose ends to use instead of the save's own, for replaying a past scene.</param>
+    private async Task<BuiltReaction> BuildReactionPacketAsync(
+        SaveId saveId, PendingScene scene, string? duty, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct)
+    {
+        var quality = llmOptions.Value;
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
+        var names = await NamesAsync(saveId, cast, ct).ConfigureAwait(false);
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+        var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
+        var ceiling = (await saves.ListAsync(ct).ConfigureAwait(false)).FirstOrDefault(s => s.Id == saveId)?.Ceiling ?? Ceiling.PG13;
+
+        var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
+        var presentPeople = cast.Where(li => scene.With.Contains(li.Ref)).ToList();
+        var present = new List<PacketPerson>();
+        var before = new Dictionary<Guid, RelationshipState>();
+        foreach (var li in presentPeople)
+        {
+            before[li.Id] = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
+            present.Add(new PacketPerson(
+                li.Id.ToString(),
+                li.Name,
+                [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
+                before[li.Id].Stage,
+                EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
+                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null));
+        }
+
+        var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var place = known.FirstOrDefault(p => p.Id == scene.PlaceId);
+        var packet = new ScenePacket(
+            setting.DisplayName,
+            setting.Tone,
+            scene.Clock,
+            scene.PlaceId,
+            place?.Name ?? scene.PlaceId,
+            names.Player,
+            present,
+            [.. facts.Where(f => f.Knowers.Contains(FactLedger.Player))],
+            [.. facts.Where(f => !f.Knowers.Contains(FactLedger.Player) && f.Knowers.Any(presentIds.Contains))],
+            "The player has just replied; see below.",
+            ceiling,
+            [.. pack.Expressions.Keys],
+            KnownPlaces: [.. known.Select(p => p.Name)],
+            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
+            PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
+            Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
+            PlayerLife: await PlayerLifeLinesAsync(saveId, setting, known, names.Player, ct).ConfigureAwait(false),
+            Duty: duty,
+            LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, scene.Clock.Day, looseEndsOverride, ct).ConfigureAwait(false) : null,
+            VariedChoices: quality.VariedChoices);
+
+        return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>

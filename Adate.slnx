@@ -4,6 +4,7 @@
     <Project Path="src/Game.Cli/Game.Cli.csproj" />
     <Project Path="src/Game.Core/Game.Core.csproj" />
     <Project Path="src/Game.Data/Game.Data.csproj" />
+    <Project Path="src/Game.Eval/Game.Eval.csproj" />
     <Project Path="src/Game.Desktop/Game.Desktop.csproj" />
     <Project Path="src/Game.Host/Game.Host.csproj" />
     <Project Path="src/Game.Imaging/Game.Imaging.csproj" />

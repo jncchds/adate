@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Replays past scenes with different ways of writing, on whichever model LM Studio serves, and has a model
+    grade the versions side by side. Output goes to eval/llm/out, which is not checked in.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Play\Game.Play.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

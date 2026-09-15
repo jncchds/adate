@@ -78,6 +78,39 @@ public class SceneWriterTests
         $$"""{ "text": "{{text}}", "expression": "{{expression}}", "facts": {{facts}}, "places": {{places}}, "summary": "Coffee with Rin.", "tags": {{tags}} }""";
 
     [Fact]
+    public async Task Two_pass_writes_the_prose_first_and_reads_its_data_out_of_it()
+    {
+        var llm = new FakeLlm(
+            () => "Rin waits by the window with two cups.",
+            () => Answer(text: "ignored").TrimEnd().TrimEnd('}') + """, "threads": ["Rin wants to show the player a record shop."], "resolved": [4, 42] }""");
+        var writer = new SceneWriter(llm, new SceneValidator(Story, Cast), Story, Cast, PlaceTypes, new SceneJudge(llm),
+            Options.Create(new LlmOptions { Enabled = true, MaxRetries = 2, UseJudge = false, TwoPass = true }));
+
+        var scene = await writer.WriteAsync(Packet() with { LooseEnds = [new PacketThread(4, "Rin promised a book.", 5)] }, World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal("Rin waits by the window with two cups.", scene.Text);
+        Assert.Equal("Coffee with Rin.", scene.Summary);
+        Assert.Equal(["Rin wants to show the player a record shop."], scene.Threads);
+        Assert.Equal([4L], scene.Resolved);
+        Assert.Contains("prose only", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("## The scene as written\nRin waits by the window with two cups.", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.False(llm.Requests[1].Schema["properties"]!.AsObject().ContainsKey("text"));
+        Assert.True(llm.Requests[1].Schema["properties"]!.AsObject().ContainsKey("threads"));
+    }
+
+    [Fact]
+    public async Task Without_threads_the_answer_is_not_asked_for_them()
+    {
+        var llm = new FakeLlm(() => Answer());
+
+        var scene = await Writer(llm).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.Null(scene.Threads);
+        Assert.False(llm.Requests[0].Schema["properties"]!.AsObject().ContainsKey("threads"));
+    }
+
+    [Fact]
     public async Task A_scene_keeps_its_summary_and_only_known_tags()
     {
         var scene = await Writer(new FakeLlm(() => Answer(tags: """["first", "made-up"]"""))).WriteAsync(Packet(), World(), "Placeholder.");

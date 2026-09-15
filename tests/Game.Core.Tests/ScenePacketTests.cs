@@ -34,6 +34,57 @@ public class ScenePacketTests
     }
 
     [Fact]
+    public void Two_pass_writing_splits_the_rules_between_the_prose_and_the_data_and_both_see_the_material()
+    {
+        var rin = Packet().Present[0] with { Voice = "Short sentences, never a question answered directly." };
+        var packet = Packet() with
+        {
+            Present = [rin],
+            OffersChoices = true,
+            LooseEnds = [new PacketThread(7, "Rin promised to lend the player a record.", 5)],
+            Happening = "The espresso machine has broken down.",
+            VariedChoices = true,
+        };
+
+        var all = ScenePacketBuilder.Render(packet);
+        var prose = ScenePacketBuilder.Render(packet, ScenePart.Prose);
+        var extract = ScenePacketBuilder.Render(packet, ScenePart.Extract);
+        var context = ScenePacketBuilder.Render(packet, ScenePart.Context);
+
+        Assert.Contains("prose only", prose, StringComparison.Ordinal);
+        Assert.Contains("Never say what the player does", prose, StringComparison.Ordinal);
+        Assert.DoesNotContain("- facts:", prose, StringComparison.Ordinal);
+        Assert.DoesNotContain("- threads:", prose, StringComparison.Ordinal);
+
+        Assert.Contains("already written", extract, StringComparison.Ordinal);
+        Assert.Contains("- facts:", extract, StringComparison.Ordinal);
+        Assert.Contains("- threads:", extract, StringComparison.Ordinal);
+        Assert.DoesNotContain("Never say what the player does", extract, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("## Rules", context, StringComparison.Ordinal);
+        Assert.Contains("different in kind", all, StringComparison.Ordinal);
+
+        Assert.All(new[] { all, prose, extract, context }, text =>
+        {
+            Assert.Contains("#7 (day 5): Rin promised to lend the player a record.", text, StringComparison.Ordinal);
+            Assert.Contains("Also going on here right now: The espresso machine has broken down.", text, StringComparison.Ordinal);
+            Assert.Contains("How Rin talks: Short sentences, never a question answered directly.", text, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Without_the_material_nothing_of_it_is_rendered()
+    {
+        var text = ScenePacketBuilder.Render(Packet() with { OffersChoices = true });
+
+        Assert.DoesNotContain("## Loose ends", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("- threads:", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Also going on", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("talks:", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("different in kind", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Alone_the_choices_are_things_to_do_here_and_a_shift_makes_the_scene_about_work()
     {
         var alone = ScenePacketBuilder.Render(Packet() with { Present = [], OffersChoices = true, Duty = "stock the shelves" });

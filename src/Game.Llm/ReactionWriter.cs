@@ -13,10 +13,14 @@ public sealed record ReactionResponse(
     ProposedMeeting? Meet = null,
     bool? Ends = null,
     IReadOnlyList<SceneResponseChoice>? Choices = null,
-    bool? Numbers = null);
+    bool? Numbers = null,
+    IReadOnlyList<string>? Threads = null,
+    IReadOnlyList<long>? Resolved = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
+/// <param name="Threads">New loose ends the reaction left open; null when threads are off.</param>
+/// <param name="Resolved">Loose ends from the packet the reaction settled.</param>
 public sealed record WrittenReaction(
     string Text,
     string? Expression,
@@ -27,12 +31,15 @@ public sealed record WrittenReaction(
     ProposedMeeting? Meet = null,
     bool Ends = true,
     IReadOnlyList<ProposedChoice>? Choices = null,
-    bool ExchangedNumbers = false);
+    bool ExchangedNumbers = false,
+    IReadOnlyList<string>? Threads = null,
+    IReadOnlyList<long>? Resolved = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
 /// the model also reads what the reply shows about the player, as tags C# then scores; unknown tags
 /// are dropped, never trusted. The reaction may repeat what the player did or said, and nothing more.
+/// With <see cref="LlmOptions.TwoPass"/>, the prose comes first in plain text and its data is read out of it.
 /// </summary>
 /// <param name="judge">Reads a reaction in another language for things the player did not choose; none in English, which has word checks.</param>
 public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastContent cast, IOptions<LlmOptions> options, SceneJudge? judge = null)
@@ -49,6 +56,14 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
     public const string SystemPrompt =
         "You continue one scene of a first-person dating sim after the player has replied. Write only how " +
         "the other people present react. Answer with JSON matching the schema.";
+
+    public const string ProseSystemPrompt =
+        "You continue one scene of a first-person dating sim after the player has replied. Write only how " +
+        "the other people present react, and answer with that prose alone.";
+
+    public const string ExtractSystemPrompt =
+        "You read the continuation of a dating sim scene that has already been written, and fill in its data from " +
+        "what it says. Answer with JSON matching the schema.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -75,15 +90,18 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
 
         // On their own, the player's words are something they do; what follows is how it goes, not anyone's reaction.
         var alone = packet.Present.Count == 0;
-        var request = ScenePacketBuilder.Render(packet)
-            + "\n## The scene so far\n" + sceneText
+        var situation = "\n## The scene so far\n" + sceneText
             + "\n\n## What the player does or says\n" + playerWords
-            + "\n\n## Now\n"
-            + (alone
+            + "\n\n## Now\n";
+
+        var proseRules =
+            (alone
                 ? "- Nobody the player knows is here. Write how it goes: what doing this is like here, and what the place, the weather and the people around do. One or two short paragraphs, in the second person as before. Invent nobody the player could get to know.\n"
                 : "- Write how the people present react: one or two short paragraphs, in the second person as before.\n")
-            + "- Take the player's reply exactly as written above. Add nothing else the player does, says, thinks or feels.\n"
-            + (chosenTags is not null
+            + "- Take the player's reply exactly as written above. Add nothing else the player does, says, thinks or feels.\n";
+
+        var fieldRules =
+            (chosenTags is not null
                 ? "- tags: an empty list.\n"
                 : alone
                     ? "- tags: the quality doing this shows about the player, from the desires in the schema's list; an empty list if none does.\n"
@@ -95,9 +113,15 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                   $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
                   "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n")
-            + Conversation(replyNumber, maxReplies, alone);
+            + Conversation(replyNumber, maxReplies, alone, packet.VariedChoices)
+            + (packet.LooseEnds is null ? "" : ScenePacketBuilder.ThreadRules + "\n");
 
-        var schema = Schema(packet);
+        var twoPass = settings.TwoPass;
+        var request = twoPass
+            ? ScenePacketBuilder.Render(packet, ScenePart.Prose) + situation + proseRules + "- Answer with the reaction's prose only: no notes, no lists, no JSON.\n"
+            : ScenePacketBuilder.Render(packet) + situation + proseRules + fieldRules;
+
+        var schema = Schema(packet, withText: !twoPass);
         var rejections = new List<string>();
         IReadOnlyList<string> lastReasons = [];
         var attempts = 0;
@@ -113,8 +137,23 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             try
             {
                 var maxTokens = NarrationLanguage.IsEnglish(packet.Language) ? MaxTokens : MaxTokensOtherLanguages;
-                var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
-                response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json);
+                if (twoPass)
+                {
+                    var prose = (await llm.CompleteTextAsync(new LlmRequest(ProseSystemPrompt, user, "reaction-prose", new JsonObject(), maxTokens), ct)
+                        .ConfigureAwait(false)).Trim();
+                    var extract = ScenePacketBuilder.Render(packet, ScenePart.Context) + situation.Replace("## Now\n", "", StringComparison.Ordinal)
+                        + "## What was written next\n" + prose
+                        + "\n\n## Fill in\n- The continuation above is already written. Do not rewrite it: fill in the fields from what it says.\n"
+                        + $"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.\n"
+                        + fieldRules;
+                    var raw = await llm.CompleteJsonAsync(new LlmRequest(ExtractSystemPrompt, extract, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
+                    response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json) is { } read ? read with { Text = prose } : null;
+                }
+                else
+                {
+                    var raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, user, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
+                    response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json);
+                }
             }
             catch (JsonException ex)
             {
@@ -163,7 +202,9 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
 
                 return new WrittenReaction(
                     response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet,
-                    Ends: !goesOn, Choices: goesOn ? next : [], ExchangedNumbers: response.Numbers is true);
+                    Ends: !goesOn, Choices: goesOn ? next : [], ExchangedNumbers: response.Numbers is true,
+                    Threads: packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
+                    Resolved: SceneWriter.Settled(packet, response.Resolved));
             }
 
             lastReasons = reasons;
@@ -173,55 +214,74 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         return new WrittenReaction(fallbackText, null, chosenTags ?? [], Fallback: true, attempts, rejections);
     }
 
-    public JsonObject Schema(ScenePacket packet)
+    /// <param name="withText">False when the prose was written separately, and only its data is asked for.</param>
+    public JsonObject Schema(ScenePacket packet, bool withText = true)
     {
+        ArgumentNullException.ThrowIfNull(packet);
+
         static JsonArray Strings(IEnumerable<string> values) => new([.. values.Select(v => (JsonNode)JsonValue.Create(v)!)]);
+
+        var properties = new JsonObject
+        {
+            ["text"] = new JsonObject { ["type"] = "string" },
+            ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
+            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+            ["ends"] = new JsonObject { ["type"] = "boolean" },
+            ["numbers"] = new JsonObject { ["type"] = "boolean" },
+            ["choices"] = new JsonObject
+            {
+                ["type"] = "array",
+                ["items"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["text"] = new JsonObject { ["type"] = "string" },
+                        ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
+                    },
+                    ["required"] = Strings(["text", "tags"]),
+                    ["additionalProperties"] = false,
+                },
+            },
+            ["meet"] = new JsonObject
+            {
+                ["type"] = Strings(["object", "null"]),
+                ["properties"] = new JsonObject
+                {
+                    ["place"] = new JsonObject { ["type"] = "string" },
+                    ["inDays"] = new JsonObject { ["type"] = "integer" },
+                    ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Morning", "Midday", "Afternoon", "Evening"]) },
+                },
+                ["required"] = Strings(["place", "inDays", "slot"]),
+                ["additionalProperties"] = false,
+            },
+        };
+
+        List<string> required = ["text", "expression", "tags", "meet", "numbers", "ends", "choices"];
+
+        if (packet.LooseEnds is not null)
+        {
+            SceneWriter.ThreadProperties(properties);
+            required.AddRange(["threads", "resolved"]);
+        }
+
+        if (!withText)
+        {
+            properties.Remove("text");
+            required.Remove("text");
+        }
 
         return new JsonObject
         {
             ["type"] = "object",
-            ["properties"] = new JsonObject
-            {
-                ["text"] = new JsonObject { ["type"] = "string" },
-                ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(packet.Expressions) },
-                ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
-                ["ends"] = new JsonObject { ["type"] = "boolean" },
-                ["numbers"] = new JsonObject { ["type"] = "boolean" },
-                ["choices"] = new JsonObject
-                {
-                    ["type"] = "array",
-                    ["items"] = new JsonObject
-                    {
-                        ["type"] = "object",
-                        ["properties"] = new JsonObject
-                        {
-                            ["text"] = new JsonObject { ["type"] = "string" },
-                            ["tags"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(story.ChoiceTags()) } },
-                        },
-                        ["required"] = Strings(["text", "tags"]),
-                        ["additionalProperties"] = false,
-                    },
-                },
-                ["meet"] = new JsonObject
-                {
-                    ["type"] = Strings(["object", "null"]),
-                    ["properties"] = new JsonObject
-                    {
-                        ["place"] = new JsonObject { ["type"] = "string" },
-                        ["inDays"] = new JsonObject { ["type"] = "integer" },
-                        ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Morning", "Midday", "Afternoon", "Evening"]) },
-                    },
-                    ["required"] = Strings(["place", "inDays", "slot"]),
-                    ["additionalProperties"] = false,
-                },
-            },
-            ["required"] = Strings(["text", "expression", "tags", "meet", "numbers", "ends", "choices"]),
+            ["properties"] = properties,
+            ["required"] = Strings(required),
             ["additionalProperties"] = false,
         };
     }
 
     /// <summary>Whether the moment may go on, and what the player could say next when it does.</summary>
-    private static string Conversation(int replyNumber, int maxReplies, bool alone = false) =>
+    private static string Conversation(int replyNumber, int maxReplies, bool alone = false, bool varied = false) =>
         replyNumber >= maxReplies
             ? "- ends: true. This is the player's last reply here: close the moment naturally, without deciding anything for the player.\n"
               + "- choices: an empty list.\n"
@@ -229,10 +289,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
               + (alone
                   ? "- ends: true when there is nothing more to do here for now; otherwise false, ending where the player could do something else.\n"
                     + "- choices: when ends is false, two or three short, different things the player could do next here, in the player's own voice, "
-                    + "each tagged with the one quality it shows, from the desires in the list; an empty list when ends is true.\n"
+                    + "each tagged with the one quality it shows, from the desires in the list; an empty list when ends is true."
                   : "- ends: true when the moment has run its course or someone has to go; otherwise false, ending on something the player can answer.\n"
                     + "- choices: when ends is false, two or three short, different things the player could say or do next, in the player's own voice, "
-                    + "each tagged from the list with what it shows about the player (at most one may be helps:{want} or hinders:{want}); an empty list when ends is true.\n");
+                    + "each tagged from the list with what it shows about the player (at most one may be helps:{want} or hinders:{want}); an empty list when ends is true.")
+              + (varied ? ScenePacketBuilder.VariedChoiceRule : "") + "\n";
 
     private static IReadOnlyDictionary<string, string> Names(ScenePacket packet)
     {

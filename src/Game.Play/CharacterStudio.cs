@@ -594,6 +594,8 @@ public sealed class StudioOptions
 
     public string WeatherFile { get; set; } = Path.Combine("content", "weather.json");
 
+    public string HappeningsFile { get; set; } = Path.Combine("content", "happenings.json");
+
     public string StylePackId { get; set; } = "illustrious-anime";
 
     public string StylePackDirectory { get; set; } = "stylepacks";

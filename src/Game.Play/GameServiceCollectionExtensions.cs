@@ -54,6 +54,7 @@ public static class GameServiceCollectionExtensions
             o.RoutesFile = Resolve(o.RoutesFile);
             o.EndingsFile = Resolve(o.EndingsFile);
             o.WeatherFile = Resolve(o.WeatherFile);
+            o.HappeningsFile = Resolve(o.HappeningsFile);
 
             // Fail at startup rather than at the first render: a game that has declared an
             // impossible age floor should not show a single screen.
@@ -110,6 +111,15 @@ public static class GameServiceCollectionExtensions
             var weather = Game.Core.World.WeatherContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.WeatherFile);
             weather.ValidateAgainst(sp.GetRequiredService<ILocationCatalog>(), sp.GetRequiredService<Game.Core.Settings.ISettingCatalog>());
             return weather;
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var happenings = Game.Core.Story.HappeningContent.Load(sp.GetRequiredService<IOptions<StudioOptions>>().Value.HappeningsFile);
+            happenings.ValidateAgainst(
+                sp.GetRequiredService<ILocationCatalog>().All().Select(t => t.Id),
+                sp.GetRequiredService<Game.Core.World.WeatherContent>().Kinds.Select(k => k.Id));
+            return happenings;
         });
 
         // One compiler per prompt dialect; the pack's dialect picks which one runs.

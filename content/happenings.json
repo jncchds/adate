@@ -1,0 +1,160 @@
+{
+  "places": {
+    "cafe": [
+      { "text": "The espresso machine has broken down and the barista is taking hand-written tea orders instead, apologising to everyone." },
+      { "text": "A regular is trying to teach a toddler to say 'cappuccino' at the counter, to general applause." },
+      { "text": "Someone left a half-finished crossword on the window table, with one clue circled in pen.", "slots": ["Morning", "Midday"] },
+      { "text": "The chalkboard menu has a new special with a pun so bad two customers are arguing about it." },
+      { "text": "A power cut leaves the cafe lit only by the window; the staff are handing out cake before it spoils.", "slots": ["Afternoon", "Evening"] }
+    ],
+    "park": [
+      { "text": "A kite is stuck high in a cherry tree and a small crowd is offering a child useless advice." },
+      { "text": "Two elderly men are playing chess on a bench and have attracted an audience that keeps disagreeing." },
+      { "text": "A dog has stolen a jogger's sandwich and is refusing to give it back.", "slots": ["Morning", "Midday"] },
+      { "text": "Park workers are putting up lights and a sign for a concert on the weekend." },
+      { "text": "Someone is feeding the ducks by the fountain from a very large bag, and the ducks are getting bold." }
+    ],
+    "bar": [
+      { "text": "It is trivia night and the team by the window is losing loudly and cheerfully.", "slots": ["Evening", "Night"] },
+      { "text": "The bartender is trying out a new cocktail and giving free sips to anyone who will give an honest opinion." },
+      { "text": "A birthday group has taken over the back and keeps starting the same song." },
+      { "text": "The jukebox is stuck on one album and nobody can find the switch." },
+      { "text": "Someone at the counter is loudly explaining a breakup to a very patient stranger." }
+    ],
+    "bookshop": [
+      { "text": "The shop cat has fallen asleep on the only copy of a book someone came to buy." },
+      { "text": "The owner is pricing a box of old paperbacks and reading bits of the inscriptions aloud." },
+      { "text": "A reading for children has just ended and small people are still refusing to leave the beanbags.", "slots": ["Morning", "Afternoon"] },
+      { "text": "Someone is trying to find a book by describing only its blue cover." },
+      { "text": "A handwritten note on the counter asks whoever keeps reordering the poetry shelf to stop." }
+    ],
+    "stairwell": [
+      { "text": "A neighbour's parcel has been left on the landing for three days, and everyone has an opinion about whose it is." },
+      { "text": "The light on the third floor keeps flickering and someone has taped a sign to it that says 'I know'." },
+      { "text": "Music drifts down from an apartment where somebody is practising the same bar of piano over and over." },
+      { "text": "A bike with a flat tyre is blocking half the stairs, with a note promising it will be gone tomorrow." }
+    ],
+    "rooftop": [
+      { "text": "Someone has left a portable speaker playing old records to nobody." },
+      { "text": "Pigeons have taken over the deck chairs and are not moving for anyone." },
+      { "text": "A neighbour is watering the planters with a kettle because the hose has split." },
+      { "text": "Across the street a whole office floor is having a party, visible through the windows.", "slots": ["Evening"] }
+    ],
+    "night-market": [
+      { "text": "A dumpling stall is running a contest: finish a plate of the hot ones and eat free.", "slots": ["Evening", "Night"] },
+      { "text": "A street musician has just been joined by a stranger with a better voice." },
+      { "text": "One stall is selling fortunes folded into paper cranes, and the queue is long." },
+      { "text": "Two stallholders are loudly competing over who sells the better skewers." }
+    ],
+    "office": [
+      { "text": "The coffee machine is out of order and a sign-up sheet for whose turn it is to buy coffee has appeared." },
+      { "text": "Someone's leaving cake is on the kitchen counter, with a card half the floor has not signed yet." },
+      { "text": "A deadline has everyone at the next desks talking in short sentences.", "slots": ["Midday", "Afternoon"] },
+      { "text": "The fire alarm test is due and nobody remembers what time." },
+      { "text": "A printer jam has created a small queue and a lot of opinions." }
+    ],
+    "diner": [
+      { "text": "The pie of the day has sold out and a regular is taking it personally." },
+      { "text": "The jukebox is playing a song the cook sings along to from the kitchen, badly." },
+      { "text": "A family at the booth is celebrating a little league win with milkshakes all round.", "slots": ["Afternoon", "Evening"] },
+      { "text": "The waitress is training someone new, who has just dropped a whole tray of cutlery." }
+    ],
+    "main-street": [
+      { "text": "Volunteers are hanging bunting for the fair and arguing about whether it is straight." },
+      { "text": "The clock tower is running ten minutes slow again and people keep checking their phones against it." },
+      { "text": "A farm truck is selling strawberries out of the back, and the queue is gossiping.", "slots": ["Morning", "Midday"] },
+      { "text": "A lost dog is going door to door as if it knows where it lives." }
+    ],
+    "library": [
+      { "text": "A book sale in the hall has everything at a dollar a bag, and the retirees got there first." },
+      { "text": "The librarian is trying to quietly stop two teenagers laughing at something on a phone." },
+      { "text": "The returns desk has a box of things found inside returned books: postcards, a pressed flower, a train ticket." },
+      { "text": "A study group has taken over the big table and is losing an argument about history." }
+    ],
+    "lake-pier": [
+      { "text": "Kids are daring each other to jump off the end of the pier and nobody has gone first yet.", "slots": ["Midday", "Afternoon"] },
+      { "text": "An old man has caught something big and three people are helping him not lose it." },
+      { "text": "A rowboat has drifted loose and is slowly heading out across the lake." },
+      { "text": "Someone is setting off paper lanterns on the water.", "slots": ["Evening", "Night"] }
+    ],
+    "fairground": [
+      { "text": "The carousel has broken mid-ride and the riders are waiting it out on their horses." },
+      { "text": "A pie-judging contest is running late and the judges look worried." },
+      { "text": "A child has won a goldfish and now has no idea what to do with it." },
+      { "text": "The ring-toss stall is rigged, everyone knows it, and one man is determined anyway." }
+    ],
+    "hilltop": [
+      { "text": "A hiker has set up a telescope and is letting anyone look." },
+      { "text": "Someone has carved new initials into the bench next to a much older pair." },
+      { "text": "A group of cyclists has stopped for breath and is loudly blaming each other for the route." },
+      { "text": "Hawks are circling low over the valley.", "slots": ["Morning", "Midday", "Afternoon"] }
+    ],
+    "family-shop": [
+      { "text": "A delivery came in wrong: forty jars of pickles instead of four." },
+      { "text": "Old Mrs Harlan is telling a customer the whole history of a candy that is no longer made." },
+      { "text": "The notice board has a new card: someone is offering free kittens." },
+      { "text": "The till is jammed and a queue of regulars is politely pretending not to mind.", "slots": ["Morning", "Midday"] }
+    ],
+    "mess-hall": [
+      { "text": "Pancake day has turned into a flipping contest between two counsellors.", "slots": ["Morning"] },
+      { "text": "A cabin of kids is refusing to eat until the others admit their song was better." },
+      { "text": "The notice board has a sign-up sheet for the talent show with only one name on it so far." },
+      { "text": "Someone has mixed the salt and sugar and the whole hall is finding out." }
+    ],
+    "lake-dock": [
+      { "text": "A canoe has come back with a hole in it and two kids blaming each other." },
+      { "text": "The swim test is running and one nervous kid is still on the edge of the dock.", "slots": ["Morning", "Midday", "Afternoon"] },
+      { "text": "Something big has just splashed out by the diving platform, and nobody knows what it was." },
+      { "text": "The flag on the pole has come loose and is flapping from one corner." }
+    ],
+    "campfire-circle": [
+      { "text": "The fire will not catch and three people are giving contradictory advice.", "slots": ["Evening", "Night"] },
+      { "text": "Someone has brought a guitar with a string missing and is playing anyway." },
+      { "text": "Marshmallow supplies have run out and a trade in the last few has begun." },
+      { "text": "A ghost story has gone slightly too well and a few kids want to sleep with the lights on." }
+    ],
+    "forest-trail": [
+      { "text": "A trail sign has been turned the wrong way, and a group ahead is going in circles." },
+      { "text": "A deer is standing right on the path, in no hurry to move." },
+      { "text": "Someone has left painted rocks along the trail with small messages on them." },
+      { "text": "A fallen tree blocks the footbridge and the only way around is muddy." }
+    ],
+    "boathouse": [
+      { "text": "The oldest canoe has a new leak and the repair kit is missing its glue." },
+      { "text": "A family of swallows has nested in the rafters, right above the life jackets." },
+      { "text": "Someone is repainting the canoe numbers and has done number seven twice." },
+      { "text": "The radio on the workbench only gets one station, and it is playing polka." }
+    ],
+    "staff-lounge": [
+      { "text": "The dartboard league table has a disputed score and a written protest pinned next to it." },
+      { "text": "The coffee pot is empty and the note on it asks who finished it without making more." },
+      { "text": "Someone has put up a new photo on the wall from a summer ten years ago, and people are trying to find faces they know." },
+      { "text": "A card game has been going for two days, and the rules have changed several times." }
+    ],
+    "staff-cabin": [
+      { "text": "The trail map on the wall has a new hand-drawn shortcut that looks like a bad idea." },
+      { "text": "A cabin mate's alarm clock keeps going off from inside a backpack." },
+      { "text": "The lantern is running out of battery and flickers when anyone walks past." },
+      { "text": "A letter from home has been slid under the door." }
+    ]
+  },
+  "weather": {
+    "rain": [
+      { "text": "People are crowding under whatever cover there is, sharing it with strangers." },
+      { "text": "Someone has lost an umbrella to the wind and is chasing it." }
+    ],
+    "storm": [
+      { "text": "The lights flicker with each gust, and everyone jumps a little at the thunder." },
+      { "text": "A loose sign is banging in the wind and someone is trying to tie it down." }
+    ],
+    "fog": [
+      { "text": "Voices carry strangely in the fog, and people keep appearing out of it closer than expected." }
+    ],
+    "cloudy": [
+      { "text": "Everyone keeps looking at the sky, deciding whether it will rain after all." }
+    ],
+    "clear": [
+      { "text": "The good weather has brought out more people than usual, in no hurry to be anywhere." }
+    ]
+  }
+}
