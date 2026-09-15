@@ -350,7 +350,9 @@ public sealed partial class PlayViewModel : PageViewModel
             var slot = state.Clock.Slot.ToString();
             Heading = $"Day {state.Clock.Day} of {state.Setting.Days}";
             StageCaption = state.Weather is { } weather ? $"{slot} · {weather.Label}" : slot;
-            Lede = $"{state.Setting.DisplayName}. Choose where to spend the {slot.ToLowerInvariant()}.";
+            Lede = state.Heading is { } heading
+                ? $"{heading.Name} is going to {heading.PlaceName} with you."
+                : $"{state.Setting.DisplayName}. Choose where to spend the {slot.ToLowerInvariant()}.";
             Notes =
             [
                 .. state.Today.Select(ev => $"Today: {ev.Name} at {PlaceName(ev.Place)}, {ev.Time.ToString().ToLowerInvariant()}."),
@@ -369,7 +371,8 @@ public sealed partial class PlayViewModel : PageViewModel
                 HasPeople = true;
             }
 
-            foreach (var place in state.KnownPlaces)
+            // Setting off somewhere together leaves only that place to go.
+            foreach (var place in state.KnownPlaces.Where(p => state.Heading is null || p.Id == state.Heading.PlaceId))
             {
                 // During a shift, the workplace says so: going there works it.
                 var typeName = _placeTypes.Get(place.TypeId).DisplayName;
@@ -1036,6 +1039,12 @@ public sealed partial class PlayViewModel : PageViewModel
         exchange.Popup = result.Popup;
         exchange.Agreed = result.Agreed;
         _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null, Open = result.Open };
+        if (result.Together && _state is not null)
+        {
+            // Setting off together: nobody to text before going.
+            _state = _state with { Contacts = [] };
+        }
+
         IsWriting = false;
         RefreshSceneControls();
         ScrollToEndRequested?.Invoke();

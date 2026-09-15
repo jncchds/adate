@@ -43,6 +43,7 @@ public sealed record SceneView(
 /// <param name="Next">What the player can say next when the conversation goes on; empty when nothing was proposed.</param>
 /// <param name="Open">Whether the scene still takes a reply: the player's own words even when nothing was proposed.</param>
 /// <param name="Redressed">Whether the person put something on or changed, so their sprite is drawn again even at the same expression.</param>
+/// <param name="Together">Whether the two just set off somewhere together, so there is nobody to text and nowhere else to go.</param>
 public sealed record ReactionResult(
     SceneView View,
     string? Popup,
@@ -50,7 +51,8 @@ public sealed record ReactionResult(
     string Transcript = "",
     IReadOnlyList<ProposedChoice>? Next = null,
     bool Open = false,
-    bool Redressed = false);
+    bool Redressed = false,
+    bool Together = false);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
@@ -123,7 +125,14 @@ public sealed record PlayState(
     int CastSize = 0,
     PlayerJob? Job = null,
     bool OnShift = false,
-    IReadOnlyList<Invitee>? Contacts = null);
+    IReadOnlyList<Invitee>? Contacts = null,
+    HeadingTogether? Heading = null);
+
+/// <summary>
+/// Where the player is on their way to with someone, straight away (user request: going together must lock out other
+/// options, or standing them up is one). The map offers only that place, and nobody else can be texted or invited.
+/// </summary>
+public sealed record HeadingTogether(string PlaceId, string PlaceName, string Name);
 
 /// <summary>A save's setting, places, clock, openings, choices, turns and ending.</summary>
 /// <summary>One part of the debug screen: a title and its raw lines.</summary>
@@ -239,8 +248,10 @@ public sealed class WorldService(
 
         var over = clock.IsPast(setting.Days);
         var pendingScene = await state.GetPendingSceneAsync(saveId, ct).ConfigureAwait(false);
+        var openPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
+        var heading = await HeadingAsync(saveId, setting, cast, flags, known, clock, openPromises, ct).ConfigureAwait(false);
 
-        IReadOnlyList<Invitee> invitees = over || pending is not null || pendingScene is not null || offer is not null || ending is not null
+        IReadOnlyList<Invitee> invitees = over || pending is not null || pendingScene is not null || offer is not null || ending is not null || heading is not null
             ? []
             : [.. cast.Where(li => !HasLeft(flags, li) && CanInvite(setting, cast, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
 
@@ -258,10 +269,9 @@ public sealed class WorldService(
 
         // The player's own life: a shift that is now, people they can text, and the traits they are building.
         var onShift = PlayerLife.OnShift(setting.Job, clock);
-        IReadOnlyList<Invitee> contacts =
-        [
-            .. cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li)).Select(li => new Invitee(li.Key, li.Name)),
-        ];
+        IReadOnlyList<Invitee> contacts = heading is not null
+            ? []
+            : [.. cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.contact") && !HasLeft(flags, li)).Select(li => new Invitee(li.Key, li.Name))];
         var building = PlayerLife.Traits(flags)
             .Where(t => PlayerLife.Level(t.Value, storyContent.Rules.TraitLevels) > 0)
             .Select(t => t.Key)
@@ -281,12 +291,14 @@ public sealed class WorldService(
         // Meetings the player agreed to, so an arrangement made in conversation is never forgotten.
         IReadOnlyList<string> promised =
         [
-            .. (await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false))
+            .. openPromises
                 .Where(p => p.Kind is PromiseKind.Meet)
                 .Select(p => (Promise: p, Person: cast.FirstOrDefault(li => li.Id.ToString() == p.CharacterId), Place: known.FirstOrDefault(k => k.Id == p.PlaceId)))
                 .Where(m => m.Person is not null && m.Place is not null)
-                .Select(m => m.Promise.DueDay == clock.Day && m.Promise.DueSlot == clock.Slot
+                .Select(m => MeetingAgreement.IsNow(m.Promise) && Promises.IsDue(m.Promise, clock)
                     ? $"{m.Person!.Name} is going to {m.Place!.Name} with you now."
+                    : Promises.IsDue(m.Promise, clock)
+                    ? $"You agreed to meet {m.Person!.Name} at {m.Place!.Name} now."
                     : $"You agreed to meet {m.Person!.Name} at {m.Place!.Name} on day {m.Promise.DueDay}" +
                       (m.Promise.DueSlot is { } due ? $", {due.ToString().ToLowerInvariant()}." : ".")),
         ];
@@ -333,7 +345,23 @@ public sealed class WorldService(
             cast.Count,
             setting.Job,
             onShift,
-            contacts);
+            contacts,
+            heading);
+    }
+
+    /// <summary>Where the player is going with someone straight away, when an agreement to go together is due now and they are still around.</summary>
+    private async Task<HeadingTogether?> HeadingAsync(
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, IReadOnlyDictionary<string, string> flags,
+        IReadOnlyList<PlaceRecord> known, ClockState clock, IReadOnlyList<Promise> openPromises, CancellationToken ct)
+    {
+        if (MeetingAgreement.Heading(openPromises, clock) is not { } promise
+            || cast.FirstOrDefault(li => li.Id.ToString() == promise.CharacterId && !HasLeft(flags, li)) is not { } with)
+        {
+            return null;
+        }
+
+        var place = known.FirstOrDefault(p => p.Id == promise.PlaceId) ?? await places.GetAsync(saveId, promise.PlaceId!, ct).ConfigureAwait(false);
+        return new HeadingTogether(promise.PlaceId!, place?.Name ?? PlaceName(setting, known, promise.PlaceId!), with.Name);
     }
 
     /// <summary>The weather on a day of a save: deterministic, so the same day always looks the same.</summary>
@@ -394,6 +422,11 @@ public sealed class WorldService(
 
         var place = play.KnownPlaces.FirstOrDefault(p => p.Id == placeId)
             ?? throw new InvalidOperationException($"'{placeId}' is not a place the player knows.");
+
+        if (play.Heading is { } heading && heading.PlaceId != place.Id)
+        {
+            throw new InvalidOperationException($"{heading.Name} is going to {heading.PlaceName} with you: go there.");
+        }
 
         var flags = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
         if (invite is not null)
@@ -753,6 +786,11 @@ public sealed class WorldService(
         if (open.EncounterId == JsonEncounterCatalog.PhoneId)
         {
             throw new InvalidOperationException("There is time for one conversation by text a slot.");
+        }
+
+        if (MeetingAgreement.Heading(await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false), open.Clock.Next()) is not null)
+        {
+            throw new InvalidOperationException("You are setting off somewhere together: there is no time to text anyone.");
         }
 
         if (!open.Written)
@@ -1153,17 +1191,16 @@ public sealed class WorldService(
         var placeDress = place is null ? DressCode.Casual : placeTypes.Get(place.TypeId).Dress;
         var firstDate = encounterId is { } id && cast.Any(c => JsonEncounterCatalog.FirstDateIdFor(c.Key) == id);
 
-        // Mornings start from home, where they got ready for the day.
-        if (clock.Slot is TimeOfDay.Morning)
-        {
-            return Outfits.For(li.Name, placeDress, firstDate, null, null, null);
-        }
-
-        var before = new ClockState(clock.Day, clock.Slot - 1);
-
-        // The slot just before spent with the player, anywhere but on the phone: no time to change since.
-        var together = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
-            .LastOrDefault(s => s.CharacterId == li.Id && s.Clock == before && s.EncounterId != JsonEncounterCatalog.PhoneId);
+        // Brought here by agreeing to go together straight away, overnight too: no time to change since the scene they
+        // set off from (user request: going now and meeting later are different). Seeing them again otherwise starts afresh.
+        static int Order(ClockState c) => (c.Day * 10) + (int)c.Slot;
+        var cameWith = (await story.GetPromisesAsync(saveId, openOnly: false, ct).ConfigureAwait(false))
+            .Any(p => MeetingAgreement.IsNow(p) && p.CharacterId == li.Id.ToString() && p.PlaceId == placeId
+                      && Promises.IsDue(p, clock) && p.Status is not PromiseStatus.Broken);
+        var together = cameWith
+            ? (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
+                .LastOrDefault(s => s.CharacterId == li.Id && Order(s.Clock) < Order(clock) && s.EncounterId != JsonEncounterCatalog.PhoneId)
+            : null;
         if (together is not null)
         {
             var kept = together.Outfit
@@ -1172,6 +1209,13 @@ public sealed class WorldService(
             return Outfits.For(li.Name, placeDress, firstDate, kept, null, there);
         }
 
+        // Mornings start from home, where they got ready for the day.
+        if (clock.Slot is TimeOfDay.Morning)
+        {
+            return Outfits.For(li.Name, placeDress, firstDate, null, null, null);
+        }
+
+        var before = new ClockState(clock.Day, clock.Slot - 1);
         var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
         var fromId = WorldMoves.Where(saveId.ToString(), ScheduleFor(saveId, setting, li, flags), [.. setting.Places.Select(p => p.Id)], before);
         var from = fromId is null || fromId == placeId ? null : await places.GetAsync(saveId, fromId, ct).ConfigureAwait(false);
@@ -1770,18 +1814,20 @@ public sealed class WorldService(
         // A meeting agreed in the reaction is held as a promise, if the story can hold it. Known places are read again:
         // the reply may have just named the place it agrees on.
         string? agreed = null;
+        var goingTogether = false;
         var knownNow = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
         if (owner is not null
             && MeetingAgreement.ToPromise(reaction.Meet, owner.Id.ToString(), scene.Clock, setting.Days, knownNow.Select(p => (p.Id, p.Name))) is { } promise)
         {
             var heldPromises = await story.GetPromisesAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
-            var together = MeetingAgreement.IsNow(promise, scene.Clock);
+            var together = MeetingAgreement.IsNow(promise);
 
             // Going somewhere together now is held on top of a later meeting; otherwise one open meeting a person.
             if (together ? heldPromises.All(p => p.Id != promise.Id) : heldPromises.All(p => p.CharacterId != promise.CharacterId))
             {
                 await story.AddPromiseAsync(saveId, promise, ct).ConfigureAwait(false);
                 var placeName = knownNow.First(p => p.Id == promise.PlaceId).Name;
+                goingTogether = together;
                 agreed = together
                     ? $"{owner.Name} is going to {placeName} with you. Go there next."
                     : $"You agreed to meet {owner.Name} at {placeName} on day {promise.DueDay}, {promise.DueSlot.ToString()!.ToLowerInvariant()}.";
@@ -1811,7 +1857,8 @@ public sealed class WorldService(
             transcript,
             next,
             stillOpen,
-            redressed);
+            redressed,
+            goingTogether);
     }
 
     private sealed record BuiltReaction(

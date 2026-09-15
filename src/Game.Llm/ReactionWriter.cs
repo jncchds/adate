@@ -118,10 +118,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                       "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n")
             + (alone
                 ? "- meet: null.\n- numbers: false.\n- routines: an empty list.\n"
-                : "- meet: only if the two of them have just agreed to meet again at a set time, or to go somewhere together right now: " +
+                : "- meet: only if the two of them have just agreed to meet at a set time, or to go somewhere together right now: " +
                   "the place (one the player knows, or one you add to places), " +
-                  $"in how many days ({MeetingAgreement.Now} for right now, when the time of day is ignored; otherwise 1 to {MeetingAgreement.MaxDaysAhead}) " +
-                  "and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
+                  $"in how many days ({MeetingAgreement.Now} for today, otherwise 1 to {MeetingAgreement.MaxDaysAhead}) " +
+                  $"and the time of day: {MeetingAgreement.NowSlot} when they set off together straight away, otherwise Morning, Midday, Afternoon, Evening or Night " +
+                  $"(it is {packet.Clock.Slot} now, so later today is a later time with 0 days). Otherwise null.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
                   "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
                   + $"- {ScenePacketBuilder.RoutineRule}\n"
@@ -272,7 +273,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 {
                     ["place"] = new JsonObject { ["type"] = "string" },
                     ["inDays"] = new JsonObject { ["type"] = "integer" },
-                    ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(["Morning", "Midday", "Afternoon", "Evening"]) },
+                    ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = Strings([MeetingAgreement.NowSlot, "Morning", "Midday", "Afternoon", "Evening", "Night"]) },
                 },
                 ["required"] = Strings(["place", "inDays", "slot"]),
                 ["additionalProperties"] = false,

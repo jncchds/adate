@@ -1699,5 +1699,25 @@ picture should show it. The outfit came from the place type alone (`lake-pier` i
 * **Kept with the scene.** `scene_log.dress` and `dress_over` (migration 015) hold it, and the next slot together
   starts from it. Older scenes have none and are dressed as the moment would dress them. Something worn over the
   outfit replaces the weather layer, and swimwear takes none.
+* **Carried only by going together.** See the next section: an outfit is kept only when a going-together-now
+  meeting brought the person to the scene, overnight too. Running into them again in the next slot starts afresh.
 * **HANDOFF 1.3 bent as for place looks.** `over` is the only story-written text in a sprite prompt. `Outfits.CleanOver`
   keeps 60 characters of plain words, and the content gate filters it with the rest of the outfit.
+
+## Going now, meeting later today, and nights
+
+User request: tell going together right now apart from meeting later, allow meeting later today, allow nights (a
+movie night), and when going together lock out every other option, or standing them up is one.
+
+* **Nights were never ruled out for a reason.** `meet` took Morning to Evening since promises were added, with nothing
+  written about why, while going together now already reached into the night. Night is now a time like any other.
+* **Now is said, not guessed.** `meet.slot` gains `Now` for setting off together straight away. `inDays` 0 with a later
+  time is later today, an ordinary meeting even in the very next slot. `inDays` 0 with the current or a past time
+  still means now, as it did before. `MeetingAgreement.IsNow` reads the promise's `-now` id rather than its timing,
+  which later today in the next slot would fool.
+* **Going together locks the way.** While a going-together meeting is due, `PlayState.Heading` names it. The map offers
+  only that place and says who is going there with the player. Nobody can be invited or texted, and
+  `TakeTurnAsync` and `TextAsync` refuse otherwise. `ReactionResult.Together` clears the texting choices under the
+  scene that set off.
+* **Outfits follow the lock.** Only a going-together meeting carries what someone wore into the next scene, across
+  midnight too. Seeing them again in the next slot otherwise lets them have changed.
