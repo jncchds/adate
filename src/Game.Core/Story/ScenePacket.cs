@@ -127,7 +127,7 @@ public static class ScenePacketBuilder
     /// <summary>What makes proposed replies worth choosing between, for scenes and reactions alike.</summary>
     public const string VariedChoiceRule =
         " Make them different in kind (for example a question, a playful line, a bold or sincere move, or something to do), " +
-        "and let at least one pick up something the player knows, a loose end or what happened before.";
+        "and let at least one pick up something the player knows, a loose end or what happened before. Keep each under 120 characters.";
 
     private static string Compose(ScenePacket packet, IReadOnlyList<KnownFact> playerKnows, IReadOnlyList<KnownFact> presentKnow, ScenePart part)
     {
@@ -282,6 +282,10 @@ public static class ScenePacketBuilder
         if (part is ScenePart.Extract)
         {
             text.AppendLine("- The scene is already written, below. Do not rewrite it: read it and fill in the fields from what it says.");
+            foreach (var rule in NarrationLanguage.DataRules(packet.Language, packet.PlayerGender))
+            {
+                text.AppendLine($"- {rule}");
+            }
         }
 
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");

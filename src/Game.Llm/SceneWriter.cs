@@ -90,7 +90,11 @@ public sealed class SceneWriter(
 
     public const int MinChoices = 2;
     public const int MaxChoices = 3;
-    public const int MaxChoiceLength = 90;
+    /// <summary>
+    /// The longest reply offered. Was 90: varied replies that picked up a loose end ran to 100-110 characters and threw
+    /// away half the scenes of a replay for the authored text. A longer one is now left out on its own.
+    /// </summary>
+    public const int MaxChoiceLength = 160;
 
     /// <param name="knownPlaces">Places the player knows. A proposal may not repeat one of their names.</param>
     /// <param name="wantChoices">Whether the scene must end with two or three tagged replies for the player.</param>
@@ -384,9 +388,11 @@ public sealed class SceneWriter(
 
             if (text.Length is 0 or > MaxChoiceLength)
             {
-                reasons.Add($"The choice '{text}' needs to be 1 to {MaxChoiceLength} characters.");
+                // Left out on its own: a reply too long to show is no reason to lose the scene.
+                continue;
             }
-            else if (choices.Any(c => string.Equals(c.Text, text, StringComparison.OrdinalIgnoreCase)))
+
+            if (choices.Any(c => string.Equals(c.Text, text, StringComparison.OrdinalIgnoreCase)))
             {
                 reasons.Add($"The choice '{text}' is offered twice.");
             }

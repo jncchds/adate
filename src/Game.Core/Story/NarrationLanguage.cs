@@ -71,6 +71,24 @@ public static partial class NarrationLanguage
         return rules;
     }
 
+    /// <summary>
+    /// The language rules for reading data out of prose that is already written (two-pass writing); none for English.
+    /// Without them the summary and choices came back in English under a Russian scene.
+    /// </summary>
+    public static IReadOnlyList<string> DataRules(string? language, string? playerGender)
+    {
+        if (IsEnglish(language))
+        {
+            return [];
+        }
+
+        return
+        [
+            $"Write the summary and choices in {language}, the language of the scene.",
+            .. WritingRules(language, playerGender).Skip(1),
+        ];
+    }
+
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
 

@@ -144,6 +144,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     var extract = ScenePacketBuilder.Render(packet, ScenePart.Context) + situation.Replace("## Now\n", "", StringComparison.Ordinal)
                         + "## What was written next\n" + prose
                         + "\n\n## Fill in\n- The continuation above is already written. Do not rewrite it: fill in the fields from what it says.\n"
+                        + string.Concat(NarrationLanguage.DataRules(packet.Language, packet.PlayerGender).Select(rule => $"- {rule}\n"))
                         + $"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.\n"
                         + fieldRules;
                     var raw = await llm.CompleteJsonAsync(new LlmRequest(ExtractSystemPrompt, extract, "reaction", schema, maxTokens), ct).ConfigureAwait(false);

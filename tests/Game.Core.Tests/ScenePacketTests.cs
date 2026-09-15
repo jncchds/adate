@@ -73,6 +73,16 @@ public class ScenePacketTests
     }
 
     [Fact]
+    public void Data_read_from_a_scene_in_another_language_keeps_its_choices_in_that_language()
+    {
+        var extract = ScenePacketBuilder.Render(Packet() with { Language = "Русский", PlayerGender = "man", OffersChoices = true }, ScenePart.Extract);
+
+        Assert.Contains("- Write the summary and choices in Русский", extract, StringComparison.Ordinal);
+        Assert.Contains("masculine forms for the player", extract, StringComparison.Ordinal);
+        Assert.DoesNotContain("Write the prose in", extract, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Without_the_material_nothing_of_it_is_rendered()
     {
         var text = ScenePacketBuilder.Render(Packet() with { OffersChoices = true });
