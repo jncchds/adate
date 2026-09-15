@@ -965,7 +965,11 @@ section.phone {
     text-align: center;
 }
 
+/* Capped, so on a short screen the replies scroll and the messages keep their room. */
 .phone-keys {
+    flex: none;
+    max-height: 45%;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;

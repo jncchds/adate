@@ -320,7 +320,9 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <StackPanel Grid.Row="2" Classes="phone-keys">
+                    <!-- Capped, so on a short screen the replies scroll and the messages keep their room. -->
+                    <ScrollViewer Grid.Row="2" MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="phone-keys">
                         <ItemsControl ItemsSource="{Binding Choices}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ChoiceItem">
@@ -341,6 +343,7 @@
                         <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Content="Put the phone away" IsVisible="{Binding ShowContinue}" Command="{Binding ContinueCommand}" />
                     </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Border>
 
