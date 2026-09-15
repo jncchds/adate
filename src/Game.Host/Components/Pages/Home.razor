@@ -1,319 +1,59 @@
 @page "/"
-@using Game.Core
-@using Game.Core.Cast
-@using Game.Core.Characters
 @using Game.Core.Saves
 @using Game.Core.Settings
-@using Game.Core.Style
 @using Game.Data.Repositories
-@using Game.Play
 @inject SaveRepository Saves
-@inject CharacterRepository Characters
-@inject CharacterStudio Studio
 @inject ISettingCatalog Settings
-@inject CastContent Cast
-@inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<PageTitle>New game</PageTitle>
+<PageTitle>adate</PageTitle>
+
+<h1>adate</h1>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
 
 @if (_saves.Count > 0)
 {
-    <h1>Continue</h1>
-    <ul class="save-list">
+    <h2>Continue</h2>
+    <div class="save-list">
         @foreach (var (save, setting) in _saves)
         {
-            <li>
-                <a href="/play/@save.Id.Value">@(setting ?? "No setting yet")</a>
+            <a class="choice" href="/play/@save.Id.Value">
+                <strong>@(setting ?? "No setting yet")</strong>
                 <small>started @save.CreatedUtc.ToLocalTime().ToString("g")</small>
-            </li>
+            </a>
         }
-    </ul>
+    </div>
 }
 
-<h1>New game</h1>
-
-<p class="lede">
-    Choose where the story happens, tell it who you are, and describe the person you will meet.
-    The first portrait shows exactly what you describe here; the others each move one or two of hair
-    colour, hair style and eye colour, and whichever you pick becomes them.
-</p>
-
-<EditForm Model="@_form" OnValidSubmit="@CreateAsync" FormName="new-game">
-    <h2>Setting</h2>
-    <div class="setting-choices">
-        @foreach (var setting in Settings.All())
-        {
-            <label class="setting-choice @(setting.Id == _form.SettingId ? "selected" : null)">
-                <input type="radio" name="setting" checked="@(setting.Id == _form.SettingId)" @onchange="() => _form.SettingId = setting.Id" />
-                <strong>@setting.DisplayName</strong>
-                <small>@setting.Days days. @setting.Tone</small>
-            </label>
-        }
-    </div>
-
-    <h2>You</h2>
-    <div class="grid">
-        <label>
-            Your name
-            <InputText @bind-Value="_form.PlayerName" placeholder="Alex" />
-            <small>Used in the writing only. You are never drawn.</small>
-        </label>
-
-        <label>
-            Your gender
-            <InputSelect @bind-Value="_form.PlayerGender">
-                <option value="woman">woman</option>
-                <option value="man">man</option>
-                <option value="nonbinary">nonbinary</option>
-            </InputSelect>
-            <small>How the story refers to you.</small>
-        </label>
-
-        <label>
-            Narration language
-            <InputText @bind-Value="_form.NarrationLanguage" placeholder="English" />
-            <small>Any language, typed in. The story is written in it; menus stay English.</small>
-        </label>
-    </div>
-
-    <h2>Who you will meet</h2>
-    <div class="grid">
-        <label>
-            Their name
-            <InputText @bind-Value="_form.LiName" placeholder="Sam" />
-        </label>
-
-        <label>
-            Love interest
-            <InputSelect @bind-Value="_form.Subject" @bind-Value:after="ApplySubjectChoices">
-                @foreach (var subject in _subjects)
-                {
-                    <option value="@subject">@subject</option>
-                }
-            </InputSelect>
-            <small>Everyone else you can fall for shares this.</small>
-        </label>
-
-        <label>
-            Age
-            <InputNumber @bind-Value="_form.Age" min="18" max="99" />
-            <small>Adults only. It is what the content rules are computed from.</small>
-        </label>
-
-        <label>
-            Hair colour
-            <InputSelect @bind-Value="_form.HairColor">
-                @foreach (var tag in Choices(AppearanceFeatures.HairColor))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Hair style
-            <InputSelect @bind-Value="_form.HairStyle">
-                @foreach (var tag in Choices(AppearanceFeatures.HairStyle))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Eye colour
-            <InputSelect @bind-Value="_form.EyeColor">
-                @foreach (var tag in Choices(AppearanceFeatures.EyeColor))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Skin tone
-            <InputSelect @bind-Value="_form.SkinTone">
-                @foreach (var tag in Choices(AppearanceFeatures.SkinTone))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Build
-            <InputSelect @bind-Value="_form.Build">
-                @foreach (var tag in Choices(AppearanceFeatures.Build))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Height
-            <InputSelect @bind-Value="_form.Height">
-                @foreach (var tag in Choices(AppearanceFeatures.Height))
-                {
-                    <option value="@tag">@tag</option>
-                }
-            </InputSelect>
-        </label>
-
-        <label>
-            Distinguishing feature
-            <InputText @bind-Value="_form.DistinguishingFeature" placeholder="freckles" />
-            <small>Optional.</small>
-        </label>
-    </div>
-
-    <h2>Their temper</h2>
-    <div class="grid">
-        @foreach (var axis in Cast.Temper)
-        {
-            <label>
-                @axis.Label
-                <select value="@_form.Temper[axis.Id]" @onchange="e => _form.Temper[axis.Id] = e.Value?.ToString() ?? axis.Ends[0].Id">
-                    @foreach (var end in axis.Ends)
-                    {
-                        <option value="@end.Id">@end.Label</option>
-                    }
-                </select>
-                <small>@axis.End(_form.Temper[axis.Id]).Writing</small>
-            </label>
-        }
-    </div>
-
-    @if (_error is not null)
-    {
-        <p class="error">@_error</p>
-    }
-
-    <button type="submit" disabled="@_working">
-        @(_working ? "Creating…" : $"Generate {Studio.CandidateCount} portraits")
-    </button>
-</EditForm>
+<h2>New game</h2>
+<p class="lede">Choose where the story happens, tell it who you are, and describe the person you will meet.</p>
+<a class="button accent" href="/new">Start a new story</a>
 
 @code {
-    private readonly NewGameForm _form = new();
-    private bool _working;
-    private string? _error;
-    private StylePack? _pack;
-    private IReadOnlyList<string> _subjects = ["female"];
     private IReadOnlyList<(SaveRecord Save, string? Setting)> _saves = [];
+    private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
-        _pack = await Studio.GetPackAsync();
-        _subjects = [.. _pack.Subjects.Keys.Order(StringComparer.Ordinal)];
-        _form.Subject = _subjects[0];
-        _form.SettingId = Settings.All()[0].Id;
-
-        foreach (var axis in Cast.Temper)
-        {
-            // Preselected so the player can skip it (plan §3).
-            _form.Temper[axis.Id] = axis.Ends[0].Id;
-        }
-
-        ApplySubjectChoices();
-
-        var saves = new List<(SaveRecord, string?)>();
-        foreach (var save in await Saves.ListAsync())
-        {
-            var settingId = await Saves.GetSettingIdAsync(save.Id);
-            var setting = settingId is null ? null : Settings.All().FirstOrDefault(s => s.Id == settingId)?.DisplayName;
-            saves.Add((save, setting));
-        }
-
-        _saves = saves;
-    }
-
-    private IReadOnlyList<string> Choices(string feature) =>
-        _pack is null ? [] : [.. _pack.SubjectFor(_form.Subject).OptionsFor(feature).Select(o => o.Tag)];
-
-    /// <summary>
-    /// Choices are per subject, so switching subject can leave a value the new one does not offer.
-    /// Each current value is kept when it is still on offer and otherwise replaced by the new
-    /// subject's first choice.
-    /// </summary>
-    private void ApplySubjectChoices()
-    {
-        _form.HairColor = Keep(AppearanceFeatures.HairColor, _form.HairColor);
-        _form.HairStyle = Keep(AppearanceFeatures.HairStyle, _form.HairStyle);
-        _form.EyeColor = Keep(AppearanceFeatures.EyeColor, _form.EyeColor);
-        _form.SkinTone = Keep(AppearanceFeatures.SkinTone, _form.SkinTone);
-        _form.Build = Keep(AppearanceFeatures.Build, _form.Build);
-        _form.Height = Keep(AppearanceFeatures.Height, _form.Height);
-    }
-
-    private string Keep(string feature, string current)
-    {
-        var choices = Choices(feature);
-        return choices.Contains(current, StringComparer.OrdinalIgnoreCase) ? current : choices.Count > 0 ? choices[0] : current;
-    }
-
-    private async Task CreateAsync()
-    {
-        _working = true;
-        _error = null;
-
         try
         {
-            var playerName = Name(_form.PlayerName, "your name");
-            var liName = Name(_form.LiName, "their name");
+            var saves = new List<(SaveRecord, string?)>();
+            foreach (var save in await Saves.ListAsync())
+            {
+                var settingId = await Saves.GetSettingIdAsync(save.Id);
+                var setting = settingId is null ? null : Settings.All().FirstOrDefault(s => s.Id == settingId)?.DisplayName;
+                saves.Add((save, setting));
+            }
 
-            var appearance = _form.ToAppearance();
-            appearance.Validate();
-
-            var save = await Saves.CreateAsync(
-                Studio.StylePackId,
-                Studio.PackFingerprint(),
-                Ceiling.PG13,
-                _form.SettingId,
-                playerName,
-                _form.PlayerGender,
-                Game.Core.Story.NarrationLanguage.Normalize(_form.NarrationLanguage));
-
-            var character = await Characters.CreateAsync(save.Id, appearance, liName, _form.Temper);
-
-            Navigation.NavigateTo($"/candidates/{character.Id}");
+            _saves = saves;
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _working = false;
         }
-    }
-
-    private static string Name(string? value, string what)
-    {
-        var trimmed = value?.Trim() ?? "";
-
-        return trimmed.Length is > 0 and <= 40
-            ? trimmed
-            : throw new ArgumentException($"Enter {what}, up to 40 characters.");
-    }
-
-    private sealed class NewGameForm
-    {
-        public string SettingId { get; set; } = "";
-        public string PlayerName { get; set; } = "";
-        public string PlayerGender { get; set; } = "woman";
-        public string NarrationLanguage { get; set; } = Game.Core.Story.NarrationLanguage.Default;
-        public string LiName { get; set; } = "";
-        public string Subject { get; set; } = "female";
-        public int Age { get; set; } = 24;
-        public string HairColor { get; set; } = "";
-        public string HairStyle { get; set; } = "";
-        public string EyeColor { get; set; } = "";
-        public string SkinTone { get; set; } = "";
-        public string Build { get; set; } = "";
-        public string Height { get; set; } = "";
-        public string DistinguishingFeature { get; set; } = "";
-        public Dictionary<string, string> Temper { get; } = new(StringComparer.Ordinal);
-
-        public CharacterAppearance ToAppearance() => new(
-            Subject, Age, EyeColor, HairColor, HairStyle, SkinTone, Build, Height, DistinguishingFeature);
     }
 }

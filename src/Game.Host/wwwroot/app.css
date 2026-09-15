@@ -11,11 +11,11 @@ h1:focus {
 }
 
 .validation-message {
-    color: #e50000;
+    color: #ff8a80;
 }
 
 .blazor-error-boundary {
-    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    background: #b32121;
     padding: 1rem 1rem 1rem 3.7rem;
     color: white;
 }
@@ -24,79 +24,88 @@ h1:focus {
         content: "An error has occurred."
     }
 
-.darker-border-checkbox.form-check-input {
-    border-color: #929292;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
-}
-
 /* ---------------------------------------------------------------- adate ---- */
 
 /*
- * Tokens are defined once for light and overridden for dark, so nothing has its only
- * definition inside a media query. The stage keeps a fixed dark ground in both themes:
- * it is a rendered scene, not part of the page chrome, and a light backdrop behind a
- * matted sprite makes alpha fringing much harder to judge.
+ * The same look as the desktop and phone app (Game.App Styles/Game.axaml): a dark ground, gold for what is
+ * chosen and for the name tag, and the play screen laid out like a visual novel.
  */
 :root {
-    color-scheme: light dark;
+    color-scheme: dark;
 
-    --bg: #fbfbfa;
-    --fg: #1a1a1a;
-    --muted: #5a5a5a;
-    --line: #c8c8c8;
-    --field-bg: #ffffff;
-    --accent: #1a1a1a;
-    --accent-fg: #ffffff;
-    --error-fg: #a11;
-    --error-bg: #fff4f4;
-    --notice-bg: #f2f2f0;
+    --bg: #121213;
+    --fg: #ececec;
+    --muted: #b8b8bc;
+    --small: #9a9aa0;
+    --line: #3d3d3f;
+    --field-bg: #1d1d1f;
+    --button-bg: #2a2a2d;
+    --panel: #1d1d1f;
+    --accent: #e8c872;
+    --accent-fg: #1a1a1a;
+    --note: #d8cfa8;
+    --reaction: #e4dcf7;
+    --error-fg: #ff8a80;
+    --error-bg: #2a1a1a;
+    --notice-bg: #1c1c1e;
+    --popup: #3a2f55;
     --stage-bg: #101012;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #121213;
-        --fg: #ececec;
-        --muted: #a2a2a2;
-        --line: #3d3d3f;
-        --field-bg: #1d1d1f;
-        --accent: #ececec;
-        --accent-fg: #121213;
-        --error-fg: #ff8f8f;
-        --error-bg: #2a1a1a;
-        --notice-bg: #1c1c1e;
-        --stage-bg: #050506;
-    }
 }
 
 body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    max-width: 62rem;
+    font-size: 15px;
+    max-width: 48rem;
     margin: 0 auto;
-    padding: 2rem 1rem 4rem;
+    padding: 1rem 1.25rem 3rem;
     line-height: 1.5;
     background: var(--bg);
     color: var(--fg);
 }
 
+a {
+    color: var(--accent);
+}
+
+h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin: 0.5rem 0;
+}
+
+h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1rem 0 0.4rem;
+}
+
 .lede {
     color: var(--muted);
-    max-width: 46rem;
+}
+
+.small {
+    font-size: 12px;
+    color: var(--small);
+    margin: 0;
+}
+
+.note {
+    color: var(--note);
+    margin: 0;
+}
+
+.back-link {
+    display: inline-block;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.25rem 0;
 }
 
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: 1rem 1.5rem;
-    margin: 1.5rem 0;
+    margin: 1rem 0;
 }
 
 .grid label {
@@ -106,30 +115,38 @@ body {
     font-weight: 600;
 }
 
-.grid input,
-.grid select {
-    padding: 0.4rem 0.5rem;
+input,
+select,
+textarea {
+    padding: 0.45rem 0.6rem;
     font: inherit;
-    font-weight: 400;
     border: 1px solid var(--line);
-    border-radius: 4px;
+    border-radius: 6px;
     background: var(--field-bg);
     color: var(--fg);
+}
+
+.grid input,
+.grid select {
+    font-weight: 400;
 }
 
 .grid small {
     font-weight: 400;
-    color: var(--muted);
+    color: var(--small);
 }
 
-button {
+button,
+.button {
     font: inherit;
+    display: inline-block;
     padding: 0.5rem 1rem;
     border: 1px solid var(--line);
-    border-radius: 4px;
-    background: var(--field-bg);
+    border-radius: 6px;
+    background: var(--button-bg);
     color: var(--fg);
     cursor: pointer;
+    text-decoration: none;
 }
 
 button:disabled {
@@ -137,10 +154,41 @@ button:disabled {
     cursor: default;
 }
 
-button.active {
+button.accent,
+.button.accent,
+button.active,
+form > button[type=submit] {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-fg);
+    font-weight: 600;
+}
+
+/* A reply, a save or a choice in a list: the whole width, left aligned. */
+button.choice,
+a.choice {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.65rem 0.9rem;
+    margin: 0 0 0.5rem;
+    color: var(--fg);
+    text-decoration: none;
+    background: var(--button-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+
+a.choice small {
+    display: block;
+    color: var(--small);
+}
+
+.chip {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    margin: 0 4px 4px 0;
 }
 
 .error {
@@ -151,7 +199,8 @@ button.active {
     margin: 1rem 0;
 }
 
-.error p {
+.error p,
+.error-text {
     color: var(--error-fg);
 }
 
@@ -163,13 +212,102 @@ button.active {
     color: var(--muted);
 }
 
+/* A turning arc wherever a picture or words are on their way. */
+.spinner {
+    display: inline-block;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    border-left-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+.spinner.small {
+    width: 20px;
+    height: 20px;
+    border-width: 2.5px;
+}
+
+.spinner.centered {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: -10px 0 0 -10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes picture-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation-duration: 3s;
+    }
+}
+
+/* Saves, new game and openings --------------------------------------------- */
+
+.save-list {
+    margin: 0.5rem 0 1rem;
+}
+
+.setting-choices,
+.opening-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.setting-choice,
+.opening-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.85rem;
+    background: var(--panel);
+}
+
+.setting-choice.selected {
+    border-color: var(--accent);
+}
+
+.setting-choice small,
+.opening-choice small {
+    color: var(--small);
+}
+
+.opening-choice p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.opening-choice button {
+    align-self: flex-start;
+    margin-top: auto;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+
 /* Candidate grid ------------------------------------------------------------ */
 
 .candidate-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: 1rem;
-    margin: 1.5rem 0;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
 }
 
 .candidate {
@@ -178,12 +316,12 @@ button.active {
 
 .candidate button {
     padding: 0;
-    border: 3px solid transparent;
-    border-radius: 6px;
+    border: 2px solid transparent;
+    border-radius: 8px;
     overflow: hidden;
     display: block;
     width: 100%;
-    background: none;
+    background: var(--panel);
 }
 
 .candidate.selected button {
@@ -197,13 +335,13 @@ button.active {
 }
 
 .candidate figcaption {
-    font-size: 0.8rem;
-    color: var(--muted);
+    font-size: 12px;
+    color: var(--small);
     text-align: center;
     padding-top: 0.25rem;
 }
 
-/* Cast ---------------------------------------------------------------------- */
+/* Cast (debug) --------------------------------------------------------------- */
 
 .cast-grid {
     display: grid;
@@ -215,9 +353,9 @@ button.active {
 .cast-card {
     margin: 0;
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    background: var(--field-bg);
+    background: var(--panel);
 }
 
 .cast-card img {
@@ -252,312 +390,13 @@ button.active {
     margin: 0;
 }
 
-/* Temper ends that differ from the main love interest. */
 .cast-card em {
     font-style: normal;
     font-weight: 600;
 }
 
-/* Map and turns ------------------------------------------------------------- */
+/* Scene viewer (debug) ------------------------------------------------------- */
 
-.map-header {
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.map-slot {
-    color: var(--muted);
-    font-weight: 600;
-}
-
-.today {
-    border-left: 3px solid var(--accent);
-    background: var(--notice-bg);
-    padding: 0.4rem 0.8rem;
-}
-
-.map-section {
-    font-size: 1rem;
-    margin: 1.25rem 0 0.5rem;
-    color: var(--muted);
-}
-
-.map-places {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0.75rem;
-    margin: 0 0 1rem;
-}
-
-/* Picture cards: places and people on the map. */
-.place-card,
-.person-card {
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
-    text-align: left;
-    border-radius: 10px;
-}
-
-.place-picture,
-.person-picture {
-    position: relative;
-    display: block;
-    width: 100%;
-    background: var(--notice-bg);
-    overflow: hidden;
-}
-
-.place-picture {
-    aspect-ratio: 16 / 9;
-}
-
-.person-picture {
-    aspect-ratio: 3 / 4;
-}
-
-.place-picture img,
-.person-picture img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    animation: picture-in 300ms ease-out;
-}
-
-/* The shared neutral backdrop fills the card; the cut-out sprite stands on it. */
-.person-picture {
-    background-size: cover;
-    background-position: center;
-}
-
-/* Full-body sprites: head to about the waist. */
-.person-picture img {
-    object-fit: contain;
-    object-position: 50% 0;
-    transform: scale(1.6);
-    transform-origin: 50% 4%;
-}
-
-.place-card:not(:disabled):hover img {
-    transform: scale(1.04);
-    transition: transform 200ms ease-out;
-}
-
-.place-name,
-.person-name {
-    display: block;
-    padding: 0.45rem 0.6rem 0;
-    font-weight: 600;
-}
-
-.place-card small {
-    display: block;
-    padding: 0 0.6rem 0.5rem;
-    color: var(--muted);
-    font-size: 0.75rem;
-}
-
-.person-name {
-    padding-bottom: 0.5rem;
-    text-align: center;
-}
-
-.person-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 9rem));
-    gap: 0.75rem;
-}
-
-.person-card.chosen {
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
-}
-
-.person-none {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: 2rem;
-    color: var(--muted);
-}
-
-.picture-wait {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.12) 50%, transparent 70%);
-    background-size: 200% 100%;
-    animation: picture-wait 1.4s linear infinite;
-}
-
-@keyframes picture-wait {
-    from { background-position: 150% 0; }
-    to { background-position: -50% 0; }
-}
-
-@keyframes picture-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .picture-wait,
-    .place-picture img,
-    .person-picture img {
-        animation: none;
-    }
-}
-
-.choices {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    margin: 1rem 0;
-}
-
-.encounter-text.reaction {
-    border-left: 3px solid var(--accent);
-    padding-left: 0.75rem;
-}
-
-.popup {
-    display: inline-block;
-    margin: 0.5rem 0 1rem;
-    padding: 0.45rem 0.9rem;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--bg, #fff);
-    font-weight: 600;
-    animation: popup-in 220ms ease-out;
-}
-
-@keyframes popup-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: none; }
-}
-
-.recap {
-    max-width: 46rem;
-    padding-left: 1.25rem;
-}
-
-.recap li {
-    margin: 0 0 0.75rem;
-}
-
-.recap-when {
-    display: block;
-    font-size: 0.8rem;
-    opacity: 0.7;
-}
-
-.recap-words {
-    display: block;
-}
-
-.recap-influence {
-    display: block;
-    color: var(--accent);
-    font-size: 0.9rem;
-}
-
-.reply-form {
-    display: flex;
-    gap: 0.5rem;
-    margin: 0.5rem 0 1rem;
-    max-width: 46rem;
-}
-
-.reply-form input {
-    flex: 1;
-}
-
-.relationship small {
-    color: var(--muted);
-    margin-left: 0.5rem;
-}
-
-.invite {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-weight: 600;
-}
-
-/* New game ------------------------------------------------------------------ */
-
-.save-list {
-    list-style: none;
-    padding: 0;
-    display: grid;
-    gap: 0.3rem;
-}
-
-.save-list small {
-    color: var(--muted);
-    margin-left: 0.5rem;
-}
-
-.setting-choices,
-.opening-choices {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 0.8rem;
-    margin: 1rem 0;
-}
-
-.setting-choice,
-.opening-choice {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 0.75rem;
-    background: var(--field-bg);
-}
-
-.setting-choice.selected {
-    border-color: var(--accent);
-}
-
-.setting-choice small,
-.opening-choice small {
-    color: var(--muted);
-}
-
-.opening-choice p {
-    margin: 0;
-}
-
-.opening-choice button {
-    align-self: flex-start;
-    margin-top: auto;
-}
-
-.encounter-text {
-    font-size: 1.05rem;
-    max-width: 46rem;
-    /* Written scenes separate paragraphs with line breaks. */
-    white-space: pre-line;
-}
-
-.encounter-with {
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
-/* Composite stage ----------------------------------------------------------- */
-
-/*
- * HANDOFF 1.1: background and sprite are separate images stacked as absolutely
- * positioned layers. Nothing is flattened server-side, so one background serves every
- * expression and one sprite serves every location.
- */
 .stage {
     position: relative;
     width: 100%;
@@ -580,11 +419,6 @@ button.active {
     object-fit: cover;
 }
 
-/*
- * Every sprite is present at once and switching is an opacity change. The PNGs are
- * already in the browser cache and served immutable, so an expression change refetches
- * nothing and generates nothing.
- */
 .layer.sprite {
     height: 96%;
     width: auto;
@@ -598,8 +432,6 @@ button.active {
 .layer.sprite.shown {
     opacity: 1;
 }
-
-/* Controls ------------------------------------------------------------------ */
 
 .controls {
     display: flex;
@@ -617,4 +449,455 @@ button.active {
 .control-label {
     font-weight: 600;
     min-width: 6rem;
+}
+
+/* Play ---------------------------------------------------------------------- */
+
+/*
+ * Keeps the picture on screen whatever the shape of the window, with the same geometry as the app's
+ * StageLayout: in landscape the background fills the screen, the person stands in a column at the left
+ * (36% of the width, at most 0.8 of the height, at least 220px, at most half), and the words sit in a
+ * translucent box over the lower half of the rest (at least 240px tall, at most 880px wide, nearly the
+ * full height when nobody stands there). Upright, the picture takes the top 45%, up to a square, and the
+ * words scroll below it.
+ */
+.play {
+    position: fixed;
+    inset: 0;
+    container: play / size;
+    background: var(--stage-bg);
+    color: var(--fg);
+    overflow: hidden;
+}
+
+.play-area {
+    --inset: 16px;
+    --figure-w: min(max(220px, min(36cqw, 80cqh)), 50cqw);
+    --room: max(0px, calc(100cqw - var(--figure-w) - var(--inset)));
+    --box-w: min(var(--room), 880px);
+    --box-h: max(50cqh, min(calc(100cqh - 2 * var(--inset)), 240px));
+    --stage-h: min(45cqh, 100cqw);
+
+    position: absolute;
+    inset: 0;
+}
+
+.play-area.tall {
+    --box-h: calc(100cqh - 2 * var(--inset));
+}
+
+.play-stage,
+.play-figure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.play-stage {
+    width: 100%;
+    background: var(--stage-bg);
+}
+
+.play-figure {
+    width: var(--figure-w);
+    pointer-events: none;
+}
+
+.play-background {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: picture-in 300ms ease-out;
+}
+
+.play-textbox {
+    position: absolute;
+    left: calc(var(--figure-w) + (var(--room) - var(--box-w)) / 2);
+    bottom: var(--inset);
+    width: var(--box-w);
+    height: var(--box-h);
+    display: flex;
+    flex-direction: column;
+    background: rgba(20, 20, 24, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.19);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(2px);
+}
+
+@container play (orientation: portrait) {
+    .play-stage,
+    .play-figure {
+        height: var(--stage-h);
+    }
+
+    .play-figure {
+        width: 100%;
+    }
+
+    .play-textbox {
+        left: 0;
+        top: var(--stage-h);
+        bottom: 0;
+        width: 100%;
+        height: auto;
+        background: #121213;
+        border: 0;
+        border-radius: 0;
+        backdrop-filter: none;
+    }
+}
+
+/*
+ * A full-body sprite framed from the head down to the knees, centred, as the app's SpriteFrame does:
+ * 72% of its height shows, it may reach 1.7 times the area's width before shrinking, and a figure that
+ * fits whole stands on the bottom edge rather than floating at the top.
+ */
+.sprite-frame {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    container-type: size;
+    display: block;
+}
+
+.sprite-frame img {
+    --h: min(calc(100cqh / 0.72), calc(170cqw * 1.5));
+    position: absolute;
+    left: 50%;
+    top: max(calc(var(--h) * -0.03), calc(100cqh - var(--h) * 0.97));
+    height: var(--h);
+    width: auto;
+    max-width: none;
+    transform: translateX(-50%);
+    animation: picture-in 300ms ease-out;
+}
+
+.lineup {
+    position: absolute;
+    inset: 0;
+    display: grid;
+}
+
+.lineup-slot {
+    position: relative;
+    overflow: hidden;
+}
+
+.lineup-name {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: rgba(16, 16, 18, 0.69);
+    white-space: nowrap;
+}
+
+.loading {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 240px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: rgba(16, 16, 18, 0.69);
+    text-align: center;
+}
+
+.loading p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.textbox-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px 6px;
+}
+
+.textbox-header .title,
+.debug .title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.nametag {
+    flex: none;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+
+.side {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.side > * {
+    flex: none;
+}
+
+.side h2 {
+    margin: 6px 0 0;
+}
+
+.side p {
+    margin: 0;
+}
+
+.story {
+    font-size: 17px;
+    line-height: 26px;
+    white-space: pre-line;
+}
+
+.story.reaction {
+    color: var(--reaction);
+}
+
+.exchange {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 4px 0 8px;
+}
+
+.reply {
+    background: rgba(232, 200, 114, 0.13);
+    border-left: 3px solid var(--accent);
+    padding: 6px 12px;
+}
+
+.popup {
+    align-self: flex-start;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--popup);
+    animation: picture-in 220ms ease-out;
+}
+
+.writing {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.side button.choice {
+    margin: 0;
+}
+
+.reply-form {
+    display: flex;
+    gap: 8px;
+}
+
+.reply-form input {
+    flex: 1;
+    min-width: 0;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.place-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+    gap: 8px;
+}
+
+.person-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 8rem));
+    gap: 8px;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    text-align: left;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    background: var(--button-bg);
+}
+
+.card.chosen {
+    border-color: var(--accent);
+}
+
+.place-picture,
+.person-picture {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 4px;
+    background: #26262a;
+}
+
+.place-picture {
+    height: 90px;
+}
+
+.person-picture {
+    height: 160px;
+    background-size: cover;
+    background-position: center;
+}
+
+.place-picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    animation: picture-in 300ms ease-out;
+}
+
+.place-name {
+    font-weight: 600;
+}
+
+.card small {
+    color: var(--small);
+    font-size: 12px;
+}
+
+.person-name {
+    text-align: center;
+}
+
+.person-none {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 2rem;
+    color: var(--muted);
+}
+
+.recap-line {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* A small round back button in the screen's top left corner, and the place's name at the top right. */
+.back {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    padding-bottom: 3px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.63);
+    color: #fff;
+    font-size: 22px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.caption {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 6px 12px;
+    border-radius: 0 0 0 8px;
+    background: rgba(0, 0, 0, 0.63);
+}
+
+.busy {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    overflow: hidden;
+}
+
+.busy::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 30%;
+    background: var(--accent);
+    animation: busy 1.2s ease-in-out infinite;
+}
+
+@keyframes busy {
+    from { left: -30%; }
+    to { left: 100%; }
+}
+
+/* The hidden debug screen: opaque, monospace, everything selectable. */
+.debug {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: rgba(16, 16, 18, 0.94);
+}
+
+.debug-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+}
+
+.debug-bar .title {
+    flex: none;
+}
+
+.debug-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 12px 24px;
+}
+
+.debug summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 0;
+}
+
+.debug pre {
+    margin: 0 0 8px;
+    font-family: "Cascadia Mono", Consolas, Menlo, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
 }

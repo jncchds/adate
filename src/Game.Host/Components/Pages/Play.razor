@@ -3,322 +3,327 @@
 @using Game.Core.Encounters
 @using Game.Core.Places
 @using Game.Core.Saves
+@using Game.Core.Story
 @using Game.Play
 @inject WorldService World
 @inject CharacterStudio Studio
 @inject ILocationCatalog PlaceTypes
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
-<PageTitle>Play</PageTitle>
+@*
+    The same screen as the desktop and phone app (Game.App PlayView): the picture always fills the stage, the
+    person stands at the left, and the words scroll in a translucent box over the lower part of the rest. On an
+    upright screen the picture takes the top and the words sit below. Scenes are saved as they happen, so
+    coming back shows the same one.
+*@
 
-@if (_error is not null)
-{
-    <h1>Play</h1>
-    <div class="error">
-        <strong>Something went wrong.</strong>
-        <p>@_error</p>
-        <button @onclick="RetryAsync">Try again</button>
-    </div>
-}
-else if (_state is null)
-{
-    <h1>Play</h1>
-    <div class="working"><p>Loading the save.</p></div>
-}
-else if (_outcome is not null)
-{
-    <h1>Day @_outcome.VisitedAt.Day, @_outcome.VisitedAt.Slot</h1>
+<PageTitle>@_heading</PageTitle>
 
-    <div class="stage">
-        @if (_background is not null)
-        {
-            <img class="layer background" src="@_background" alt="@_outcomePlace?.Name" />
-        }
-
-        @if (_sprite is not null)
-        {
-            <img class="layer sprite shown" src="@_sprite" alt="@_view?.Name" />
-        }
-    </div>
-
-    <p class="encounter-text">@_outcome.Text</p>
-
-    @if (_outcome.With.Count > 0)
-    {
-        <p class="encounter-with">With: @string.Join(", ", _outcome.With.Select(Who))</p>
-    }
-
-    @if (_outcome.Reveals.Count > 0)
-    {
-        <p class="encounter-with">New place: @string.Join(", ", _outcome.Reveals.Select(PlaceName))</p>
-    }
-
-    @if (_outcome.Choices is { Count: > 0 } choices)
-    {
-        <div class="choices">
-            @foreach (var choice in choices)
+<div class="play">
+    <div class="play-area @(_mode == Mode.Scene ? null : "tall")">
+        <div class="play-stage">
+            @if (_stageBackground is not null)
             {
-                <button type="button" disabled="@_working" @onclick="() => ChooseAsync(choice)">@choice.Text</button>
+                <img class="play-background" src="@_stageBackground" alt="" />
             }
-        </div>
-    }
-    else if (_reaction is not null)
-    {
-        <p class="encounter-text reaction">@_reaction</p>
-        @if (_popup is not null)
-        {
-            <div class="popup" role="status">@_popup</div>
-        }
-        @if (_agreed is not null)
-        {
-            <p class="today">@_agreed</p>
-        }
-        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
-    }
-    else if (_view?.Choices is { Count: > 0 } offered)
-    {
-        <div class="choices">
-            @for (var i = 0; i < offered.Count; i++)
+
+            @* On the map: everyone met so far, standing left to right on the backdrop, one slot per person. *@
+            @if (_mode == Mode.Map && _lineup.Count > 0)
             {
-                var index = i;
-                <button type="button" disabled="@_working" @onclick="() => RespondAsync(index)">@offered[index].Text</button>
-            }
-        </div>
-        <form class="reply-form" @onsubmit="() => RespondAsync(null)">
-            <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
-            <button type="submit" disabled="@_working">Reply</button>
-        </form>
-    }
-    else
-    {
-        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
-    }
-}
-else if (_state.PendingScene is { } waiting)
-{
-    <h1>Day @waiting.Clock.Day, @waiting.Clock.Slot</h1>
-    <p class="encounter-text">@waiting.Text</p>
-
-    @if (_reaction is not null)
-    {
-        <p class="encounter-text reaction">@_reaction</p>
-        @if (_popup is not null)
-        {
-            <div class="popup" role="status">@_popup</div>
-        }
-        @if (_agreed is not null)
-        {
-            <p class="today">@_agreed</p>
-        }
-        <button type="button" disabled="@_working" @onclick="ContinueAsync">Continue</button>
-    }
-    else
-    {
-        <div class="choices">
-            @for (var i = 0; i < waiting.Choices.Count; i++)
-            {
-                var index = i;
-                <button type="button" disabled="@_working" @onclick="() => RespondAsync(index)">@waiting.Choices[index].Text</button>
-            }
-        </div>
-        <form class="reply-form" @onsubmit="() => RespondAsync(null)">
-            <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
-            <button type="submit" disabled="@_working">Reply</button>
-        </form>
-    }
-}
-else if (_state.Ending is { } ending)
-{
-    <h1>@(ending.PartnerName is null ? "On your own" : $"With {ending.PartnerName}")</h1>
-    <p class="encounter-text">@ending.Text</p>
-
-    @if (ending.Departures.Count > 0)
-    {
-        <h2>Who walked away</h2>
-        <ul>
-            @foreach (var departure in ending.Departures)
-            {
-                <li>@departure</li>
-            }
-        </ul>
-    }
-
-    @if (ending.PassedOver.Count > 0)
-    {
-        <h2>Who you passed over</h2>
-        <p>@string.Join(", ", ending.PassedOver)</p>
-    }
-
-    @if (ending.Choices is { Count: > 0 } madeChoices)
-    {
-        <h2>Your choices</h2>
-        <ol class="recap">
-            @foreach (var line in madeChoices)
-            {
-                <li>
-                    <span class="recap-when">Day @line.Day, @line.Slot.ToLowerInvariant()</span>
-                    <span class="recap-words">“@line.Words”</span>
-                    <span class="recap-influence">@string.Join(" · ", line.Influence)</span>
-                </li>
-            }
-        </ol>
-    }
-
-    @if (ending.ProfileOf is not null)
-    {
-        <h2>@ending.ProfileOf</h2>
-        <ul>
-            @foreach (var line in ending.Profile)
-            {
-                <li>@line</li>
-            }
-        </ul>
-    }
-
-    <p><a href="/">Start another story</a></p>
-}
-else if (_state.EndingOffer is { } offer)
-{
-    <h1>@(_state.Over ? $"The {_state.Setting.Days} days are over" : "It is time to decide")</h1>
-
-    @foreach (var departure in offer.Departures)
-    {
-        <p class="today">@departure</p>
-    }
-
-    <p class="lede">
-        @(offer.Routes.Count == 0
-            ? "No one is waiting for an answer."
-            : offer.Asker is { } asker ? $"{asker} asks whether you'll stay. Who do you stay with?" : "Who do you stay with?")
-    </p>
-
-    @if (_working)
-    {
-        <div class="working"><p>Writing the ending.</p></div>
-    }
-
-    <div class="person-cards">
-        @foreach (var route in offer.Routes)
-        {
-            <button type="button" class="person-card" disabled="@_working" @onclick="() => EndAsync(route.Key)">
-                <span class="person-picture" style="@(_backdrop is null ? null : $"background-image: url('{_backdrop}')")">
-                    @if (_portraits.GetValueOrDefault(route.Key) is { } portrait)
+                <div class="lineup" style="grid-template-columns: repeat(@_lineup.Count, minmax(0, 1fr))">
+                    @foreach (var slot in _lineup)
                     {
-                        <img src="@portrait" alt="" />
+                        <div class="lineup-slot">
+                            <div class="sprite-frame">
+                                @if (slot.Portrait is not null)
+                                {
+                                    <img src="@slot.Portrait" alt="@slot.Name" />
+                                }
+                            </div>
+                            @if (slot.IsMet && slot.Portrait is null)
+                            {
+                                <span class="spinner small centered" aria-hidden="true"></span>
+                            }
+                            @if (slot.IsMet)
+                            {
+                                <span class="lineup-name">@slot.Name</span>
+                            }
+                        </div>
                     }
-                    else
-                    {
-                        <span class="picture-wait" aria-hidden="true"></span>
-                    }
-                </span>
-                <span class="person-name">Stay with @route.Name</span>
-            </button>
-        }
-        <button type="button" class="person-card nobody" disabled="@_working" @onclick="() => EndAsync(Game.Core.Story.EndingRules.AloneKey)">
-            <span class="person-picture"><span class="person-none">—</span></span>
-            <span class="person-name">Leave on your own</span>
-        </button>
-    </div>
-}
-else if (_state.Pending is not null)
-{
-    <h1>Day @_state.Clock.Day</h1>
-    <p class="encounter-text">@_state.Pending.Text</p>
-    <div class="choices">
-        @foreach (var choice in _state.Pending.Choices)
-        {
-            <button type="button" disabled="@_working" @onclick="() => ChooseAsync(choice)">@choice.Text</button>
-        }
-    </div>
-}
-else if (_state.Opening is null)
-{
-    <h1>@_state.Setting.DisplayName</h1>
-    <p class="lede">This save has not chosen how you meet @_state.MainLiName yet.</p>
-    <p><a href="/opening/@SaveGuid">Choose an opening</a></p>
-}
-else if (_state.Over)
-{
-    <h1>The @_state.Setting.Days days are over</h1>
-    <p class="lede">Endings arrive in a later build step. For now, this is where the calendar stops.</p>
-}
-else
-{
-    <div class="map-header">
-        <h1>Day @_state.Clock.Day of @_state.Setting.Days</h1>
-        <span class="map-slot">@_state.Clock.Slot@(_state.Weather is { } weather ? $" · {weather.Label}" : "")</span>
-    </div>
+                </div>
+            }
+        </div>
 
-    <p class="lede">
-        @_state.Setting.DisplayName. Choose where to spend the @_state.Clock.Slot.ToString().ToLowerInvariant().
-        @if (_state.MainLiId is { } mainId)
-        {
-            <a href="/scene/@mainId">Scene viewer</a>
-        }
-    </p>
-
-    @foreach (var ev in _state.Today)
-    {
-        <p class="today">Today: @ev.Name at @PlaceName(ev.Place), @ev.Time.ToString().ToLowerInvariant().</p>
-    }
-
-    @foreach (var hint in _state.Hints)
-    {
-        <p class="today">@hint</p>
-    }
-
-    @if (_state.Invitees.Count > 0)
-    {
-        <h2 class="map-section">Bring someone along</h2>
-        <div class="person-cards" role="radiogroup" aria-label="Invite along">
-            <button type="button" role="radio" aria-checked="@(_invite == "")"
-                    class="person-card nobody @(_invite == "" ? "chosen" : "")" @onclick='() => _invite = ""'>
-                <span class="person-picture"><span class="person-none">—</span></span>
-                <span class="person-name">Nobody</span>
-            </button>
-            @foreach (var person in _state.Invitees)
+        <div class="play-figure">
+            <div class="sprite-frame">
+                @if (_stageSprite is not null)
+                {
+                    <img src="@_stageSprite" alt="@_speaker" />
+                }
+            </div>
+            @if (_stageBackground is null && _mode != Mode.Error)
             {
-                <button type="button" role="radio" aria-checked="@(_invite == person.Key)"
-                        class="person-card @(_invite == person.Key ? "chosen" : "")" @onclick="() => _invite = person.Key">
-                    <span class="person-picture" style="@(_backdrop is null ? null : $"background-image: url('{_backdrop}')")">
-                        @if (_portraits.GetValueOrDefault(person.Key) is { } portrait)
+                <div class="loading" role="status">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <p>@_stageLoadingText</p>
+                </div>
+            }
+        </div>
+
+        <section class="play-textbox">
+            <header class="textbox-header">
+                @* Ten quick taps on the title open the debug screen. *@
+                <h1 class="title" @onclick="TitleTapped">@_heading</h1>
+                @if (!string.IsNullOrEmpty(_speaker))
+                {
+                    <span class="nametag">@_speaker</span>
+                }
+            </header>
+
+            <div class="side" @ref="_side">
+                @switch (_mode)
+                {
+                    case Mode.Loading:
+                        <div class="writing"><span class="spinner small" aria-hidden="true"></span><span class="lede">Loading the save…</span></div>
+                        break;
+
+                    case Mode.Error:
+                        <p class="error-text">@_error</p>
+                        <button type="button" class="accent" @onclick="RetryAsync">Try again</button>
+                        break;
+
+                    case Mode.Scene:
+                        @if (!string.IsNullOrEmpty(_sceneText))
                         {
-                            <img src="@portrait" alt="" />
+                            <p class="story">@_sceneText</p>
                         }
-                        else
+                        @if (_withLine is not null)
                         {
-                            <span class="picture-wait" aria-hidden="true"></span>
+                            <p class="small">@_withLine</p>
                         }
-                    </span>
-                    <span class="person-name">@person.Name</span>
-                </button>
-            }
-        </div>
-    }
+                        @if (_revealLine is not null)
+                        {
+                            <p class="small">@_revealLine</p>
+                        }
+                        @if (_noteLine is not null)
+                        {
+                            <p class="note">@_noteLine</p>
+                        }
 
-    <h2 class="map-section">Where to</h2>
-    <div class="map-places">
-        @foreach (var place in _state.KnownPlaces)
+                        @foreach (var exchange in _exchanges)
+                        {
+                            <div class="exchange">
+                                <div class="reply">
+                                    <span class="small">You</span>
+                                    <p class="story">@exchange.Reply</p>
+                                </div>
+                                @if (exchange.Reaction is not null)
+                                {
+                                    <p class="story reaction">@exchange.Reaction</p>
+                                }
+                                @if (exchange.Popup is not null)
+                                {
+                                    <div class="popup" role="status">@exchange.Popup</div>
+                                }
+                                @if (exchange.Agreed is not null)
+                                {
+                                    <p class="note">@exchange.Agreed</p>
+                                }
+                            </div>
+                        }
+
+                        @if (_isWriting)
+                        {
+                            <div class="writing"><span class="spinner small" aria-hidden="true"></span><span class="lede">@_writingText</span></div>
+                        }
+
+                        @foreach (var choice in _choices)
+                        {
+                            <button type="button" class="choice" disabled="@_working" @onclick="() => PickChoiceAsync(choice)">@choice.Text</button>
+                        }
+
+                        @if (_canReply)
+                        {
+                            <form class="reply-form" @onsubmit="ReplyAsync">
+                                <input type="text" @bind="_reply" @bind:event="oninput" maxlength="300" placeholder="Or say or do something else…" disabled="@_working" />
+                                <button type="submit" disabled="@(_working || string.IsNullOrWhiteSpace(_reply))">Reply</button>
+                            </form>
+                        }
+
+                        @if (_showContinue)
+                        {
+                            <button type="button" class="accent" disabled="@_working" @onclick="ContinueAsync">Continue</button>
+                        }
+                        break;
+
+                    case Mode.Map:
+                        <p class="lede">@_lede</p>
+                        @foreach (var note in _notes)
+                        {
+                            <p class="note">@note</p>
+                        }
+
+                        @if (_people.Count > 0)
+                        {
+                            <h2>Bring someone along</h2>
+                            <div class="person-cards">
+                                @foreach (var card in _people)
+                                {
+                                    @PersonCard(card)
+                                }
+                            </div>
+                        }
+
+                        @if (_contacts.Count > 0)
+                        {
+                            <h2>Message someone</h2>
+                            <div class="chips">
+                                @foreach (var contact in _contacts)
+                                {
+                                    <button type="button" class="chip" disabled="@_working" @onclick="() => TextAsync(contact)">Text @contact.Name</button>
+                                }
+                            </div>
+                        }
+
+                        <h2>Where to</h2>
+                        <div class="place-cards">
+                            @foreach (var card in _places)
+                            {
+                                <button type="button" class="card place-card" disabled="@_working" @onclick="() => GoAsync(card)">
+                                    <span class="place-picture">
+                                        @if (card.Thumbnail is not null)
+                                        {
+                                            <img src="@card.Thumbnail" alt="" />
+                                        }
+                                        else
+                                        {
+                                            <span class="spinner small centered" aria-hidden="true"></span>
+                                        }
+                                    </span>
+                                    <span class="place-name">@card.Place.Name</span>
+                                    <small>@card.TypeName</small>
+                                </button>
+                            }
+                        </div>
+                        break;
+
+                    case Mode.EndingOffer:
+                        @foreach (var note in _notes)
+                        {
+                            <p class="note">@note</p>
+                        }
+                        <p class="lede">@_lede</p>
+                        <div class="person-cards">
+                            @foreach (var card in _people)
+                            {
+                                @PersonCard(card)
+                            }
+                        </div>
+                        break;
+
+                    case Mode.Ending when _state?.Ending is { } ending:
+                        <p class="story">@ending.Text</p>
+
+                        @if (ending.Departures.Count > 0)
+                        {
+                            <h2>Who walked away</h2>
+                            @foreach (var departure in ending.Departures)
+                            {
+                                <p class="note">@departure</p>
+                            }
+                        }
+
+                        @if (ending.PassedOver.Count > 0)
+                        {
+                            <h2>Who you passed over</h2>
+                            <p class="lede">@string.Join(", ", ending.PassedOver)</p>
+                        }
+
+                        @if (ending.Choices is { Count: > 0 } madeChoices)
+                        {
+                            <h2>Your choices</h2>
+                            @foreach (var line in madeChoices)
+                            {
+                                <div class="recap-line">
+                                    <span class="small">Day @line.Day, @line.Slot.ToLowerInvariant()</span>
+                                    <span>“@line.Words”</span>
+                                    <span class="note">@string.Join(" · ", line.Influence)</span>
+                                </div>
+                            }
+                        }
+
+                        @if (ending.ProfileOf is not null)
+                        {
+                            <h2>@ending.ProfileOf</h2>
+                            @foreach (var line in ending.Profile)
+                            {
+                                <p class="lede">@line</p>
+                            }
+                        }
+
+                        <a class="button accent" href="/">Start another story</a>
+                        break;
+
+                    case Mode.NoOpening:
+                        <p class="lede">@_lede</p>
+                        <a class="button accent" href="/opening/@SaveGuid">Choose an opening</a>
+                        break;
+
+                    case Mode.Over:
+                        <p class="lede">@_lede</p>
+                        break;
+                }
+            </div>
+        </section>
+
+        @* Overlays, above the person: back to the saves, the place's name, and the busy line. *@
+        <a class="back" href="/" title="Saves" aria-label="Saves">‹</a>
+        @if (!string.IsNullOrEmpty(_caption))
         {
-            <button type="button" class="place-card" disabled="@_working" @onclick="() => GoAsync(place)">
-                <span class="place-picture">
-                    @if (_thumbnails.GetValueOrDefault(place.Id) is { } thumbnail)
+            <div class="caption">@_caption</div>
+        }
+        @if (_working)
+        {
+            <div class="busy" role="progressbar" aria-label="Working"></div>
+        }
+
+        @* The hidden debug screen, over everything. *@
+        @if (_debugOpen)
+        {
+            <div class="debug">
+                <div class="debug-bar">
+                    <strong class="title">Debug</strong>
+                    <button type="button" @onclick="OpenDebugAsync">Refresh</button>
+                    <button type="button" @onclick="() => _debugOpen = false">Close</button>
+                </div>
+                <div class="debug-body">
+                    @foreach (var part in _debugSections)
                     {
-                        <img src="@thumbnail" alt="" />
+                        <details open>
+                            <summary>@part.Title</summary>
+                            <pre>@(part.Lines.Count == 0 ? "(none)" : string.Join('\n', part.Lines))</pre>
+                        </details>
                     }
-                    else
-                    {
-                        <span class="picture-wait" aria-hidden="true"></span>
-                    }
-                </span>
-                <span class="place-name">@place.Name</span>
-                <small>@PlaceTypes.Get(place.TypeId).DisplayName</small>
-            </button>
+                </div>
+            </div>
         }
     </div>
-}
+</div>
 
 @code {
+    private enum Mode
+    {
+        Loading,
+        Error,
+        Scene,
+        Map,
+        EndingOffer,
+        Ending,
+        NoOpening,
+        Over,
+    }
+
     [Parameter]
     public Guid SaveGuid { get; set; }
 
@@ -328,200 +333,833 @@ else
 
     private SaveId SaveId => new(SaveGuid);
 
+    private ElementReference _side;
+    private string? _scrollRequest;
+
     private PlayState? _state;
     private TurnOutcome? _outcome;
-    private PlaceRecord? _outcomePlace;
-    private string? _background;
-    private string? _sprite;
     private SceneView? _view;
-    private string? _reaction;
-    private string? _popup;
-    private string? _agreed;
-    private string _reply = "";
     private string _invite = "";
+
+    // Where the player was last, so the stage shows them there.
+    private PlaceRecord? _stagePlace;
+
+    // Bumped whenever the scene on screen changes, so a picture or answer for an earlier one is dropped.
+    private int _scene;
+    private int _generation;
+
+    private Mode _mode = Mode.Loading;
     private bool _working;
     private string? _error;
+    private string _heading = "Play";
+    private string? _lede;
+    private string? _caption;
+    private string? _stageBackground;
+    private string _stageLoadingText = "Opening the save…";
+    private string? _stageSprite;
+    private string? _sceneText;
+    private string? _speaker;
+    private bool _isWriting;
+    private string _writingText = "Writing the scene…";
+    private string? _withLine;
+    private string? _revealLine;
+    private string? _noteLine;
+    private readonly List<Exchange> _exchanges = [];
+    private IReadOnlyList<ChoiceButton> _choices = [];
+    private bool _canReply;
+    private bool _showContinue;
+    private string _reply = "";
+    private IReadOnlyList<string> _notes = [];
+    private readonly List<PersonCardItem> _people = [];
+    private readonly List<PlaceCardItem> _places = [];
+    private readonly List<LineupSlot> _lineup = [];
+    private IReadOnlyList<Invitee> _contacts = [];
 
-    // Map pictures, keyed by place id and invitee key, for the slot and weather they were drawn for.
+    private bool _debugOpen;
+    private IReadOnlyList<DebugSection> _debugSections = [];
+    private readonly Queue<DateTime> _taps = new();
+
+    // Pictures, reused while the slot and weather they were drawn for last.
     private readonly Dictionary<string, string> _thumbnails = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _portraits = new(StringComparer.Ordinal);
     private string? _picturesFor;
-
-    // One neutral backdrop, shared by every person card, with the cut-out sprites standing on it.
     private string? _backdrop;
+
+    private sealed class Exchange(string reply)
+    {
+        public string Reply { get; } = reply;
+
+        public string? Reaction { get; set; }
+
+        public string? Popup { get; set; }
+
+        public string? Agreed { get; set; }
+    }
+
+    /// <summary>An encounter's own choice, or a proposed reply by its index.</summary>
+    private sealed record ChoiceButton(string Text, EncounterChoice? Authored, int? Index);
+
+    private sealed class PersonCardItem(string key, string label, bool isNobody)
+    {
+        public string Key { get; } = key;
+
+        public string Label { get; } = label;
+
+        public bool IsNobody { get; } = isNobody;
+
+        public bool Chosen { get; set; }
+
+        public string? Portrait { get; set; }
+    }
+
+    private sealed class PlaceCardItem(PlaceRecord place, string typeName)
+    {
+        public PlaceRecord Place { get; } = place;
+
+        public string TypeName { get; } = typeName;
+
+        public string? Thumbnail { get; set; }
+    }
+
+    private sealed class LineupSlot(string key, string name, bool isMet)
+    {
+        public string Key { get; } = key;
+
+        public string Name { get; } = name;
+
+        public bool IsMet { get; } = isMet;
+
+        public string? Portrait { get; set; }
+    }
+
+    private RenderFragment PersonCard(PersonCardItem card) => __builder =>
+    {
+        <button type="button" class="card person-card @(card.Chosen ? "chosen" : null)" disabled="@_working" @onclick="() => PersonPickedAsync(card)">
+            <span class="person-picture" style="@(card.IsNobody || _backdrop is null ? null : $"background-image: url('{_backdrop}')")">
+                @if (card.IsNobody)
+                {
+                    <span class="person-none">—</span>
+                }
+                else
+                {
+                    <span class="sprite-frame">
+                        @if (card.Portrait is not null)
+                        {
+                            <img src="@card.Portrait" alt="" />
+                        }
+                    </span>
+                    @if (card.Portrait is null)
+                    {
+                        <span class="spinner small centered" aria-hidden="true"></span>
+                    }
+                }
+            </span>
+            <span class="person-name">@card.Label</span>
+        </button>
+    };
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
+        await ReloadAsync();
 
-        if (Start is { } start
-            && _state is { Opening: not null, Pending: null, PendingScene: null, Scene: null, EndingOffer: null, Ending: null, Over: false }
-            && _state.KnownPlaces.FirstOrDefault(p => p.Id == start) is { } place)
+        // Choosing an opening leads straight into its meeting, not to a map with a hint.
+        if (Start is { } start && _mode == Mode.Map && _places.FirstOrDefault(p => p.Place.Id == start) is { } card)
         {
-            await GoAsync(place);
+            await GoAsync(card);
         }
     }
 
-    private async Task LoadAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollRequest is { } request)
+        {
+            _scrollRequest = null;
+            try
+            {
+                await JS.InvokeVoidAsync(request, _side);
+            }
+            catch (Exception ex) when (ex is JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+            {
+                // Scrolling is a nicety; a page that is going away does not need it.
+            }
+        }
+    }
+
+    private Task RefreshAsync() => InvokeAsync(StateHasChanged);
+
+    private async Task ReloadAsync()
     {
         _error = null;
 
         try
         {
-            _state = await World.GetPlayStateAsync(SaveId);
-            _ = LoadPicturesAsync(_state);
+            var state = await World.GetPlayStateAsync(SaveId);
+            _state = state;
+            Apply(state);
+
+            if (state.Scene is { } scene)
+            {
+                _ = RestoreSceneAsync(scene);
+            }
+            else
+            {
+                _ = LoadPicturesAsync(state);
+            }
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            ShowError(ex);
+        }
+    }
+
+    /// <summary>Shows the save as it stands, in the same order of precedence as the app.</summary>
+    private void Apply(PlayState state)
+    {
+        _scene++;
+        _outcome = null;
+        _view = null;
+        _exchanges.Clear();
+        _isWriting = false;
+        _reply = "";
+        _withLine = null;
+        _revealLine = null;
+        _noteLine = null;
+        _stageSprite = null;
+        _speaker = null;
+        _people.Clear();
+        _places.Clear();
+        _lineup.Clear();
+        _contacts = [];
+        _notes = [];
+
+        if (state.Scene is { } scene)
+        {
+            ShowStoredScene(state, scene);
+        }
+        else if (state.PendingScene is { } waiting)
+        {
+            _heading = $"Day {waiting.Clock.Day}, {waiting.Clock.Slot}";
+            _sceneText = waiting.Text;
+            _view = new SceneView(waiting.Text, null, null, null, null, waiting.Choices) { Open = true };
+            _mode = Mode.Scene;
+        }
+        else if (state.Ending is { } ending)
+        {
+            _heading = ending.PartnerName is null ? "On your own" : $"With {ending.PartnerName}";
+            _caption = null;
+            _stageLoadingText = "Setting the scene…";
+            _mode = Mode.Ending;
+        }
+        else if (state.EndingOffer is { } offer)
+        {
+            _heading = state.Over ? $"The {state.Setting.Days} days are over" : "It is time to decide";
+            _notes = offer.Departures;
+            _lede = offer.Routes.Count == 0
+                ? "No one is waiting for an answer."
+                : offer.Asker is { } asker ? $"{asker} asks whether you'll stay. Who do you stay with?" : "Who do you stay with?";
+
+            foreach (var route in offer.Routes)
+            {
+                _people.Add(new PersonCardItem(route.Key, $"Stay with {route.Name}", false));
+            }
+
+            _people.Add(new PersonCardItem(EndingRules.AloneKey, "Leave on your own", true));
+            _caption = null;
+            _stageLoadingText = "Setting the scene…";
+            _mode = Mode.EndingOffer;
+        }
+        else if (state.Pending is { } pending)
+        {
+            _heading = $"Day {state.Clock.Day}";
+            _sceneText = pending.Text;
+            _mode = Mode.Scene;
+        }
+        else if (state.Opening is null)
+        {
+            _heading = state.Setting.DisplayName;
+            _lede = $"This save has not chosen how you meet {state.MainLiName} yet.";
+            _mode = Mode.NoOpening;
+        }
+        else if (state.Over)
+        {
+            _heading = $"The {state.Setting.Days} days are over";
+            _lede = "The calendar stops here.";
+            _mode = Mode.Over;
+        }
+        else
+        {
+            var slot = state.Clock.Slot.ToString();
+            _heading = $"Day {state.Clock.Day} of {state.Setting.Days}";
+            _caption = state.Weather is { } weather ? $"{slot} · {weather.Label}" : slot;
+            _lede = $"{state.Setting.DisplayName}. Choose where to spend the {slot.ToLowerInvariant()}.";
+            _notes =
+            [
+                .. state.Today.Select(ev => $"Today: {ev.Name} at {PlaceName(ev.Place)}, {ev.Time.ToString().ToLowerInvariant()}."),
+                .. state.Hints,
+            ];
+
+            _invite = "";
+            if (state.Invitees.Count > 0)
+            {
+                _people.Add(new PersonCardItem("", "Nobody", true) { Chosen = true });
+                foreach (var person in state.Invitees)
+                {
+                    _people.Add(new PersonCardItem(person.Key, person.Name, false));
+                }
+            }
+
+            foreach (var place in state.KnownPlaces)
+            {
+                // During a shift, the workplace says so: going there works it.
+                var typeName = PlaceTypes.Get(place.TypeId).DisplayName;
+                _places.Add(new PlaceCardItem(place, state.OnShift && state.Job?.Place == place.Id ? $"{typeName} · your shift" : typeName)
+                {
+                    Thumbnail = _thumbnails.GetValueOrDefault(place.Id),
+                });
+            }
+
+            _contacts = state.Contacts ?? [];
+
+            // Everyone met so far stands on the backdrop, left to right, in one slot for each person the story has.
+            var met = state.Met ?? [];
+            foreach (var person in met)
+            {
+                _lineup.Add(new LineupSlot(person.Key, person.Name, true) { Portrait = _portraits.GetValueOrDefault(person.Key) });
+            }
+
+            for (var empty = met.Count; empty < state.CastSize; empty++)
+            {
+                _lineup.Add(new LineupSlot($"slot-{empty}", "", false));
+            }
+
+            _stageLoadingText = "Setting the scene…";
+            _mode = Mode.Map;
+        }
+
+        RefreshSceneControls();
+        _scrollRequest = "adate.scrollToTop";
+    }
+
+    /// <summary>The scene the player left, exactly as it was: place, words, person, replies and answers.</summary>
+    private void ShowStoredScene(PlayState state, CurrentScene scene)
+    {
+        var outcome = scene.Outcome;
+        var place = state.KnownPlaces.FirstOrDefault(p => p.Id == outcome.PlaceId);
+        _stagePlace = place ?? _stagePlace;
+        _outcome = outcome with { Text = scene.Text };
+        _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices)
+        {
+            Open = state.PendingScene is not null,
+        };
+
+        _heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
+        _caption = place?.Name ?? outcome.PlaceId;
+        _stageLoadingText = $"Drawing {_caption}…";
+        _stageBackground = null;
+        _sceneText = scene.Written ? scene.Text : null;
+        _isWriting = !scene.Written;
+        _writingText = "Writing the scene…";
+        _withLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
+        _revealLine = outcome.Reveals.Count > 0 ? $"New place: {string.Join(", ", outcome.Reveals.Select(PlaceName))}" : null;
+        _noteLine = outcome.Note;
+        _speaker = scene.Speaker;
+        foreach (var exchange in scene.Exchanges)
+        {
+            _exchanges.Add(new Exchange(exchange.Reply) { Reaction = exchange.Reaction, Popup = exchange.Popup, Agreed = exchange.Agreed });
+        }
+
+        _mode = Mode.Scene;
+    }
+
+    /// <summary>
+    /// Brings back a stored scene's pictures (drawn already, so they come from the cache), draws anything the scene
+    /// was still waiting for, and finishes the writing if leaving interrupted it.
+    /// </summary>
+    private async Task RestoreSceneAsync(CurrentScene scene)
+    {
+        var token = _scene;
+
+        try
+        {
+            var background = scene.BackgroundPath ?? await World.SceneBackgroundAsync(SaveId);
+            if (token != _scene)
+            {
+                return;
+            }
+
+            _stageBackground = background;
+            await RefreshAsync();
+        }
+        catch (Exception)
+        {
+            if (token == _scene)
+            {
+                _stageLoadingText = "The picture could not be drawn.";
+                await RefreshAsync();
+            }
+        }
+
+        if (scene.CharacterId is not null)
+        {
+            try
+            {
+                var path = scene.SpritePath;
+                if (path is null)
+                {
+                    var presented = await World.PresentAsync(SaveId, scene.Outcome);
+                    path = await World.SceneSpriteAsync(SaveId, presented with { Expression = scene.Expression ?? presented.Expression });
+                }
+
+                if (token == _scene)
+                {
+                    _stageSprite = path;
+                    await RefreshAsync();
+                }
+            }
+            catch (Exception)
+            {
+                // The words and choices work without the person's picture.
+            }
+        }
+
+        if (!scene.Written)
+        {
+            _working = true;
+            try
+            {
+                if (await World.ResumeSceneAsync(SaveId) is { } written && token == _scene)
+                {
+                    await ApplyWrittenAsync(written, token);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (token == _scene)
+                {
+                    ShowError(ex);
+                }
+            }
+            finally
+            {
+                _working = false;
+                await RefreshAsync();
+            }
         }
     }
 
     /// <summary>
-    /// Fills in the map's pictures one by one as they arrive, never holding up the map: backgrounds
-    /// at this slot and weather, and each invitee at their resting expression. Cached images come
-    /// back at once; the rest render once and are cached for every later visit.
+    /// What a scene offers now: the encounter's own choices before anything is said, what the player can say next
+    /// while the conversation goes on (always with a reply of their own), or Continue once it has closed. Nothing
+    /// while words are still being written.
+    /// </summary>
+    private void RefreshSceneControls()
+    {
+        IReadOnlyList<ProposedChoice>? replies = null;
+        IReadOnlyList<EncounterChoice>? authored = null;
+        var showContinue = false;
+
+        if (_isWriting || _mode != Mode.Scene)
+        {
+            // The spinner stands in for the words and the choices alike; outside a scene there is nothing to pick.
+        }
+        else if (_exchanges.Count == 0 && (_outcome?.Choices ?? _state?.Pending?.Choices) is { Count: > 0 } choices)
+        {
+            authored = choices;
+        }
+        else if (_view is { Open: true } open)
+        {
+            // Nothing proposed still leaves the player's own words, beside Continue.
+            replies = open.Choices ?? [];
+            showContinue = replies.Count == 0;
+        }
+        else
+        {
+            showContinue = true;
+        }
+
+        _choices = authored is not null
+            ? [.. authored.Select(c => new ChoiceButton(c.Text, c, null))]
+            : replies is not null
+                ? [.. replies.Select((c, i) => new ChoiceButton(c.Text, null, i))]
+                : [];
+        _canReply = replies is not null;
+        _showContinue = showContinue;
+    }
+
+    /// <summary>
+    /// Fills in the pictures as they arrive, never holding up the screen: the stage first, then the lineup and the
+    /// people on offer at their resting expression, then each place at this slot and weather.
     /// </summary>
     private async Task LoadPicturesAsync(PlayState state)
     {
-        var key = $"{state.Clock.Day}:{state.Clock.Slot}:{state.Weather?.Id ?? "clear"}";
+        var generation = ++_generation;
+        var weather = state.Weather?.Id ?? "clear";
+        var key = $"{state.Clock.Day}:{state.Clock.Slot}:{weather}";
         if (_picturesFor != key)
         {
             _thumbnails.Clear();
             _picturesFor = key;
         }
 
-        // Everyone the player can pick right now: along for a visit, or to stay with at the end.
-        IReadOnlyList<Invitee> people = [.. state.Invitees, .. state.EndingOffer?.Routes ?? []];
-
-        if (_backdrop is null && people.Count > 0)
-        {
-            try
-            {
-                _backdrop = await Studio.GenerateBackdropAsync();
-                await InvokeAsync(StateHasChanged);
-            }
-            catch (Exception)
-            {
-                // Without the backdrop the cards keep their plain ground.
-            }
-        }
-
-        foreach (var person in people.Where(p => !_portraits.ContainsKey(p.Key)))
-        {
-            try
-            {
-                if (await World.PortraitAsync(SaveId, person.Key) is { } portrait)
-                {
-                    _portraits[person.Key] = portrait;
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-            catch (Exception)
-            {
-                // A missing picture leaves the card with its name; the choice still works.
-            }
-        }
-
-        foreach (var place in state.KnownPlaces.Where(p => !_thumbnails.ContainsKey(p.Id)))
-        {
-            try
-            {
-                var thumbnail = await Studio.GenerateBackgroundAsync(SaveId, place, state.Clock.Slot, state.Weather?.Id ?? "clear");
-                if (_picturesFor == key)
-                {
-                    _thumbnails[place.Id] = thumbnail;
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-            catch (Exception)
-            {
-                // As above: the place stays choosable by name.
-            }
-
-            // The player moved on to another slot while this one was drawing; stop drawing it.
-            if (_picturesFor != key || _outcome is not null)
-            {
-                return;
-            }
-        }
-    }
-
-    private async Task RetryAsync()
-    {
-        _outcome = null;
-        await LoadAsync();
-    }
-
-    private async Task GoAsync(PlaceRecord place)
-    {
-        _working = true;
+        bool Stale() => generation != _generation || _outcome is not null;
 
         try
         {
-            _outcome = await World.TakeTurnAsync(SaveId, place.Id, string.IsNullOrEmpty(_invite) ? null : _invite);
-            _invite = "";
-            _outcomePlace = place;
-            _background = null;
-            StateHasChanged();
-
-            // Drawn at the slot the visit happened in, and saved with the scene.
-            _background = await World.SceneBackgroundAsync(SaveId);
-            StateHasChanged();
-
-            // Whoever the scene is about steps in at their resting expression straight away.
-            _view = await World.PresentAsync(SaveId, _outcome);
-            _sprite = await World.SceneSpriteAsync(SaveId, _view);
-            StateHasChanged();
-
-            // Written once the placeholder, background and sprite are on screen, so a slow or absent
-            // model never holds up the turn itself. The written expression replaces the resting one.
-            var written = await World.WriteSceneAsync(SaveId, _outcome);
-            _outcome = _outcome with { Text = written.Text };
-
-            var expressionChanged = written.Expression != _view.Expression;
-            _view = written;
-            StateHasChanged();
-
-            if (expressionChanged)
+            if (_mode is Mode.EndingOffer or Mode.Ending or Mode.Map)
             {
-                _sprite = await World.SceneSpriteAsync(SaveId, written);
+                _backdrop ??= await Studio.GenerateBackdropAsync();
+                if (Stale())
+                {
+                    return;
+                }
+
+                _stageBackground = _backdrop;
+                await RefreshAsync();
             }
+            else if (_mode is Mode.Scene
+                     && (_stagePlace ?? state.KnownPlaces.FirstOrDefault(p => p.Id == state.LastPlaceId) ?? state.KnownPlaces.FirstOrDefault()) is { } here)
+            {
+                if (_stageBackground is null)
+                {
+                    _stageLoadingText = $"Drawing {here.Name}…";
+                    await RefreshAsync();
+                }
+
+                var background = await Studio.GenerateBackgroundAsync(SaveId, here, state.Clock.Slot, weather);
+                if (Stale())
+                {
+                    return;
+                }
+
+                _stageBackground = background;
+                await RefreshAsync();
+            }
+        }
+        catch (Exception)
+        {
+            _stageLoadingText = "The picture could not be drawn.";
+            await RefreshAsync();
+        }
+
+        // Everyone standing on the map, and everyone on offer, drawn once at their resting expression.
+        foreach (var personKey in _lineup.Where(s => s.IsMet).Select(s => s.Key).Concat(_people.Where(p => !p.IsNobody).Select(p => p.Key)).Distinct().ToList())
+        {
+            if (!_portraits.ContainsKey(personKey))
+            {
+                try
+                {
+                    if (await World.PortraitAsync(SaveId, personKey) is { } portrait)
+                    {
+                        _portraits[personKey] = portrait;
+                    }
+                }
+                catch (Exception)
+                {
+                    // A missing picture leaves the card with its name; the choice still works.
+                }
+            }
+
+            if (Stale())
+            {
+                return;
+            }
+
+            foreach (var slot in _lineup.Where(s => s.Key == personKey))
+            {
+                slot.Portrait = _portraits.GetValueOrDefault(personKey);
+            }
+
+            foreach (var card in _people.Where(p => p.Key == personKey))
+            {
+                card.Portrait = _portraits.GetValueOrDefault(personKey);
+            }
+
+            await RefreshAsync();
+        }
+
+        foreach (var card in _places.ToList())
+        {
+            if (!_thumbnails.TryGetValue(card.Place.Id, out var thumbnail))
+            {
+                try
+                {
+                    thumbnail = await Studio.GenerateBackgroundAsync(SaveId, card.Place, state.Clock.Slot, weather);
+                    if (_picturesFor == key)
+                    {
+                        _thumbnails[card.Place.Id] = thumbnail;
+                    }
+                }
+                catch (Exception)
+                {
+                    // The place stays choosable by name.
+                }
+            }
+
+            // The player moved on while this one was drawing; stop drawing for a screen that is gone.
+            if (Stale())
+            {
+                return;
+            }
+
+            card.Thumbnail = thumbnail;
+            await RefreshAsync();
+        }
+    }
+
+    /// <summary>
+    /// While the player reads a scene, draws what the next map needs: every known place at the slot and weather the
+    /// clock has moved on to. They are cached, so the map shows them straight away.
+    /// </summary>
+    private async Task PrewarmMapAsync()
+    {
+        try
+        {
+            var next = await World.GetPlayStateAsync(SaveId);
+            if (next.Over || next.EndingOffer is not null || next.Ending is not null)
+            {
+                return;
+            }
+
+            var weather = next.Weather?.Id ?? "clear";
+            foreach (var place in next.KnownPlaces)
+            {
+                await Studio.GenerateBackgroundAsync(SaveId, place, next.Clock.Slot, weather);
+            }
+        }
+        catch (Exception)
+        {
+            // Only a head start: the map draws whatever is still missing when it opens.
+        }
+    }
+
+    private async Task PersonPickedAsync(PersonCardItem card)
+    {
+        foreach (var person in _people)
+        {
+            person.Chosen = person == card;
+        }
+
+        if (_mode == Mode.Map)
+        {
+            _invite = card.Key;
+            return;
+        }
+
+        _working = true;
+        _lede = "Writing the ending.";
+
+        try
+        {
+            await World.EndAsync(SaveId, card.Key);
+            await ReloadAsync();
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            ShowError(ex);
         }
         finally
         {
             _working = false;
         }
     }
+
+    /// <summary>Passing time at a place.</summary>
+    private Task GoAsync(PlaceCardItem card) =>
+        TurnAsync(card.Place.Name, card.Place, () => World.TakeTurnAsync(SaveId, card.Place.Id, string.IsNullOrEmpty(_invite) ? null : _invite));
+
+    /// <summary>Spending the slot texting someone whose number the player has.</summary>
+    private Task TextAsync(Invitee contact) =>
+        TurnAsync($"Messages · {contact.Name}", null, () => World.TextAsync(SaveId, contact.Key));
+
+    /// <param name="caption">What the stage says: the place, or the conversation.</param>
+    /// <param name="place">Where the turn is spent, remembered for the stage; null for texting.</param>
+    private async Task TurnAsync(string caption, PlaceRecord? place, Func<Task<TurnOutcome>> take)
+    {
+        _working = true;
+        var token = ++_scene;
+
+        try
+        {
+            // On screen at once: the place's name, a spinner while its picture is drawn, and one while the words are
+            // written. The placeholder text never shows unless the model cannot write the scene.
+            _outcome = null;
+            _view = null;
+            _stageBackground = null;
+            _stageSprite = null;
+            _speaker = null;
+            _exchanges.Clear();
+            _withLine = null;
+            _revealLine = null;
+            _noteLine = null;
+            _sceneText = null;
+            _caption = caption;
+            _stageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
+            _writingText = "Writing the scene…";
+            _isWriting = true;
+            _mode = Mode.Scene;
+            RefreshSceneControls();
+            _scrollRequest = "adate.scrollToTop";
+            await RefreshAsync();
+
+            var outcome = await take();
+            _invite = "";
+            _outcome = outcome;
+            if (place is not null)
+            {
+                _stagePlace = place;
+            }
+
+            _heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
+            _withLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
+            _revealLine = outcome.Reveals.Count > 0 ? $"New place: {string.Join(", ", outcome.Reveals.Select(PlaceName))}" : null;
+            _noteLine = outcome.Note;
+
+            // Whoever the scene is about steps in at their resting expression.
+            var presented = await World.PresentAsync(SaveId, outcome);
+            _view = presented;
+            _speaker = presented.Name;
+            await RefreshAsync();
+
+            // The picture, the person and the words at once: the image service and the model work side by side.
+            var background = ShowBackgroundAsync(token);
+            var sprite = ShowSpriteAsync(presented, token);
+            var written = await World.WriteSceneAsync(SaveId, outcome);
+
+            if (token != _scene)
+            {
+                return;
+            }
+
+            // The resting sprite is saved before the written expression's, so the later one stays.
+            if (written.CharacterId is not null && written.Expression != presented.Expression)
+            {
+                await sprite;
+            }
+
+            await ApplyWrittenAsync(written, token);
+            await background;
+            await sprite;
+
+            _ = PrewarmMapAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            _working = false;
+            await RefreshAsync();
+        }
+    }
+
+    private async Task ShowBackgroundAsync(int token)
+    {
+        try
+        {
+            var picture = await World.SceneBackgroundAsync(SaveId);
+            if (token == _scene)
+            {
+                _stageBackground = picture;
+                await RefreshAsync();
+            }
+        }
+        catch (Exception)
+        {
+            if (token == _scene)
+            {
+                _stageLoadingText = "The picture could not be drawn.";
+                await RefreshAsync();
+            }
+        }
+    }
+
+    private async Task ShowSpriteAsync(SceneView view, int token)
+    {
+        if (view.CharacterId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var picture = await World.SceneSpriteAsync(SaveId, view);
+
+            // A written expression that arrived meanwhile has its own picture; this one is out of date.
+            if (token == _scene && _view?.Expression == view.Expression)
+            {
+                _stageSprite = picture;
+                await RefreshAsync();
+            }
+        }
+        catch (Exception)
+        {
+            // The scene works without the person's picture.
+        }
+    }
+
+    /// <summary>The written scene replaces the spinner; a different expression brings its own picture.</summary>
+    private async Task ApplyWrittenAsync(SceneView written, int token)
+    {
+        var expressionChanged = written.CharacterId is not null && written.Expression != _view?.Expression;
+
+        _outcome = _outcome is null ? null : _outcome with { Text = written.Text };
+        _view = written;
+        _speaker = written.Name ?? _speaker;
+        _sceneText = written.Text;
+        _isWriting = false;
+        RefreshSceneControls();
+        await RefreshAsync();
+
+        if (expressionChanged)
+        {
+            try
+            {
+                var picture = await World.SceneSpriteAsync(SaveId, written);
+                if (token == _scene)
+                {
+                    _stageSprite = picture;
+                    await RefreshAsync();
+                }
+            }
+            catch (Exception)
+            {
+                // Keeps the resting picture.
+            }
+        }
+    }
+
+    private Task PickChoiceAsync(ChoiceButton choice) =>
+        choice.Authored is { } authored ? ChooseAsync(authored) : AnswerAsync(choice.Index);
 
     private async Task ChooseAsync(EncounterChoice choice)
     {
         _working = true;
+        var token = _scene;
+        var exchange = BeginExchange(choice.Text);
 
         try
         {
-            // The people there answer the choice like any reply; a choice nobody hears moves straight on.
-            var result = await World.ChooseAsync(SaveId, choice.Id);
-            if (result is null)
+            // The people there answer the choice like any reply; only a choice nobody hears moves straight on.
+            if (await World.ChooseAsync(SaveId, choice.Id) is { } result)
             {
-                await ContinueAsync();
-            }
-            else if (_outcome is null)
-            {
-                await LoadAsync();
+                if (token != _scene)
+                {
+                    return;
+                }
+
+                ApplyReaction(exchange, result);
+                await ShowReactionSpriteAsync(result, token);
             }
             else
             {
-                ShowReaction(result);
+                await ContinueCoreAsync();
             }
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _exchanges.Remove(exchange);
+            ShowError(ex);
         }
         finally
         {
@@ -529,78 +1167,94 @@ else
         }
     }
 
-    /// <summary>A proposed reply by index, or the typed one when <paramref name="index"/> is null.</summary>
-    private async Task RespondAsync(int? index)
+    /// <summary>The player's words join the conversation at once, with a spinner while the others answer.</summary>
+    private Exchange BeginExchange(string words)
     {
-        if (index is null && string.IsNullOrWhiteSpace(_reply))
+        var exchange = new Exchange(words);
+        _exchanges.Add(exchange);
+        _writingText = _speaker is { } who ? $"{who} is answering…" : "Writing what happens…";
+        _isWriting = true;
+        RefreshSceneControls();
+        _scrollRequest = "adate.scrollToEnd";
+        StateHasChanged();
+        return exchange;
+    }
+
+    /// <summary>The answer joins the conversation; new replies keep it going, and without them Continue ends it.</summary>
+    private void ApplyReaction(Exchange exchange, ReactionResult result)
+    {
+        exchange.Reaction = result.View.Text;
+        exchange.Popup = result.Popup;
+        exchange.Agreed = result.Agreed;
+        _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null, Open = result.Open };
+        _isWriting = false;
+        RefreshSceneControls();
+        _scrollRequest = "adate.scrollToEnd";
+        StateHasChanged();
+    }
+
+    /// <summary>A different expression in the answer brings the person's picture for it.</summary>
+    private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
+    {
+        if (result.View.CharacterId is null || _view is null || result.View.Expression == _view.Expression)
+        {
+            return;
+        }
+
+        _view = _view with
+        {
+            CharacterId = result.View.CharacterId,
+            Name = result.View.Name ?? _view.Name,
+            Aesthetic = result.View.Aesthetic ?? _view.Aesthetic,
+            Expression = result.View.Expression,
+        };
+
+        try
+        {
+            var picture = await World.SceneSpriteAsync(SaveId, result.View);
+            if (token == _scene)
+            {
+                _stageSprite = picture;
+            }
+        }
+        catch (Exception)
+        {
+            // Keeps the picture already shown.
+        }
+    }
+
+    /// <summary>The player's own words.</summary>
+    private Task ReplyAsync() => string.IsNullOrWhiteSpace(_reply) || _working ? Task.CompletedTask : AnswerAsync(null);
+
+    private async Task AnswerAsync(int? index)
+    {
+        var words = index is { } i ? _choices.ElementAtOrDefault(i)?.Text : _reply.Trim();
+        if (string.IsNullOrWhiteSpace(words))
         {
             return;
         }
 
         _working = true;
+        var token = _scene;
+        var freeText = index is null ? _reply : null;
+        var exchange = BeginExchange(words);
 
         try
         {
-            var result = await World.RespondAsync(SaveId, index, index is null ? _reply : null);
-            var expressionBefore = _view?.Expression;
-            ShowReaction(result);
-            _reply = "";
-            StateHasChanged();
-
-            if (_outcome is not null && result.View.CharacterId is not null && result.View.Expression != expressionBefore)
+            var result = await World.RespondAsync(SaveId, index, freeText);
+            if (token != _scene)
             {
-                _view = (_view ?? result.View) with { Expression = result.View.Expression };
-                _sprite = await World.SceneSpriteAsync(SaveId, result.View);
+                return;
             }
+
+            _reply = "";
+            ApplyReaction(exchange, result);
+            await ShowReactionSpriteAsync(result, token);
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _working = false;
-        }
-    }
-
-    /// <summary>
-    /// The answer joins the scene's words. While the conversation goes on the next replies are offered;
-    /// once it closes, Continue moves on.
-    /// </summary>
-    private void ShowReaction(ReactionResult result)
-    {
-        _popup = result.Popup;
-        _agreed = result.Agreed;
-
-        if (_outcome is not null)
-        {
-            _outcome = _outcome with { Text = result.Transcript, Choices = [] };
-            _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null };
-            _reaction = null;
-        }
-        else if (result.Next is { Count: > 0 } more && _state?.PendingScene is { } waiting)
-        {
-            _state = _state with { PendingScene = waiting with { Text = result.Transcript, Choices = more } };
-            _reaction = null;
-        }
-        else
-        {
-            _reaction = result.View.Text;
-        }
-    }
-
-    private async Task EndAsync(string pick)
-    {
-        _working = true;
-
-        try
-        {
-            await World.EndAsync(SaveId, pick);
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
+            _exchanges.Remove(exchange);
+            ShowError(ex);
         }
         finally
         {
@@ -610,21 +1264,74 @@ else
 
     private async Task ContinueAsync()
     {
+        _working = true;
+        try
+        {
+            await ContinueCoreAsync();
+        }
+        finally
+        {
+            _working = false;
+        }
+    }
+
+    private async Task ContinueCoreAsync()
+    {
         await World.CloseSceneAsync(SaveId);
         _outcome = null;
-        _outcomePlace = null;
-        _background = null;
-        _sprite = null;
         _view = null;
-        _reaction = null;
-        _popup = null;
-        _agreed = null;
-        _reply = "";
-        await LoadAsync();
+        await ReloadAsync();
+    }
+
+    private Task RetryAsync()
+    {
+        _outcome = null;
+        return ReloadAsync();
+    }
+
+    /// <summary>Ten quick taps on the title, within four seconds, open the debug screen.</summary>
+    private async Task TitleTapped()
+    {
+        var now = DateTime.UtcNow;
+        _taps.Enqueue(now);
+        while (_taps.Count > 0 && (now - _taps.Peek()).TotalSeconds > 4)
+        {
+            _taps.Dequeue();
+        }
+
+        if (_taps.Count >= 10)
+        {
+            _taps.Clear();
+            await OpenDebugAsync();
+        }
+    }
+
+    private async Task OpenDebugAsync()
+    {
+        _debugOpen = true;
+        try
+        {
+            _debugSections = await World.DebugReportAsync(SaveId);
+        }
+        catch (Exception ex)
+        {
+            _debugSections = [new DebugSection("Error", [ex.ToString()])];
+        }
+    }
+
+    private void ShowError(Exception ex)
+    {
+        _error = ex.Message;
+        _heading = "Something went wrong";
+        _speaker = null;
+        _isWriting = false;
+        _mode = Mode.Error;
     }
 
     private string PlaceName(string placeId) =>
-        _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name ?? placeId;
+        _state?.KnownPlaces.FirstOrDefault(p => p.Id == placeId)?.Name
+        ?? _state?.Setting.Places.FirstOrDefault(p => p.Id == placeId)?.Name
+        ?? placeId;
 
     private string Who(string reference) =>
         _state?.People.GetValueOrDefault(reference) ?? reference;
