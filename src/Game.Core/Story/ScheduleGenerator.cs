@@ -22,12 +22,14 @@ public static class ScheduleGenerator
     /// <param name="anchorPlace">Where the story says they are found: a home place, a routine place, where they were met.</param>
     /// <param name="anchorSlot">When, on weekdays.</param>
     /// <param name="seed">The person's own seed, so every save gives them the same week.</param>
+    /// <param name="homePlace">Where they live, once the story has named it: their nights are spent there.</param>
     public static CharacterSchedule For(
         string characterId,
         SettingDefinition setting,
         string? anchorPlace,
         TimeOfDay? anchorSlot,
-        long seed)
+        long seed,
+        string? homePlace = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(characterId);
         ArgumentNullException.ThrowIfNull(setting);
@@ -55,6 +57,12 @@ public static class ScheduleGenerator
             {
                 entries.Add(new ScheduleEntry(time, places[rng.Below(places.Count)], Weekend));
             }
+        }
+
+        // Added last, so a known home changes nothing else about the week.
+        if (homePlace is not null)
+        {
+            entries.Add(new ScheduleEntry(TimeOfDay.Night, homePlace));
         }
 
         return new CharacterSchedule(characterId, entries);

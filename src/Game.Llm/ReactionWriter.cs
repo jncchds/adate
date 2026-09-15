@@ -15,12 +15,16 @@ public sealed record ReactionResponse(
     IReadOnlyList<SceneResponseChoice>? Choices = null,
     bool? Numbers = null,
     IReadOnlyList<string>? Threads = null,
-    IReadOnlyList<long>? Resolved = null);
+    IReadOnlyList<long>? Resolved = null,
+    IReadOnlyList<SceneResponsePlace>? Places = null,
+    IReadOnlyList<ProposedRoutine>? Routines = null);
 
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
 /// <param name="Threads">New loose ends the reaction left open; null when threads are off.</param>
 /// <param name="Resolved">Loose ends from the packet the reaction settled.</param>
+/// <param name="Places">Places the reaction named, unchecked: C# checks them against the place types and stores the good ones.</param>
+/// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
 public sealed record WrittenReaction(
     string Text,
     string? Expression,
@@ -33,7 +37,9 @@ public sealed record WrittenReaction(
     IReadOnlyList<ProposedChoice>? Choices = null,
     bool ExchangedNumbers = false,
     IReadOnlyList<string>? Threads = null,
-    IReadOnlyList<long>? Resolved = null);
+    IReadOnlyList<long>? Resolved = null,
+    IReadOnlyList<Game.Core.Places.PlaceProposal>? Places = null,
+    IReadOnlyList<ProposedRoutine>? Routines = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -108,11 +114,13 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     : "- tags: what the player's reply shows about them, from the schema's list; an empty list if nothing stands out. " +
                       "If the reply does or admits something from the dealbreaker tags (lie, two-timing, cruel, stood-up, pushy), include that tag even when it is said honestly.\n")
             + (alone
-                ? "- meet: null.\n- numbers: false.\n"
+                ? "- meet: null.\n- numbers: false.\n- routines: an empty list.\n"
                 : "- meet: only if the two of them have just agreed to meet again at a set time: the place (one the player knows), " +
                   $"in how many days (1 to {MeetingAgreement.MaxDaysAhead}) and the time of day (Morning, Midday, Afternoon or Evening). Otherwise null.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
-                  "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n")
+                  "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
+                  + $"- {ScenePacketBuilder.RoutineRule}\n")
+            + $"- {ScenePacketBuilder.PlaceRule}\n"
             + Conversation(replyNumber, maxReplies, alone, packet.VariedChoices)
             + (packet.LooseEnds is null ? "" : ScenePacketBuilder.ThreadRules + "\n");
 
@@ -205,7 +213,13 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     response!.Text.Trim(), response.Expression, tags, Fallback: false, attempts, rejections, response.Meet,
                     Ends: !goesOn, Choices: goesOn ? next : [], ExchangedNumbers: response.Numbers is true,
                     Threads: packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
-                    Resolved: SceneWriter.Settled(packet, response.Resolved));
+                    Resolved: SceneWriter.Settled(packet, response.Resolved),
+                    Places:
+                    [
+                        .. (response.Places ?? []).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name)).Select(p => new Game.Core.Places.PlaceProposal(
+                            p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim())),
+                    ],
+                    Routines: [.. (response.Routines ?? []).Where(r => r is not null)]);
             }
 
             lastReasons = reasons;
@@ -258,7 +272,26 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
             },
         };
 
-        List<string> required = ["text", "expression", "tags", "meet", "numbers", "ends", "choices"];
+        properties["places"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["items"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["type"] = new JsonObject { ["type"] = "string" },
+                    ["name"] = new JsonObject { ["type"] = "string" },
+                    ["details"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+                    ["owner"] = new JsonObject { ["type"] = "string" },
+                },
+                ["required"] = Strings(["type", "name", "details", "owner"]),
+                ["additionalProperties"] = false,
+            },
+        };
+        properties["routines"] = SceneWriter.RoutineProperty();
+
+        List<string> required = ["text", "expression", "tags", "meet", "numbers", "ends", "choices", "places", "routines"];
 
         if (packet.LooseEnds is not null)
         {

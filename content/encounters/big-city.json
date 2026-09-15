@@ -29,7 +29,7 @@
     "time": ["Evening", "Night"],
     "days": [8, 28],
     "requires": ["!chance.met"],
-    "sets": ["chance.met", "chance.place={place}"],
+    "sets": ["chance.met", "chance.place={place}", "chance.slot={slot}"],
     "with": ["variant:chance"],
     "priority": 60,
     "text": "The same person as on your last two evenings sits at the end of the counter, and tonight they ask whether you are waiting for someone."

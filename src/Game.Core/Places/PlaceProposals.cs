@@ -5,7 +5,8 @@ using Game.Core.Saves;
 namespace Game.Core.Places;
 
 /// <summary>A place the story names during play (plan §10): a type, a name and detail ids.</summary>
-public sealed record PlaceProposal(string Type, string Name, IReadOnlyList<string> Details);
+/// <param name="Owner">The id of the person present whose home it is, when it is someone's home.</param>
+public sealed record PlaceProposal(string Type, string Name, IReadOnlyList<string> Details, string? Owner = null);
 
 /// <summary>
 /// Checks a proposed place against the place-type catalog and turns it into a place the player now

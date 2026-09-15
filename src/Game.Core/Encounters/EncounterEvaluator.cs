@@ -130,6 +130,9 @@ public static class TurnPlanner
     /// <summary>A flag value that stores the place the encounter fired at, for places decided in play.</summary>
     public const string PlaceValue = "{place}";
 
+    /// <summary>A flag value that stores the time of day the encounter fired at.</summary>
+    public const string SlotValue = "{slot}";
+
     public static TurnOutcome Plan(
         SettingDefinition setting,
         IReadOnlyList<EncounterDefinition> encounters,
@@ -153,7 +156,7 @@ public static class TurnPlanner
         {
             foreach (var (key, value) in Assignments(encounter.Sets ?? []))
             {
-                flags[key] = value == PlaceValue ? context.PlaceId : value;
+                flags[key] = value == PlaceValue ? context.PlaceId : value == SlotValue ? context.Clock.Slot.ToString() : value;
             }
 
             flags[EncounterEvaluator.FiredKey(encounter.Id)] = context.Clock.Day.ToString(CultureInfo.InvariantCulture);

@@ -388,6 +388,80 @@
         { "id": "backpacks", "tags": ["backpacks"], "phrase": "backpacks hanging on hooks" },
         { "id": "trail-map", "tags": ["map on wall"], "phrase": "a trail map pinned to the wall" }
       ]
+    },
+    {
+      "id": "apartment",
+      "dress": "home",
+      "displayName": "Apartment",
+      "kind": "indoor",
+      "tags": [
+        "apartment",
+        "living room",
+        "sofa",
+        "bookshelf",
+        "kitchenette"
+      ],
+      "description": "A small, lived-in apartment with a sofa, an overflowing bookshelf and a kitchenette in the corner",
+      "details": [
+        {
+          "id": "houseplants",
+          "tags": [
+            "houseplants"
+          ],
+          "phrase": "houseplants filling the windowsill"
+        },
+        {
+          "id": "record-player",
+          "tags": [
+            "record player"
+          ],
+          "phrase": "a record player on a low cabinet"
+        },
+        {
+          "id": "string-lights",
+          "tags": [
+            "string lights"
+          ],
+          "phrase": "string lights along the wall"
+        }
+      ]
+    },
+    {
+      "id": "house",
+      "dress": "home",
+      "displayName": "House",
+      "kind": "indoor",
+      "tags": [
+        "house",
+        "living room",
+        "wooden floor",
+        "fireplace",
+        "armchair"
+      ],
+      "description": "The living room of a small wooden house with a fireplace, a worn armchair and a door out to the porch",
+      "details": [
+        {
+          "id": "family-photos",
+          "tags": [
+            "family photos"
+          ],
+          "phrase": "family photos on the mantelpiece"
+        },
+        {
+          "id": "quilt",
+          "tags": [
+            "patchwork quilt"
+          ],
+          "phrase": "a patchwork quilt over the sofa"
+        },
+        {
+          "id": "porch-swing",
+          "tags": [
+            "porch swing"
+          ],
+          "phrase": "a porch swing seen through the window"
+        }
+      ]
     }
   ]
 }

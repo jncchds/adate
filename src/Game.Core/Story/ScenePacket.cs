@@ -8,7 +8,9 @@ namespace Game.Core.Story;
 /// <param name="Temper">Writing guidance from each of their temper ends.</param>
 /// <param name="RevealedWant">Their want, once the player has learned it; never before.</param>
 /// <param name="Voice">How they talk, written once for them; null when voices are off or not yet written.</param>
-public sealed record PacketPerson(string Id, string Name, IReadOnlyList<string> Temper, RelationshipStage Stage, string? RevealedWant, string? Voice = null);
+/// <param name="Routine">Their usual week, so they can mention it: "weekday mornings at the dock; nights at home".</param>
+public sealed record PacketPerson(
+    string Id, string Name, IReadOnlyList<string> Temper, RelationshipStage Stage, string? RevealedWant, string? Voice = null, string? Routine = null);
 
 /// <summary>A loose end an earlier scene left open, numbered so a scene can say it settled it.</summary>
 public sealed record PacketThread(long Id, string Text, int Day);
@@ -124,6 +126,16 @@ public static class ScenePacketBuilder
         "each one short sentence in English that names who; an empty list if none.\n" +
         "- resolved: the numbers of the loose ends listed above that this settles; an empty list if none.";
 
+    /// <summary>What the answer's places are, for scenes and reactions alike: a new place, and whose home it is.</summary>
+    public const string PlaceRule =
+        "places: every place someone names that the player does not know yet (a café they mention, where they live), with a place type " +
+        "and up to three details of that type, and owner: the id of the person here whose home it is, or an empty string; an empty list if none.";
+
+    /// <summary>What the answer's routines are: what someone said about their own week.</summary>
+    public const string RoutineRule =
+        "routines: whenever someone here says where they usually are at some time, their id, the place's name, the time of day " +
+        "(Morning, Midday, Afternoon, Evening or Night) and the days (weekdays, weekend or daily); only what they actually say, an empty list if nothing.";
+
     /// <summary>What makes proposed replies worth choosing between, for scenes and reactions alike.</summary>
     public const string VariedChoiceRule =
         " Make them different in kind (for example a question, a playful line, a bold or sincere move, or something to do), " +
@@ -182,6 +194,11 @@ public static class ScenePacketBuilder
             if (person.Voice is { } voice)
             {
                 text.AppendLine($"  How {person.Name} talks: {voice}");
+            }
+
+            if (person.Routine is { } routine)
+            {
+                text.AppendLine($"  {person.Name}'s usual week: {routine}. They may mention it when it comes up naturally.");
             }
         }
 
@@ -290,7 +307,8 @@ public static class ScenePacketBuilder
 
         text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");
-        text.AppendLine("- places: only a place someone names that is not one the player knows, with a place type and up to three details of that type; otherwise an empty list.");
+        text.AppendLine($"- {PlaceRule}");
+        text.AppendLine($"- {RoutineRule}");
         text.AppendLine("- summary: one sentence a friend would use to remind the player what happened in this scene.");
         text.AppendLine("- tags: why it matters, if it does; first for a first time, conflict for a falling-out.");
         var varied = packet.VariedChoices ? VariedChoiceRule : "";

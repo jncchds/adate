@@ -1547,3 +1547,32 @@ unnamed background.
 
 So the material is on by default and two-pass stays off. Caveats: ten cases, one save, and a judge
 from the same family that also wrote half the versions.
+## Routines are learned, time of day is remembered, and conversations can add places and homes
+
+User request: know where to find the love interests the rest of the day, have "same place" also mean
+"same time" for where you first met someone, and let a conversation add a place, so the player can
+later visit someone at home or invite them over.
+
+* **The anchor remembers the time.** Meeting beats set `{route}.slot={slot}` (a new `TurnPlanner`
+  token) beside `{route}.place`, and the chance meeting sets it too; the schedule anchors weekdays at
+  that place and time. Saves from before keep mornings for the routine variant and evenings for the
+  others. The main love interest stays anchored to the opening's home place and slot.
+* **What the player knows of a week** (`RoutineKnowledge`): where and when they met (once met), their
+  home at night (once named), and parts learned two ways. Being told: each person's whole week goes to
+  the writer (`PacketPerson.Routine`), and scenes and replies return `routines` (who, place, time,
+  weekdays/weekend/daily); C# keeps one only when the schedule agrees
+  (`{key}.routine.{days}.{slot}` = place). Noticing: finding someone at a quiet turn where their
+  schedule puts them counts (`{key}.seen...`), and the second time learns that part. The map lists
+  "X is usually around: weekday mornings at A; nights at B", and "You might run into" only uses known
+  parts, so hints are earned rather than handed out.
+* **Places from conversation.** Replies can now name places too, not only scenes. Each proposal
+  carries an `owner`: the id of the person present whose home it is. A place the save already has is
+  made known; a new one becomes a story place with its details cleaned to what its type offers, never
+  sending the answer back. When it is the home of someone present who has none, it is drawn as the
+  setting's `homeType` (apartment in the city, house in town, staff cabin at camp; new `apartment`
+  and `house` place types with happenings), recorded as `{key}.home` with a `lives-at` fact, and they
+  spend their nights there (`ScheduleGenerator`, added after everything else so the week does not
+  change). Their home only counts as somewhere to find them once the two are friends.
+* **Inviting someone over** needs no new mechanism: the writer is told where the player lives, and a
+  meeting agreed at the player's home, or at a love interest's once it is known, is held as a promise
+  like any other.

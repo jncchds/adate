@@ -9,7 +9,11 @@ namespace Game.Llm;
 
 public sealed record SceneResponseFact(string Subject, string Predicate, string Object, string Level);
 
-public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details);
+/// <param name="Owner">The id of the person present whose home the place is; empty otherwise.</param>
+public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details, string? Owner = null);
+
+/// <summary>What someone said about their own week, unchecked: C# keeps it only when their schedule agrees.</summary>
+public sealed record ProposedRoutine(string Who, string Place, string Slot, string Days);
 
 public sealed record SceneResponseChoice(string Text, IReadOnlyList<string>? Tags);
 
@@ -23,7 +27,8 @@ public sealed record SceneResponse(
     IReadOnlyList<string>? Tags = null,
     IReadOnlyList<SceneResponseChoice>? Choices = null,
     IReadOnlyList<string>? Threads = null,
-    IReadOnlyList<long>? Resolved = null);
+    IReadOnlyList<long>? Resolved = null,
+    IReadOnlyList<ProposedRoutine>? Routines = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -32,6 +37,7 @@ public sealed record SceneResponse(
 /// <param name="Tags">Salience tags from <see cref="MemoryTags.All"/>.</param>
 /// <param name="Threads">New loose ends the scene left open; null when threads are off.</param>
 /// <param name="Resolved">Loose ends from the packet the scene settled.</param>
+/// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -44,7 +50,8 @@ public sealed record WrittenScene(
     IReadOnlyList<string>? Tags = null,
     IReadOnlyList<ProposedChoice>? Choices = null,
     IReadOnlyList<string>? Threads = null,
-    IReadOnlyList<long>? Resolved = null);
+    IReadOnlyList<long>? Resolved = null,
+    IReadOnlyList<ProposedRoutine>? Routines = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -221,7 +228,8 @@ public sealed class SceneWriter(
                         [.. (response.Tags ?? []).Where(t => MemoryTags.All.Contains(t, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal)],
                         choices,
                         packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
-                        Settled(packet, response.Resolved));
+                        Settled(packet, response.Resolved),
+                        [.. (response.Routines ?? []).Where(r => r is not null)]);
                 }
 
                 lastReasons = reasons;
@@ -295,6 +303,7 @@ public sealed class SceneWriter(
                     {
                         ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
                         ["name"] = new JsonObject { ["type"] = "string" },
+                        ["owner"] = new JsonObject { ["type"] = "string" },
                         // Detail ids as an enum: in other languages Gemma translated them ("кадки с растениями" for
                         // planters) even when told not to. Whether a detail fits the type is still checked below.
                         ["details"] = new JsonObject
@@ -307,13 +316,14 @@ public sealed class SceneWriter(
                             },
                         },
                     },
-                    ["required"] = Strings(["type", "name", "details"]),
+                    ["required"] = Strings(["type", "name", "details", "owner"]),
                     ["additionalProperties"] = false,
                 },
             },
         };
 
-        List<string> required = ["text", "expression", "facts", "places", "summary", "tags", "choices"];
+        properties["routines"] = RoutineProperty();
+        List<string> required = ["text", "expression", "facts", "places", "routines", "summary", "tags", "choices"];
 
         if (packet.LooseEnds is not null)
         {
@@ -335,6 +345,25 @@ public sealed class SceneWriter(
             ["additionalProperties"] = false,
         };
     }
+
+    /// <summary>The routines field: what someone said about their own week. Shared with the reaction writer's schema.</summary>
+    internal static JsonObject RoutineProperty() => new()
+    {
+        ["type"] = "array",
+        ["items"] = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["who"] = new JsonObject { ["type"] = "string" },
+                ["place"] = new JsonObject { ["type"] = "string" },
+                ["slot"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("Morning", "Midday", "Afternoon", "Evening", "Night") },
+                ["days"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("weekdays", "weekend", "daily") },
+            },
+            ["required"] = new JsonArray("who", "place", "slot", "days"),
+            ["additionalProperties"] = false,
+        },
+    };
 
     /// <summary>The threads and resolved fields, shared with the reaction writer's schema.</summary>
     internal static void ThreadProperties(JsonObject properties)
@@ -501,7 +530,7 @@ public sealed class SceneWriter(
         var places = new List<PlaceProposal>();
         foreach (var place in response.Places ?? [])
         {
-            var proposal = new PlaceProposal(place.Type, place.Name ?? "", place.Details ?? []);
+            var proposal = new PlaceProposal(place.Type, place.Name ?? "", place.Details ?? [], string.IsNullOrWhiteSpace(place.Owner) ? null : place.Owner.Trim());
             var problems = PlaceProposals.Check(proposal, placeTypes, [.. knownPlaces, .. places.Select(p => p.Name)]);
 
             if (problems.Count == 0)

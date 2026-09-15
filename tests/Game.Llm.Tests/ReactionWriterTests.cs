@@ -51,6 +51,24 @@ public class ReactionWriterTests
         $$"""{ "text": "{{text}}", "expression": "{{expression}}", "tags": {{tags}} }""";
 
     [Fact]
+    public async Task A_reply_can_name_a_place_someone_lives_and_say_where_they_usually_are()
+    {
+        var llm = new FakeLlm(() => """
+            { "text": "Maya laughs.", "expression": "smile", "tags": [], "meet": null, "numbers": false, "ends": true, "choices": [],
+              "places": [{ "type": "apartment", "name": "Maya's loft", "details": ["record-player"], "owner": "maya-id" }],
+              "routines": [{ "who": "maya-id", "place": "Meridian & Co. offices", "slot": "Midday", "days": "weekdays" }] }
+            """);
+
+        var reaction = await Writer(llm).WriteAsync(Packet(), "Maya waves.", "Where do you live?", null, "Fallback.");
+
+        var place = Assert.Single(reaction.Places!);
+        Assert.Equal(("apartment", "Maya's loft", "maya-id"), (place.Type, place.Name, place.Owner));
+        Assert.Equal("Midday", Assert.Single(reaction.Routines!).Slot);
+        Assert.Contains("- places:", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("- routines:", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Two_pass_reads_the_data_out_of_prose_written_first()
     {
         var llm = new FakeLlm(

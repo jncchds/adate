@@ -1,5 +1,17 @@
 {
   "places": {
+    "apartment": [
+      { "text": "The neighbours upstairs are moving furniture again, and something heavy just hit the floor." },
+      { "text": "A pot on the stove is about to boil over." },
+      { "text": "The Wi-Fi has dropped, and the router is blinking an angry orange." },
+      { "text": "A delivery driver is buzzing the wrong flat, over and over.", "slots": ["Midday", "Afternoon", "Evening"] }
+    ],
+    "house": [
+      { "text": "The porch light has attracted every moth in the county.", "slots": ["Evening", "Night"] },
+      { "text": "A neighbour’s dog has wandered in through the open back door." },
+      { "text": "The old radio in the kitchen has started playing on its own." },
+      { "text": "A pie cooling on the windowsill has drawn a curious raccoon.", "slots": ["Afternoon", "Evening"] }
+    ],
     "cafe": [
       { "text": "The espresso machine has broken down and the barista is taking hand-written tea orders instead, apologising to everyone." },
       { "text": "A regular is trying to teach a toddler to say 'cappuccino' at the counter, to general applause." },

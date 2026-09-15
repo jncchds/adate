@@ -228,7 +228,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     "route.routine.meet",
                     new EncounterPlace(Id: setting.RoutinePlace, AloneVisitsBefore: 2),
                     Requires: ["!routine.met"],
-                    Sets: ["routine.met", "routine.place=" + TurnPlanner.PlaceValue],
+                    Sets: ["routine.met", "routine.place=" + TurnPlanner.PlaceValue, "routine.slot=" + TurnPlanner.SlotValue],
                     With: [who],
                     Priority: 60,
                     Text: "Third time at {place}, and the same face is here again. Today they say hello: {who}.");
@@ -242,7 +242,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Time: [TimeOfDay.Evening],
                     Days: [FirstDateDay, setting.Days],
                     Requires: [$"{MainLiRef}.dating", $"{EncounterEvaluator.InviteKey}={MainLiRef}", "!introduced.met"],
-                    Sets: ["introduced.met", "introduced.place=" + TurnPlanner.PlaceValue],
+                    Sets: ["introduced.met", "introduced.place=" + TurnPlanner.PlaceValue, "introduced.slot=" + TurnPlanner.SlotValue],
                     With: [MainLiRef, who],
                     Priority: OpeningPriority + 6,
                     Text: "Halfway through the evening {main_li} waves someone over: {who}, an old friend, who stays for a drink.");

@@ -311,6 +311,17 @@ public sealed class GameStateRepository(Database database)
         }
     }
 
+    /// <summary>Sets flags outside a turn or a reply, in one transaction: what a written scene taught the player.</summary>
+    public async Task SetFlagsAsync(SaveId saveId, IReadOnlyDictionary<string, string> flags, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(flags);
+
+        await using var connection = await database.OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await UpsertFlagsAsync(connection, transaction, saveId, flags, ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
     private static async Task UpsertFlagsAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,

@@ -13,7 +13,7 @@
     "time": ["Afternoon"],
     "days": [6, 28],
     "requires": ["!chance.met"],
-    "sets": ["chance.met", "chance.place={place}"],
+    "sets": ["chance.met", "chance.place={place}", "chance.slot={slot}"],
     "with": ["variant:chance"],
     "priority": 60,
     "text": "Your usual table by the arched windows has someone at it again, and this time they slide the chair out for you."

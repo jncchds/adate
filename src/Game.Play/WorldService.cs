@@ -314,7 +314,7 @@ public sealed class WorldService(
             names.MainLiId,
             names.MainLi,
             opening,
-            [.. life, .. promised, .. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock)],
+            [.. life, .. promised, .. Hints(setting, opening, flags, clock, names.MainLi), .. Sightings(saveId, setting, cast, flags, known, clock), .. Routines(saveId, setting, cast, flags, known)],
             pending,
             invitees,
             relationships,
@@ -465,6 +465,7 @@ public sealed class WorldService(
                 {
                     [$"{stranger.Key}.met"] = "true",
                     [$"{stranger.Key}.place"] = place.Id,
+                    [$"{stranger.Key}.slot"] = play.Clock.Slot.ToString(),
                     [ChanceMeetingDayKey] = play.Clock.Day.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 },
                 Reveals = [],
@@ -506,13 +507,33 @@ public sealed class WorldService(
             {
                 if (WorldMoves.Where(saveKey, ScheduleFor(saveId, play.Setting, li, flags), settingPlaces, play.Clock) == place.Id)
                 {
+                    // At their own home only once the two are friends: nobody drops in on someone they barely know.
+                    if (flags.GetValueOrDefault($"{li.Key}.home") == place.Id
+                        && (await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false)).Stage < RelationshipStage.Friend)
+                    {
+                        continue;
+                    }
+
                     here.Add((li, (await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false)).Affection));
                 }
             }
 
             if (here.OrderByDescending(h => h.Affection).Select(h => h.Person).FirstOrDefault() is { } company)
             {
-                outcome = outcome with { EncounterId = JsonEncounterCatalog.QuietCompanyId, With = [company.Ref], Text = $"{company.Name} is at {place.Name} too." };
+                // Finding someone where their week puts them a second time is learning that part of their week.
+                var noticed = new Dictionary<string, string>(outcome.FlagsToSet, StringComparer.Ordinal);
+                if (RoutineKnowledge.Match(ScheduleFor(saveId, play.Setting, company, flags), play.Clock, place.Id) is { } usual)
+                {
+                    RoutineKnowledge.See(noticed, flags, company.Key, usual);
+                }
+
+                outcome = outcome with
+                {
+                    EncounterId = JsonEncounterCatalog.QuietCompanyId,
+                    With = [company.Ref],
+                    Text = $"{company.Name} is at {place.Name} too.",
+                    FlagsToSet = noticed,
+                };
             }
             else if (await SeekerAsync(saveId, cast, flags, play.Clock, ct).ConfigureAwait(false) is { } seeker)
             {
@@ -682,6 +703,8 @@ public sealed class WorldService(
             var schedule = ScheduleFor(saveId, play.Setting, li, flags);
             var now = WorldMoves.Where(saveId.ToString(), schedule, [.. play.Setting.Places.Select(p => p.Id)], play.Clock);
             people.Add($"  usually at: {schedule.Where(play.Clock) ?? "-"}   now at: {now ?? "-"}   met: {EncounterEvaluator.Holds(flags, $"{li.Key}.met")}   left: {HasLeft(flags, li)}");
+            people.Add($"  week: {RoutineKnowledge.Describe(RoutineKnowledge.Entries(schedule), id => PlaceName(play.Setting, play.KnownPlaces, id))}");
+            people.Add($"  player knows: {RoutineKnowledge.Describe(KnownRoutine(play.Setting, li, schedule, flags), id => PlaceName(play.Setting, play.KnownPlaces, id))}   home: {flags.GetValueOrDefault($"{li.Key}.home") ?? "-"}");
             people.Add($"  voice: {await story.GetVoiceAsync(li.Id, ct).ConfigureAwait(false) ?? "-"}");
             people.Add($"  rapport now:{PlayerLife.Rapport(li.Profile.WeightOf, PlayerLife.Traits(flags), storyContent.Rules)}");
         }
@@ -759,6 +782,9 @@ public sealed class WorldService(
         {
             lines.Add($"{player} {job.Habit}.");
         }
+
+        // So an invitation over has somewhere to name: an agreed meeting there brings someone to the player's place.
+        lines.Add($"{player} lives at {PlaceName(setting, known, setting.Home ?? setting.RoutinePlace)}.");
 
         var lately = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
             .Where(s => s.EncounterId == JsonEncounterCatalog.QuietAloneId && s.Exchanges.Count > 0)
@@ -1129,6 +1155,19 @@ public sealed class WorldService(
             await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
         }
 
+        // Places the scene named, homes among them, and what people said about their weeks.
+        var present = built.Cast.Where(li => outcome.With.Contains(li.Ref)).ToList();
+        var learned = await AddPlacesAsync(saveId, written.Fallback ? [] : written.Places, present, day, ct).ConfigureAwait(false);
+        if (!written.Fallback)
+        {
+            await LearnRoutinesAsync(saveId, present, written.Routines, learned, day, ct).ConfigureAwait(false);
+        }
+
+        if (learned.Count > 0)
+        {
+            await state.SetFlagsAsync(saveId, learned, ct).ConfigureAwait(false);
+        }
+
         await StoreWrittenSceneAsync(saveId, outcome, written, presentIds, ct).ConfigureAwait(false);
 
         await story.LogTurnAsync(saveId, outcome.VisitedAt, written.Fallback ? "scene-fallback" : "scene", new
@@ -1178,31 +1217,10 @@ public sealed class WorldService(
         return result;
     }
 
-    /// <summary>The scene's new places and its memory, kept once it is written.</summary>
+    /// <summary>The scene's memory, kept once it is written.</summary>
     private async Task StoreWrittenSceneAsync(SaveId saveId, TurnOutcome outcome, WrittenScene written, IReadOnlyCollection<string> presentIds, CancellationToken ct)
     {
         var day = outcome.VisitedAt.Day;
-
-        // A named place the setting already has but the player did not know is revealed, not
-        // duplicated; anything else becomes a story place (plan §10).
-        if (written.Places.Count > 0)
-        {
-            var all = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
-            var ids = all.Select(p => p.Id).ToList();
-
-            foreach (var proposal in written.Places)
-            {
-                if (all.FirstOrDefault(p => string.Equals(p.Name, proposal.Name, StringComparison.OrdinalIgnoreCase)) is { } existing)
-                {
-                    await places.MarkKnownAsync(saveId, existing.Id, outcome.VisitedAt.Day, ct).ConfigureAwait(false);
-                    continue;
-                }
-
-                var record = PlaceProposals.ToRecord(saveId, proposal, ids, outcome.VisitedAt.Day);
-                ids.Add(record.Id);
-                await places.AddAsync([record], ct).ConfigureAwait(false);
-            }
-        }
 
         if (!written.Fallback && written.Summary is { } summary)
         {
@@ -1262,7 +1280,8 @@ public sealed class WorldService(
                 [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
                 relationship.Stage,
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
-                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null));
+                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null,
+                RoutineForWriter(saveId, setting, li, flags, known)));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1586,6 +1605,17 @@ public sealed class WorldService(
             swapped = $"You have {owner.Name}'s number now.";
         }
 
+        // Places the reply named, homes among them, and what people said about their weeks.
+        if (!reaction.Fallback)
+        {
+            foreach (var (key, value) in await AddPlacesAsync(saveId, reaction.Places, presentPeople, scene.Clock.Day, ct).ConfigureAwait(false))
+            {
+                toSet[key] = value;
+            }
+
+            await LearnRoutinesAsync(saveId, presentPeople, reaction.Routines, toSet, scene.Clock.Day, ct).ConfigureAwait(false);
+        }
+
         // On their own, what the player chose to do shows who they are: its qualities build their traits.
         if (presentPeople.Count == 0)
         {
@@ -1701,7 +1731,8 @@ public sealed class WorldService(
                 [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
                 before[li.Id].Stage,
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
-                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null));
+                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null,
+                RoutineForWriter(saveId, setting, li, flags, known)));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -2003,27 +2034,199 @@ public sealed class WorldService(
     /// </summary>
     private static CharacterSchedule ScheduleFor(SaveId saveId, SettingDefinition setting, LoveInterest li, IReadOnlyDictionary<string, string> flags)
     {
-        string? place;
-        TimeOfDay? slot;
+        var (place, slot) = Anchor(setting, li, flags);
+        var id = li.Id.ToString();
+        return ScheduleGenerator.For(id, setting, place, slot, ScheduleGenerator.SeedFor(saveId, id), flags.GetValueOrDefault($"{li.Key}.home"));
+    }
 
+    /// <summary>
+    /// Where and when a love interest's week is anchored: the main LI at their home place in the opening's slot, the others
+    /// where they were met, at the time of day they were met (user feedback: a morning meeting should mean mornings there).
+    /// Saves from before the time was kept fall back to mornings for the routine variant and evenings for the others.
+    /// </summary>
+    private static (string? Place, TimeOfDay? Slot) Anchor(SettingDefinition setting, LoveInterest li, IReadOnlyDictionary<string, string> flags)
+    {
         if (li.Key == JsonEncounterCatalog.MainLiRef)
         {
-            place = flags.GetValueOrDefault("main_li.home_place");
-            slot = setting.Openings.FirstOrDefault(o => o.Id == flags.GetValueOrDefault("opening"))?.Time;
-        }
-        else if (li.Key == "routine")
-        {
-            place = setting.RoutinePlace;
-            slot = TimeOfDay.Morning;
-        }
-        else
-        {
-            place = flags.GetValueOrDefault($"{li.Key}.place");
-            slot = TimeOfDay.Evening;
+            return (flags.GetValueOrDefault("main_li.home_place"), setting.Openings.FirstOrDefault(o => o.Id == flags.GetValueOrDefault("opening"))?.Time);
         }
 
-        var id = li.Id.ToString();
-        return ScheduleGenerator.For(id, setting, place, slot, ScheduleGenerator.SeedFor(saveId, id));
+        TimeOfDay? met = Enum.TryParse<TimeOfDay>(flags.GetValueOrDefault($"{li.Key}.slot"), out var slot) ? slot : null;
+        return li.Key == "routine"
+            ? (setting.RoutinePlace, met ?? TimeOfDay.Morning)
+            : (flags.GetValueOrDefault($"{li.Key}.place"), met ?? TimeOfDay.Evening);
+    }
+
+    /// <summary>
+    /// What the player knows of someone's week: where and when they first met (once met), their home at night (once named),
+    /// and what they learned by being told or by finding them there twice.
+    /// </summary>
+    private static IReadOnlyList<RoutineEntry> KnownRoutine(SettingDefinition setting, LoveInterest li, CharacterSchedule schedule, IReadOnlyDictionary<string, string> flags)
+    {
+        var given = new List<RoutineEntry>();
+        if (EncounterEvaluator.Holds(flags, $"{li.Key}.met") && Anchor(setting, li, flags) is { Place: { } place, Slot: { } slot })
+        {
+            given.Add(new RoutineEntry(RoutineKnowledge.Weekdays, slot, place));
+        }
+
+        if (flags.GetValueOrDefault($"{li.Key}.home") is { } home)
+        {
+            given.Add(new RoutineEntry(RoutineKnowledge.Daily, TimeOfDay.Night, home));
+        }
+
+        return RoutineKnowledge.Known(schedule, li.Key, flags, given);
+    }
+
+    /// <summary>What the player knows of each met person's week, for the map.</summary>
+    private static IReadOnlyList<string> Routines(
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, IReadOnlyDictionary<string, string> flags, IReadOnlyList<PlaceRecord> known) =>
+    [
+        .. cast
+            .Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li))
+            .Select(li => (li.Name, Known: KnownRoutine(setting, li, ScheduleFor(saveId, setting, li, flags), flags)))
+            .Where(p => p.Known.Count > 0)
+            .Select(p => $"{p.Name} is usually around: {RoutineKnowledge.Describe(p.Known, id => PlaceName(setting, known, id))}."),
+    ];
+
+    /// <summary>Someone's whole week as the writer is told it, so they can mention it; their home by name once the story has named it.</summary>
+    private static string? RoutineForWriter(
+        SaveId saveId, SettingDefinition setting, LoveInterest li, IReadOnlyDictionary<string, string> flags, IReadOnlyList<PlaceRecord> known)
+    {
+        var week = RoutineKnowledge.Describe(RoutineKnowledge.Entries(ScheduleFor(saveId, setting, li, flags)), id => PlaceName(setting, known, id));
+        var home = flags.ContainsKey($"{li.Key}.home") ? "" : (week.Length > 0 ? "; " : "") + "nights at home, a place the player does not know yet";
+        return week.Length + home.Length == 0 ? null : week + home;
+    }
+
+    /// <summary>
+    /// Keeps the places a scene or reply named (user request: a place mentioned in conversation can be visited later).
+    /// A place the save already has is made known; a new one becomes a story place. When it is the home of someone present
+    /// who has none yet, it becomes their home, drawn as the setting's home type, and they spend their nights there.
+    /// Returns the flags that record new homes.
+    /// </summary>
+    private async Task<Dictionary<string, string>> AddPlacesAsync(
+        SaveId saveId, IReadOnlyList<Game.Core.Places.PlaceProposal>? proposals, IReadOnlyList<LoveInterest> present, int day, CancellationToken ct)
+    {
+        var homes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (proposals is not { Count: > 0 })
+        {
+            return homes;
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var all = (await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false)).ToList();
+        var types = placeTypes.All();
+        bool IsHome(string typeId) => types.FirstOrDefault(t => t.Id == typeId)?.Dress == DressCode.Home;
+
+        foreach (var proposal in proposals)
+        {
+            var owner = present.FirstOrDefault(li => li.Id.ToString() == proposal.Owner);
+            var homeless = owner is not null && !flags.ContainsKey($"{owner.Key}.home") && !homes.ContainsKey($"{owner.Key}.home");
+
+            var record = all.FirstOrDefault(p => PlaceProposals.SameName(p.Name, proposal.Name));
+            if (record is null)
+            {
+                var typeId = types.FirstOrDefault(t => t.Id == proposal.Type)?.Id;
+                if (homeless && (typeId is null || !IsHome(typeId)))
+                {
+                    typeId = HomeTypeOf(setting);
+                }
+
+                if (typeId is null)
+                {
+                    continue;
+                }
+
+                // Only details the type offers: a reply's places are not sent back for a wrong detail, just cleaned.
+                var offered = (types.First(t => t.Id == typeId).Details ?? []).Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+                var cleaned = proposal with
+                {
+                    Type = typeId,
+                    Details = [.. (proposal.Details ?? []).Where(offered.Contains).Distinct(StringComparer.Ordinal).Take(PlaceProposals.MaxDetails)],
+                };
+
+                if (PlaceProposals.Check(cleaned, placeTypes, all.Where(p => p.Known).Select(p => p.Name)).Count > 0)
+                {
+                    continue;
+                }
+
+                record = PlaceProposals.ToRecord(saveId, cleaned, all.Select(p => p.Id), day);
+                await places.AddAsync([record], ct).ConfigureAwait(false);
+                all.Add(record);
+            }
+            else if (!record.Known)
+            {
+                await places.MarkKnownAsync(saveId, record.Id, day, ct).ConfigureAwait(false);
+            }
+
+            if (homeless && IsHome(record.TypeId))
+            {
+                homes[$"{owner!.Key}.home"] = record.Id;
+                await story.AddFactAsync(
+                    saveId,
+                    new Fact(owner.Id.ToString(), "lives-at", record.Name, FactLevel.Established, "scene", day),
+                    storyContent.Predicate("lives-at"),
+                    [owner.Id.ToString(), FactLedger.Player],
+                    ct: ct).ConfigureAwait(false);
+            }
+        }
+
+        return homes;
+    }
+
+    /// <summary>The place type a love interest's home is drawn as in this setting; an apartment when the setting names none that is a home.</summary>
+    private string HomeTypeOf(SettingDefinition setting) =>
+        setting.HomeType is { } type && placeTypes.All().Any(t => t.Id == type && t.Dress == DressCode.Home) ? type : "apartment";
+
+    /// <summary>
+    /// Learns what someone present said about their own week, when their schedule agrees: the part of the week it names
+    /// becomes known, and the place with it. What does not match their week is let go.
+    /// </summary>
+    private async Task LearnRoutinesAsync(
+        SaveId saveId, IReadOnlyList<LoveInterest> present, IReadOnlyList<ProposedRoutine>? mentioned, Dictionary<string, string> toSet, int day, CancellationToken ct)
+    {
+        if (mentioned is not { Count: > 0 } || present.Count == 0)
+        {
+            return;
+        }
+
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var flags = new Dictionary<string, string>(await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false), StringComparer.Ordinal);
+        foreach (var (key, value) in toSet)
+        {
+            flags[key] = value;
+        }
+
+        var all = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
+        foreach (var said in mentioned)
+        {
+            if (present.FirstOrDefault(li => li.Id.ToString() == said.Who) is not { } li
+                || !Enum.TryParse<TimeOfDay>(said.Slot, ignoreCase: true, out var slot)
+                || all.FirstOrDefault(p => PlaceProposals.SameName(p.Name, said.Place ?? "")) is not { } place)
+            {
+                continue;
+            }
+
+            var days = said.Days?.Trim().ToLowerInvariant() switch
+            {
+                RoutineKnowledge.Weekdays => RoutineKnowledge.Weekdays,
+                RoutineKnowledge.Weekend => RoutineKnowledge.Weekend,
+                _ => RoutineKnowledge.Daily,
+            };
+
+            var entry = RoutineKnowledge.Entries(ScheduleFor(saveId, setting, li, flags))
+                .FirstOrDefault(e => e.Slot == slot && e.PlaceId == place.Id && (e.Days == days || e.Days == RoutineKnowledge.Daily || days == RoutineKnowledge.Daily));
+            if (entry is null)
+            {
+                continue;
+            }
+
+            toSet[RoutineKnowledge.LearnedKey(li.Key, entry)] = entry.PlaceId;
+            if (!place.Known)
+            {
+                await places.MarkKnownAsync(saveId, place.Id, day, ct).ConfigureAwait(false);
+            }
+        }
     }
 
     private static string RefFor(string key) =>
@@ -2136,11 +2339,15 @@ public sealed class WorldService(
         var lines = new List<string>();
         foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met") && !HasLeft(flags, li)))
         {
+            // Only from what the player knows of their week (user request: routines are learned, not handed out).
             var schedule = ScheduleFor(saveId, setting, li, flags);
+            var usual = KnownRoutine(setting, li, schedule, flags);
             var at = clock;
             for (var step = 0; step < 6 && at.Day <= clock.Day + 1; step++, at = at.Next())
             {
-                if (schedule.Where(at) is { } placeId && known.FirstOrDefault(p => p.Id == placeId) is { } place)
+                if (schedule.Where(at) is { } placeId
+                    && usual.Any(e => e.PlaceId == placeId && RoutineKnowledge.Fits(e, at))
+                    && known.FirstOrDefault(p => p.Id == placeId) is { } place)
                 {
                     lines.Add($"You might run into {li.Name} at {place.Name} {When(at, clock)}.");
                     break;

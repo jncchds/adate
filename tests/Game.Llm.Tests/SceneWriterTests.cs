@@ -100,6 +100,19 @@ public class SceneWriterTests
     }
 
     [Fact]
+    public async Task A_named_home_keeps_its_owner_and_a_mentioned_routine_comes_back_for_the_game_to_check()
+    {
+        var answer = Answer(places: "[{ \"type\": \"cafe\", \"name\": \"Rin's flat\", \"details\": [], \"owner\": \"" + Rin + "\" }]").TrimEnd().TrimEnd('}')
+            + ", \"routines\": [{ \"who\": \"" + Rin + "\", \"place\": \"The Corner Cup\", \"slot\": \"Morning\", \"days\": \"weekdays\" }] }";
+
+        var scene = await Writer(new FakeLlm(() => answer)).WriteAsync(Packet(), World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal(Rin, Assert.Single(scene.Places).Owner);
+        Assert.Equal(("The Corner Cup", "Morning", "weekdays"), (Assert.Single(scene.Routines!).Place, scene.Routines![0].Slot, scene.Routines[0].Days));
+    }
+
+    [Fact]
     public async Task Without_threads_the_answer_is_not_asked_for_them()
     {
         var llm = new FakeLlm(() => Answer());

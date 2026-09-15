@@ -83,6 +83,18 @@ public class ScenePacketTests
     }
 
     [Fact]
+    public void The_writer_knows_each_persons_week_and_may_name_homes_and_routines()
+    {
+        var rin = Packet().Present[0] with { Routine = "weekday mornings at The Corner Cup; nights at home" };
+
+        var text = ScenePacketBuilder.Render(Packet() with { Present = [rin] });
+
+        Assert.Contains("Rin's usual week: weekday mornings at The Corner Cup; nights at home.", text, StringComparison.Ordinal);
+        Assert.Contains("owner: the id of the person here whose home it is", text, StringComparison.Ordinal);
+        Assert.Contains("- routines:", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Without_the_material_nothing_of_it_is_rendered()
     {
         var text = ScenePacketBuilder.Render(Packet() with { OffersChoices = true });

@@ -72,13 +72,15 @@ public class PlayerLifeTests
     public void Every_setting_has_a_job_that_shows_a_quality_people_look_for_and_a_home()
     {
         var desires = Story().Values.Desires.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
-        var settings = new JsonSettingCatalog(ContentPath("settings"), new JsonLocationCatalog(ContentPath("place-types.json")));
+        var types = new JsonLocationCatalog(ContentPath("place-types.json"));
+        var settings = new JsonSettingCatalog(ContentPath("settings"), types);
 
         Assert.All(settings.All(), setting =>
         {
             Assert.NotNull(setting.Job);
             Assert.Contains(setting.Job!.Trait, desires);
             Assert.NotNull(setting.Home);
+            Assert.Equal(DressCode.Home, types.All().Single(t => t.Id == setting.HomeType).Dress);
         });
     }
 }
