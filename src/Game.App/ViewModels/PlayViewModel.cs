@@ -470,7 +470,7 @@ public sealed partial class PlayViewModel : PageViewModel
             Working = true;
             try
             {
-                if (await _world.ResumeSceneAsync(_saveId) is { } written && token == _scene)
+                if (await Task.Run(() => _world.ResumeSceneAsync(_saveId, WritingProgress(token))) is { } written && token == _scene)
                 {
                     await ApplyWrittenAsync(written, token);
                 }
@@ -753,13 +753,14 @@ public sealed partial class PlayViewModel : PageViewModel
             SceneText = null;
             StageCaption = caption;
             StageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
-            WritingText = "Writing the scene…";
+            WritingText = place is null ? "Opening your messages…" : $"Seeing who is at {place.Name}…";
             IsWriting = true;
             Mode = PlayMode.Scene;
             RefreshSceneControls();
             ScrollToTopRequested?.Invoke();
 
-            var outcome = await take();
+            // Off the UI thread: the database calls finish synchronously, so until the model was asked nothing was drawn.
+            var outcome = await Task.Run(take);
             _invite = "";
             _outcome = outcome;
             if (place is not null)
@@ -773,14 +774,15 @@ public sealed partial class PlayViewModel : PageViewModel
             NoteLine = outcome.Note;
 
             // Whoever the scene is about steps in at their resting expression.
-            var presented = await _world.PresentAsync(_saveId, outcome);
+            var presented = await Task.Run(() => _world.PresentAsync(_saveId, outcome));
             _view = presented;
             Speaker = presented.Name;
+            WritingText = "Setting the scene…";
 
             // The picture, the person and the words at once: the image service and the model work side by side.
             var background = ShowBackgroundAsync(token);
             var sprite = ShowSpriteAsync(presented, token);
-            var written = await _world.WriteSceneAsync(_saveId, outcome);
+            var written = await Task.Run(() => _world.WriteSceneAsync(_saveId, outcome, WritingProgress(token)));
 
             if (token != _scene)
             {
@@ -808,6 +810,16 @@ public sealed partial class PlayViewModel : PageViewModel
             Working = false;
         }
     }
+
+    /// <summary>What the world is doing for the scene, under the spinner, for as long as the scene is the one on screen.</summary>
+    /// <remarks>Made on the UI thread, so each step is posted back to it.</remarks>
+    private Progress<string> WritingProgress(int token) => new(step =>
+    {
+        if (token == _scene && IsWriting)
+        {
+            WritingText = step;
+        }
+    });
 
     private async Task ShowBackgroundAsync(int token)
     {

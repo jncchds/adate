@@ -727,7 +727,7 @@
             _working = true;
             try
             {
-                if (await World.ResumeSceneAsync(SaveId) is { } written && token == _scene)
+                if (await Task.Run(() => World.ResumeSceneAsync(SaveId, WritingProgress(token))) is { } written && token == _scene)
                 {
                     await ApplyWrittenAsync(written, token);
                 }
@@ -994,14 +994,15 @@
             _sceneText = null;
             _caption = caption;
             _stageLoadingText = place is null ? "Opening your messages…" : $"Drawing {place.Name}…";
-            _writingText = "Writing the scene…";
+            _writingText = place is null ? "Opening your messages…" : $"Seeing who is at {place.Name}…";
             _isWriting = true;
             _mode = Mode.Scene;
             RefreshSceneControls();
             _scrollRequest = "adate.scrollToTop";
             await RefreshAsync();
 
-            var outcome = await take();
+            // Off the circuit: the database calls finish synchronously, so until the model was asked nothing was drawn.
+            var outcome = await Task.Run(take);
             _invite = "";
             _outcome = outcome;
             if (place is not null)
@@ -1015,15 +1016,16 @@
             _noteLine = outcome.Note;
 
             // Whoever the scene is about steps in at their resting expression.
-            var presented = await World.PresentAsync(SaveId, outcome);
+            var presented = await Task.Run(() => World.PresentAsync(SaveId, outcome));
             _view = presented;
             _speaker = presented.Name;
+            _writingText = "Setting the scene…";
             await RefreshAsync();
 
             // The picture, the person and the words at once: the image service and the model work side by side.
             var background = ShowBackgroundAsync(token);
             var sprite = ShowSpriteAsync(presented, token);
-            var written = await World.WriteSceneAsync(SaveId, outcome);
+            var written = await Task.Run(() => World.WriteSceneAsync(SaveId, outcome, WritingProgress(token)));
 
             if (token != _scene)
             {
@@ -1052,6 +1054,16 @@
             await RefreshAsync();
         }
     }
+
+    /// <summary>What the world is doing for the scene, under the spinner, for as long as the scene is the one on screen.</summary>
+    private Progress<string> WritingProgress(int token) => new(step =>
+    {
+        if (token == _scene && _isWriting)
+        {
+            _writingText = step;
+            _ = RefreshAsync();
+        }
+    });
 
     private async Task ShowBackgroundAsync(int token)
     {

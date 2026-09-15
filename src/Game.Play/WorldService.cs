@@ -1064,12 +1064,12 @@ public sealed class WorldService(
     /// Finishes writing the open scene when leaving the game interrupted it. Null when no scene is open
     /// or it is already written.
     /// </summary>
-    public async Task<SceneView?> ResumeSceneAsync(SaveId saveId, CancellationToken ct = default)
+    public async Task<SceneView?> ResumeSceneAsync(SaveId saveId, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         return scene is null || scene.Written
             ? null
-            : await WriteSceneAsync(saveId, TurnOutcomeJson.Deserialize(scene.OutcomeJson), ct).ConfigureAwait(false);
+            : await WriteSceneAsync(saveId, TurnOutcomeJson.Deserialize(scene.OutcomeJson), progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>The player has moved on from the scene they were in (Continue), leaving any reply unsaid.</summary>
@@ -1114,7 +1114,8 @@ public sealed class WorldService(
     /// everyone present; the packet and the answer are logged so the turn can be replayed. Returns the
     /// scene text, or the encounter's authored text when there is no model or no answer passed.
     /// </summary>
-    public async Task<SceneView> WriteSceneAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
+    /// <param name="progress">Told each slow step as it starts, in words for the player (getting to know people, remembering, writing).</param>
+    public async Task<SceneView> WriteSceneAsync(SaveId saveId, TurnOutcome outcome, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(outcome);
 
@@ -1137,13 +1138,17 @@ public sealed class WorldService(
             return presented;
         }
 
-        var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct).ConfigureAwait(false);
+        var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct, progress).ConfigureAwait(false);
         var (known, packet, world, memoryLines) = (built.Known, built.Packet, built.World, built.MemoryLines);
         var presentIds = packet.Present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
         var day = outcome.VisitedAt.Day;
 
+        progress?.Report("Writing the scene…");
         var written = await sceneWriter.WriteAsync(packet, world, outcome.Text, [.. known.Select(p => p.Name)], packet.OffersChoices, ct).ConfigureAwait(false);
+
+        // Summarising and folding memories asks the model again, before the words are handed back.
+        progress?.Report("Keeping it in memory…");
 
         if (!written.Fallback && packet.LooseEnds is not null)
         {
@@ -1253,12 +1258,13 @@ public sealed class WorldService(
     /// </summary>
     /// <param name="looseEndsOverride">Loose ends to use instead of the save's own, for replaying a past scene.</param>
     private async Task<BuiltScene> BuildScenePacketAsync(
-        SaveId saveId, TurnOutcome outcome, SceneView presented, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct)
+        SaveId saveId, TurnOutcome outcome, SceneView presented, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct,
+        IProgress<string>? progress = null)
     {
         var quality = llmOptions.Value;
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
         var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
-        await EnsureBibleAsync(saveId, setting, cast, ct).ConfigureAwait(false);
+        await EnsureBibleAsync(saveId, setting, cast, ct, progress).ConfigureAwait(false);
 
         var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
         var known = await ListKnownAsync(saveId, ct).ConfigureAwait(false);
@@ -1280,7 +1286,7 @@ public sealed class WorldService(
                 [.. li.Member.Temper.Values.Select(end => ends.GetValueOrDefault(end, ""))],
                 relationship.Stage,
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
-                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null,
+                quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct, progress).ConfigureAwait(false) : null,
                 RoutineForWriter(saveId, setting, li, flags, known)));
         }
 
@@ -1291,6 +1297,7 @@ public sealed class WorldService(
         // Memory (plan §8): the last scene shared with whoever is here, the memories most like this
         // encounter, and last week in a sentence.
         var day = outcome.VisitedAt.Day;
+        progress?.Report("Remembering earlier days…");
         var remembered = await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false);
         var lastShared = MemoryRetrieval.LastShared(remembered, presentIds);
         var retrieved = MemoryRetrieval.Retrieve(
@@ -1370,12 +1377,15 @@ public sealed class WorldService(
     /// time one is needed. Null when no voice could be written.
     /// </summary>
     private async Task<string?> VoiceOfAsync(
-        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, LoveInterest li, IReadOnlyList<KnownFact> facts, CancellationToken ct)
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, LoveInterest li, IReadOnlyList<KnownFact> facts, CancellationToken ct,
+        IProgress<string>? progress = null)
     {
         if (await story.GetVoiceAsync(li.Id, ct).ConfigureAwait(false) is { } voice)
         {
             return voice;
         }
+
+        progress?.Report("Finding how everyone talks…");
 
         var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var people = new List<VoicePerson>();
@@ -1786,13 +1796,16 @@ public sealed class WorldService(
     /// becomes immutable core facts the player can see; C# picks each person's job from the setting;
     /// the model adds likes and a secret, which only that person knows until a scene reveals them.
     /// </summary>
-    private async Task EnsureBibleAsync(SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, CancellationToken ct)
+    private async Task EnsureBibleAsync(
+        SaveId saveId, SettingDefinition setting, IReadOnlyList<LoveInterest> cast, CancellationToken ct, IProgress<string>? progress = null)
     {
         var facts = await story.GetFactsAsync(saveId, ct).ConfigureAwait(false);
         if (cast.Count == 0 || facts.Any(f => f.Fact.Source is BibleWriter.Source or "appearance"))
         {
             return;
         }
+
+        progress?.Report("Getting to know everyone…");
 
         var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var people = new List<BiblePerson>();
