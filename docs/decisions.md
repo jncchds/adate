@@ -1657,3 +1657,22 @@ through the ordinary stage. The user chose a phone over the place, texting while
   `TextMessages.Split` turns the words into bubbles, one per quoted message, and leaves out any narration when
   there are quoted messages. Text without quotes is a bubble a line. The expression still comes back but draws
   no sprite.
+
+## Story places look like what was named
+
+User question: are places tied to a list, or can the model describe a new one? They were tied to one. A named place
+was one of 24 types with up to three of that type's details, and its name never reached the picture, so "The
+Velvet Bean" drew as any cafe. The user chose to let the model describe it.
+
+* **A look per story place.** Each place the writer adds now carries `look`: a few comma-separated visual phrases
+  in English, under 80 characters, with no people, name, time or weather. Examples are "converted church, stained
+  glass, a stage with a piano" or "velvet booths, brass lamps". It is stored in `place.look` (migration 014).
+  Authored places and older story places have none and draw exactly as before, so their cache holds.
+* **Added to the type, not replacing it.** The type still decides dress code, happenings and homes. The natural
+  prompt compiler puts the look right after the type's description, before details, lighting and weather. Tag
+  packs leave it out, as they do typed styles.
+* **HANDOFF 1.3 is bent on purpose, and kept small.** The look is the only story-written text that reaches a
+  background. `PlaceProposals.CleanLook` collapses spaces, cuts at a comma or space to fit 80 characters and keeps
+  only word characters. A scene's over-long look goes back to the writer. A reaction's is cut to fit, since a
+  reaction's places are not sent back. `ApprovedIntent` filters the look phrase by phrase against the pack's
+  restricted terms, like an outfit, and logs what it removes.

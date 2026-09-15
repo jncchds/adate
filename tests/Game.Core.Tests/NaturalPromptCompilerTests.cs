@@ -202,6 +202,18 @@ public class NaturalPromptCompilerTests
     }
 
     [Fact]
+    public void Background_adds_a_story_places_look_after_its_types_description()
+    {
+        var prompt = Positive(RenderTarget.Background, intent: TestContent.Intent() with { LocationLook = "converted church, stained glass" });
+
+        Assert.Contains("Converted church, stained glass.", prompt, StringComparison.Ordinal);
+        Assert.True(
+            prompt.IndexOf("The interior of a cozy corner cafe", StringComparison.Ordinal) < prompt.IndexOf("Converted church", StringComparison.Ordinal),
+            "The place is still of its type first.");
+        Assert.DoesNotContain("church", Positive(RenderTarget.Background), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_detail_the_place_type_does_not_offer_is_refused_by_name()
     {
         var ex = Assert.Throws<KeyNotFoundException>(() =>

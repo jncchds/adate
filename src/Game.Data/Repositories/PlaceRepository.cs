@@ -25,8 +25,8 @@ public sealed class PlaceRepository(Database database)
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO place (save_id, id, type_id, name, details_json, seed, origin, known, first_day, created_utc)
-                VALUES ($save, $id, $type, $name, $details, $seed, $origin, $known, $firstDay, $created)
+                INSERT INTO place (save_id, id, type_id, name, details_json, seed, origin, known, first_day, look, created_utc)
+                VALUES ($save, $id, $type, $name, $details, $seed, $origin, $known, $firstDay, $look, $created)
                 ON CONFLICT(save_id, id) DO NOTHING;
                 """;
 
@@ -39,6 +39,7 @@ public sealed class PlaceRepository(Database database)
             command.Parameters.AddWithValue("$origin", place.Origin is PlaceOrigin.Authored ? "authored" : "story");
             command.Parameters.AddWithValue("$known", place.Known ? 1 : 0);
             command.Parameters.AddWithValue("$firstDay", place.FirstDay is { } day ? day : DBNull.Value);
+            command.Parameters.AddWithValue("$look", (object?)place.Look ?? DBNull.Value);
             command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.ToString("O"));
 
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -54,7 +55,7 @@ public sealed class PlaceRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            SELECT save_id, id, type_id, name, details_json, seed, origin, known, first_day
+            SELECT save_id, id, type_id, name, details_json, seed, origin, known, first_day, look
             FROM place
             WHERE save_id = $save AND ($knownOnly = 0 OR known = 1)
             ORDER BY rowid;
@@ -78,7 +79,7 @@ public sealed class PlaceRepository(Database database)
         await using var command = connection.CreateCommand();
 
         command.CommandText = """
-            SELECT save_id, id, type_id, name, details_json, seed, origin, known, first_day
+            SELECT save_id, id, type_id, name, details_json, seed, origin, known, first_day, look
             FROM place
             WHERE save_id = $save AND id = $id;
             """;
@@ -118,5 +119,6 @@ public sealed class PlaceRepository(Database database)
         reader.GetInt64(5),
         reader.GetString(6) == "authored" ? PlaceOrigin.Authored : PlaceOrigin.Story,
         reader.GetInt64(7) == 1,
-        reader.IsDBNull(8) ? null : reader.GetInt32(8));
+        reader.IsDBNull(8) ? null : reader.GetInt32(8),
+        reader.IsDBNull(9) ? null : reader.GetString(9));
 }

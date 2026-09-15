@@ -219,7 +219,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     Places:
                     [
                         .. (response.Places ?? []).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name)).Select(p => new Game.Core.Places.PlaceProposal(
-                            p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim())),
+                            p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim(), p.Look)),
                     ],
                     Routines: [.. (response.Routines ?? []).Where(r => r is not null)]);
             }
@@ -286,8 +286,9 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     ["name"] = new JsonObject { ["type"] = "string" },
                     ["details"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
                     ["owner"] = new JsonObject { ["type"] = "string" },
+                    ["look"] = new JsonObject { ["type"] = "string" },
                 },
-                ["required"] = Strings(["type", "name", "details", "owner"]),
+                ["required"] = Strings(["type", "name", "details", "owner", "look"]),
                 ["additionalProperties"] = false,
             },
         };

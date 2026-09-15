@@ -53,6 +53,12 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
 
             Add(sentences, location.Description);
 
+            // A story place's own look, after the type's description so the place is still of its type.
+            if (intent.LocationLook is { Length: > 0 } look)
+            {
+                Add(sentences, char.ToUpperInvariant(look[0]) + look[1..]);
+            }
+
             var details = (intent.LocationDetails ?? []).Select(id => location.Detail(id).Phrase).ToList();
             if (details.Count > 0)
             {

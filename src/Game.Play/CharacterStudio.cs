@@ -360,7 +360,8 @@ public sealed class CharacterStudio(
         var compiler = compilers.For(pack.Dialect);
         var intent = new SceneIntent(
             place.TypeId, time, "", "", "", Framing.FullBody, place.Details,
-            weather == "clear" ? null : weather);
+            weather == "clear" ? null : weather,
+            place.Look);
 
         // A background has no subject, so no age clamp applies -- only the game setting and
         // the pack. It still goes through the gate: a location is authored content, but the

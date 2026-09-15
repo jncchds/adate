@@ -10,7 +10,8 @@ namespace Game.Llm;
 public sealed record SceneResponseFact(string Subject, string Predicate, string Object, string Level);
 
 /// <param name="Owner">The id of the person present whose home the place is; empty otherwise.</param>
-public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details, string? Owner = null);
+/// <param name="Look">A few visual phrases for how it looks, in English.</param>
+public sealed record SceneResponsePlace(string Type, string Name, IReadOnlyList<string>? Details, string? Owner = null, string? Look = null);
 
 /// <summary>What someone said about their own week, unchecked: C# keeps it only when their schedule agrees.</summary>
 public sealed record ProposedRoutine(string Who, string Place, string Slot, string Days);
@@ -304,6 +305,7 @@ public sealed class SceneWriter(
                         ["type"] = new JsonObject { ["type"] = "string", ["enum"] = Strings(placeTypes.All().Select(t => t.Id)) },
                         ["name"] = new JsonObject { ["type"] = "string" },
                         ["owner"] = new JsonObject { ["type"] = "string" },
+                        ["look"] = new JsonObject { ["type"] = "string" },
                         // Detail ids as an enum: in other languages Gemma translated them ("кадки с растениями" for
                         // planters) even when told not to. Whether a detail fits the type is still checked below.
                         ["details"] = new JsonObject
@@ -316,7 +318,7 @@ public sealed class SceneWriter(
                             },
                         },
                     },
-                    ["required"] = Strings(["type", "name", "details", "owner"]),
+                    ["required"] = Strings(["type", "name", "details", "owner", "look"]),
                     ["additionalProperties"] = false,
                 },
             },
@@ -530,7 +532,8 @@ public sealed class SceneWriter(
         var places = new List<PlaceProposal>();
         foreach (var place in response.Places ?? [])
         {
-            var proposal = new PlaceProposal(place.Type, place.Name ?? "", place.Details ?? [], string.IsNullOrWhiteSpace(place.Owner) ? null : place.Owner.Trim());
+            var proposal = new PlaceProposal(
+                place.Type, place.Name ?? "", place.Details ?? [], string.IsNullOrWhiteSpace(place.Owner) ? null : place.Owner.Trim(), place.Look);
             var problems = PlaceProposals.Check(proposal, placeTypes, [.. knownPlaces, .. places.Select(p => p.Name)]);
 
             if (problems.Count == 0)

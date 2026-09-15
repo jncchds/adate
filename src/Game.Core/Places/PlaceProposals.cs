@@ -4,19 +4,27 @@ using Game.Core.Saves;
 
 namespace Game.Core.Places;
 
-/// <summary>A place the story names during play (plan §10): a type, a name and detail ids.</summary>
+/// <summary>A place the story names during play (plan §10): a type, a name, detail ids and how it looks.</summary>
 /// <param name="Owner">The id of the person present whose home it is, when it is someone's home.</param>
-public sealed record PlaceProposal(string Type, string Name, IReadOnlyList<string> Details, string? Owner = null);
+/// <param name="Look">A few visual phrases the writer gave it, such as "converted church, stained glass"; drawn, never shown.</param>
+public sealed record PlaceProposal(string Type, string Name, IReadOnlyList<string> Details, string? Owner = null, string? Look = null);
 
 /// <summary>
 /// Checks a proposed place against the place-type catalog and turns it into a place the player now
-/// knows. Only the type and detail ids ever reach an image prompt; the name is display text.
+/// knows. The type, detail ids and look reach an image prompt; the name is display text.
 /// </summary>
+/// <remarks>
+/// The look bends HANDOFF 1.3 on purpose (user request: a place named in the story should look like what was named, not
+/// like any place of its type). It is kept to a short run of words, and the content gate filters it phrase by phrase
+/// like an outfit, so the writer adds to an authored description rather than writing the prompt.
+/// </remarks>
 public static partial class PlaceProposals
 {
     public const int MaxNameLength = 40;
 
     public const int MaxDetails = 3;
+
+    public const int MaxLookLength = 80;
 
     public const string IdPrefix = "story-";
 
@@ -67,7 +75,29 @@ public static partial class PlaceProposals
             }
         }
 
+        if (Spaces().Replace(proposal.Look?.Trim() ?? "", " ").Length > MaxLookLength)
+        {
+            reasons.Add($"The look of '{name}' is longer than {MaxLookLength} characters; give a few short visual phrases.");
+        }
+
         return reasons;
+    }
+
+    /// <summary>
+    /// A look as it is stored and drawn: spaces collapsed, cut at a comma or a space to fit <see cref="MaxLookLength"/>,
+    /// and only words; null when nothing usable is left.
+    /// </summary>
+    public static string? CleanLook(string? look)
+    {
+        var text = Spaces().Replace(look?.Trim() ?? "", " ").Trim(' ', ',', '.', ';');
+        if (text.Length > MaxLookLength)
+        {
+            var cut = text[..(MaxLookLength + 1)];
+            var at = cut.LastIndexOf(',') is > 0 and var comma ? comma : cut.LastIndexOf(' ');
+            text = (at > 0 ? cut[..at] : text[..MaxLookLength]).Trim(' ', ',', '.', ';');
+        }
+
+        return text.Length > 0 && LookWords().IsMatch(text) ? text : null;
     }
 
     /// <summary>A known story place with its own seed, and an id derived from its name that no other place has.</summary>
@@ -93,7 +123,8 @@ public static partial class PlaceProposals
             PlaceRecord.SeedFor(saveId, id),
             PlaceOrigin.Story,
             Known: true,
-            FirstDay: day);
+            FirstDay: day,
+            Look: CleanLook(proposal.Look));
     }
 
     /// <summary>Names that differ only by case, punctuation, spacing or a leading "the" are the same place.</summary>
@@ -118,4 +149,10 @@ public static partial class PlaceProposals
 
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NotSlug();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spaces();
+
+    [GeneratedRegex(@"^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ,.'&()\-]*$")]
+    private static partial Regex LookWords();
 }

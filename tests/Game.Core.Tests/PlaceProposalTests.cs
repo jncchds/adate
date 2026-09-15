@@ -60,5 +60,33 @@ public class PlaceProposalTests
         Assert.True(first.Known);
         Assert.Equal(9, first.FirstDay);
         Assert.Equal(PlaceRecord.SeedFor(save, first.Id), first.Seed);
+        Assert.Null(first.Look);
+    }
+
+    [Fact]
+    public void A_look_is_kept_tidied_and_an_overlong_one_is_sent_back()
+    {
+        var catalog = Catalog();
+        var save = SaveId.New();
+
+        var church = PlaceProposals.ToRecord(save, new PlaceProposal("bar", "The Chapel", [], Look: "  converted church,  stained glass windows, a stage with a piano. "), [], day: 3);
+        Assert.Equal("converted church, stained glass windows, a stage with a piano", church.Look);
+
+        var tooLong = new PlaceProposal("bar", "The Chapel", [], Look: string.Join(", ", Enumerable.Repeat("stained glass windows", 6)));
+        Assert.Contains(PlaceProposals.Check(tooLong, catalog, []), r => r.Contains("look", StringComparison.Ordinal));
+        Assert.Empty(PlaceProposals.Check(tooLong with { Look = church.Look }, catalog, []));
+    }
+
+    [Fact]
+    public void A_look_is_cut_to_fit_at_a_phrase_and_one_with_no_words_is_dropped()
+    {
+        var cut = PlaceProposals.CleanLook(string.Join(", ", Enumerable.Repeat("stained glass windows", 6)));
+
+        Assert.NotNull(cut);
+        Assert.True(cut.Length <= PlaceProposals.MaxLookLength);
+        Assert.EndsWith("stained glass windows", cut, StringComparison.Ordinal);
+        Assert.Null(PlaceProposals.CleanLook("  "));
+        Assert.Null(PlaceProposals.CleanLook("<img src=x>"));
+        Assert.Null(PlaceProposals.CleanLook(null));
     }
 }

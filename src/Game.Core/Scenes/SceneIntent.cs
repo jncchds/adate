@@ -12,6 +12,10 @@ namespace Game.Core.Scenes;
 /// authored vocabulary.
 /// </param>
 /// <param name="Weather">A weather id; null or <c>clear</c> adds nothing to the prompt.</param>
+/// <param name="LocationLook">
+/// How a story place looks, in the writer's words (a few comma-separated phrases), added to the type's description.
+/// The one place words from the story reach a background: short, and filtered by the content gate like an outfit.
+/// </param>
 public sealed record SceneIntent(
     string LocationId,
     TimeOfDay Time,
@@ -20,4 +24,5 @@ public sealed record SceneIntent(
     string Expression,
     Framing Framing,
     IReadOnlyList<string>? LocationDetails = null,
-    string? Weather = null);
+    string? Weather = null,
+    string? LocationLook = null);

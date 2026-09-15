@@ -51,6 +51,19 @@ public class ApprovedIntentTests
         Assert.Empty(approved.Removed);
     }
 
+    /// <summary>A story place's look is written by the model, so it goes through the gate phrase by phrase too.</summary>
+    [Fact]
+    public void A_restricted_phrase_in_a_places_look_is_removed_and_the_rest_kept()
+    {
+        var approved = ApprovedIntent.Approve(
+            ContentPolicy.Resolve(new GameContentSettings(18, Ceiling.PG13), 24, Ceiling.PG13, Intimacy.None),
+            TestContent.Intent() with { LocationLook = "nude statues, velvet booths" },
+            TestContent.Pack());
+
+        Assert.Equal("velvet booths", approved.Intent.LocationLook);
+        Assert.Contains("nude statues", approved.Removed);
+    }
+
     [Fact]
     public void A_restricted_term_is_permitted_at_its_own_ceiling()
     {

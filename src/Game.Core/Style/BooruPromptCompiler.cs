@@ -189,6 +189,8 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         var location = locations.Get(intent.LocationId);
         tags.AddRange(location.Tags);
 
+        // A story place's look is prose for a natural-language pack; read as booru tags it would be noise, so it is left out.
+
         foreach (var detail in intent.LocationDetails ?? [])
         {
             tags.AddRange(location.Detail(detail).Tags);

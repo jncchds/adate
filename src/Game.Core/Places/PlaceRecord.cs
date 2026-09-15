@@ -26,6 +26,7 @@ public enum PlaceOrigin
 /// regenerated every background.
 /// </param>
 /// <param name="Known">Whether the player can choose to go there.</param>
+/// <param name="Look">How a story place looks, in the writer's words, added to its type's description; null for authored places.</param>
 public sealed record PlaceRecord(
     SaveId SaveId,
     string Id,
@@ -35,7 +36,8 @@ public sealed record PlaceRecord(
     long Seed,
     PlaceOrigin Origin,
     bool Known,
-    int? FirstDay)
+    int? FirstDay,
+    string? Look = null)
 {
     /// <summary>The setting's authored places for a save, in setting order.</summary>
     public static IReadOnlyList<PlaceRecord> Authored(SaveId saveId, SettingDefinition setting)

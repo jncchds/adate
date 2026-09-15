@@ -129,8 +129,10 @@ public static class ScenePacketBuilder
     /// <summary>What the answer's places are, for scenes and reactions alike: a new place, and whose home it is.</summary>
     public const string PlaceRule =
         "places: every place someone names that the player does not know yet, even in passing (a café they mention, where they live, " +
-        "somewhere a choice suggests going), with a place type " +
-        "and up to three details of that type, and owner: the id of the person here whose home it is, or an empty string; an empty list if none.";
+        "somewhere a choice suggests going), with the place type closest to it, up to three details of that type, " +
+        "look: how this particular place looks, in English, a few short comma-separated visual phrases under 80 characters " +
+        "(what it is built as, materials, colours, what stands out; no people, no name, no time of day or weather), " +
+        "and owner: the id of the person here whose home it is, or an empty string; an empty list if none.";
 
     /// <summary>What the answer's routines are: what someone said about their own week.</summary>
     public const string RoutineRule =

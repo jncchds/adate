@@ -368,6 +368,21 @@ public class DatabaseTests
     }
 
     [Fact]
+    public async Task A_story_places_look_is_stored_with_it()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var places = new PlaceRepository(db.Database);
+
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        await places.AddAsync([Place(save.Id, "story-the-chapel") with { Origin = PlaceOrigin.Story, Look = "converted church, stained glass" }]);
+
+        Assert.Equal("converted church, stained glass", (await places.GetAsync(save.Id, "story-the-chapel"))!.Look);
+        await places.AddAsync([Place(save.Id, "corner-cafe")]);
+        Assert.Null((await places.ListAsync(save.Id)).Single(p => p.Id == "corner-cafe").Look);
+    }
+
+    [Fact]
     public async Task A_place_becomes_known_and_keeps_its_first_day()
     {
         using var db = new TempDatabase();

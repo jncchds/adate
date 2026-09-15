@@ -712,7 +712,7 @@ public sealed class WorldService(
         ]));
         sections.Add(new("Places",
         [
-            .. play.KnownPlaces.Select(p => $"{p.Id} ({p.TypeId}) {p.Name}"),
+            .. play.KnownPlaces.Select(p => $"{p.Id} ({p.TypeId}) {p.Name}{(p.Details.Count > 0 ? $" [{string.Join(", ", p.Details)}]" : "")}{(p.Look is null ? "" : $" look: {p.Look}")}"),
         ]));
         sections.Add(new("Facts",
         [
@@ -2198,8 +2198,10 @@ public sealed class WorldService(
 
                 // Only details the type offers: a reply's places are not sent back for a wrong detail, just cleaned.
                 var offered = (types.First(t => t.Id == typeId).Details ?? []).Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+                // A look that runs long is cut to fit rather than costing the place, as details are cleaned.
                 var cleaned = proposal with
                 {
+                    Look = PlaceProposals.CleanLook(proposal.Look),
                     Type = typeId,
                     Details = [.. (proposal.Details ?? []).Where(offered.Contains).Distinct(StringComparer.Ordinal).Take(PlaceProposals.MaxDetails)],
                 };

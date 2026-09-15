@@ -48,8 +48,8 @@ public sealed class ApprovedIntent
     /// Vets <paramref name="intent"/> against the ceiling in <paramref name="decision"/>.
     /// </summary>
     /// <remarks>
-    /// Only the three fields the story model writes are filtered — outfit, pose and
-    /// expression. Everything else in a prompt is authored content or a player-declared
+    /// Only the fields the story model writes are filtered — outfit, pose, expression and a
+    /// story place's look. Everything else in a prompt is authored content or a player-declared
     /// attribute, and filtering those would mean second-guessing the game's own data.
     /// </remarks>
     public static ApprovedIntent Approve(ContentDecision decision, SceneIntent intent, StylePack pack)
@@ -66,6 +66,7 @@ public sealed class ApprovedIntent
                 Outfit = Filter(intent.Outfit),
                 Pose = Filter(intent.Pose),
                 Expression = Filter(intent.Expression),
+                LocationLook = intent.LocationLook is { } look ? Filter(look) : null,
             },
             decision.Ceiling,
             removed);
