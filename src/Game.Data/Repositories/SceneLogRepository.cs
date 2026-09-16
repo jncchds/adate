@@ -211,12 +211,13 @@ public sealed class SceneLogRepository(Database database)
         var character = Text(9) is { } id ? Guid.Parse(id) : (Guid?)null;
         var outfit = Text(15) is { } dress ? new Outfit(dress, Text(16)) : null;
 
-        // Scenes from before the stage was kept stood their one person in the older columns.
-        IReadOnlyList<SceneFigure> figures = Text(18) is { } stored
+        // Scenes from before the stage was kept stood their one person in the older columns; with nobody there either,
+        // who stands on the stage is not known.
+        IReadOnlyList<SceneFigure>? figures = Text(18) is { } stored
             ? JsonSerializer.Deserialize<List<SceneFigure>>(stored, Json) ?? []
             : character is { } who && Text(11) is { } expression
                 ? [new SceneFigure(who, Text(10) ?? "", null, expression, outfit, Text(12))]
-                : [];
+                : null;
 
         return new StoredScene(
             reader.GetInt64(0),

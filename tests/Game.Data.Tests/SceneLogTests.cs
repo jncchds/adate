@@ -116,7 +116,7 @@ public class SceneLogTests
         var (rin, kai) = (Guid.NewGuid(), Guid.NewGuid());
 
         var id = await log.StartAsync(save.Id, new ClockState(9, TimeOfDay.Evening), "bar", "route.introduced.meet", "{}", "Rin waves Kai over.");
-        Assert.Empty((await log.GetOpenAsync(save.Id))!.Figures!);
+        Assert.Null((await log.GetOpenAsync(save.Id))!.Figures);
 
         // Before: the one person in the older columns.
         await log.SetPersonAsync(id, rin, "Rin", "smile", "img/rin.png");

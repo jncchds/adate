@@ -106,7 +106,7 @@ public class StageLayoutTests
     public void Children_after_the_side_overlay_the_whole_area()
     {
         var layout = new StageLayout();
-        Avalonia.Controls.Border[] children = [new(), new(), new(), new()];
+        Avalonia.Controls.Border[] children = [new(), new(), new(), new(), new()];
         layout.Children.AddRange(children);
 
         layout.Measure(new Size(1280, 720));
@@ -114,11 +114,63 @@ public class StageLayoutTests
 
         // Layout rounds to whole pixels, so the side is compared within one.
         var regions = StageLayout.Split(new Size(1280, 720), tall: false);
-        Assert.Equal(regions.Side.X, children[2].Bounds.X, 0.51);
-        Assert.Equal(regions.Side.Y, children[2].Bounds.Y, 0.51);
-        Assert.Equal(regions.Side.Width, children[2].Bounds.Width, 1.01);
-        Assert.Equal(regions.Side.Height, children[2].Bounds.Height, 1.01);
-        Assert.Equal(new Rect(0, 0, 1280, 720), children[3].Bounds);
+        Assert.Equal(regions.Side.X, children[3].Bounds.X, 0.51);
+        Assert.Equal(regions.Side.Y, children[3].Bounds.Y, 0.51);
+        Assert.Equal(regions.Side.Width, children[3].Bounds.Width, 1.01);
+        Assert.Equal(regions.Side.Height, children[3].Bounds.Height, 1.01);
+        Assert.Equal(0, children[2].Bounds.Width);
+        Assert.Equal(new Rect(0, 0, 1280, 720), children[4].Bounds);
+    }
+
+    [Theory]
+    [InlineData(1920, 1080)]
+    [InlineData(1280, 720)]
+    [InlineData(1024, 768)]
+    [InlineData(844, 390)]
+    [InlineData(390, 844)]
+    [InlineData(768, 1024)]
+    public void One_person_stands_exactly_where_they_did_before_two_could(double width, double height)
+    {
+        foreach (var tall in new[] { false, true })
+        {
+            var one = StageLayout.Split(new Size(width, height), tall);
+
+            Assert.Equal(default, one.Companion);
+            Assert.Equal(one, StageLayout.Split(new Size(width, height), tall, pair: false));
+        }
+    }
+
+    [Theory]
+    [InlineData(1920, 1080)]
+    [InlineData(1280, 720)]
+    [InlineData(1280, 800)]
+    [InlineData(1024, 768)]
+    [InlineData(844, 390)]
+    public void Two_people_stand_at_either_edge_with_the_words_between_them(double width, double height)
+    {
+        var regions = StageLayout.Split(new Size(width, height), tall: false, pair: true);
+        var screen = new Rect(0, 0, width, height);
+
+        Assert.Equal(0, regions.Figure.Left);
+        Assert.Equal(width, regions.Companion.Right, 3);
+        Assert.False(regions.Figure.Intersects(regions.Companion), "The two stand apart.");
+        Assert.True(screen.Contains(regions.Side));
+        Assert.False(regions.Side.Intersects(regions.Figure) || regions.Side.Intersects(regions.Companion), "The words cover neither.");
+        Assert.True(regions.Side.Height >= StageLayout.MinBoxHeight);
+        Assert.True(regions.Side.Width >= Math.Min(width, height) * 0.5, "The box is wide enough to read.");
+        Assert.True(regions.Figure.Width >= StageLayout.MinFigureWidth);
+    }
+
+    [Fact]
+    public void Two_people_on_an_upright_phone_share_the_picture_from_either_side()
+    {
+        var regions = StageLayout.Split(new Size(390, 866), tall: false, pair: true);
+
+        Assert.True(regions.Stacked);
+        Assert.Equal((0.0, 390.0), (regions.Figure.Left, regions.Companion.Right));
+        Assert.True(regions.Stage.Contains(regions.Figure) && regions.Stage.Contains(regions.Companion));
+        Assert.True(regions.Figure.Right > regions.Companion.Left, "They overlap a little in the middle.");
+        Assert.Equal(regions.Stage.Bottom, regions.Side.Top);
     }
 
     [Fact]

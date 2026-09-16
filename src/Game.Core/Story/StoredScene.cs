@@ -13,7 +13,10 @@ namespace Game.Core.Story;
 /// <param name="Exchanges">Every reply the player gave in the scene and the answer to it, in order.</param>
 /// <param name="Outfit">What the person wears, once the scene or a change in its conversation has said; null before.</param>
 /// <param name="Fallback">Whether <paramref name="Text"/> is the placeholder because the writer failed, so the player can ask again.</param>
-/// <param name="Figures">Who stands on the stage, left to right, as the words last left it; the one person in the older columns for a scene from before.</param>
+/// <param name="Figures">
+/// Who stands on the stage, left to right, as the words last left it; the one person in the older columns for a scene from
+/// before, and null when that is not known either.
+/// </param>
 public sealed record StoredScene(
     long Id,
     ClockState Clock,

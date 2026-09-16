@@ -26,7 +26,7 @@ public enum PersonAway
     /// <summary>They come in during the scene, as what must happen says.</summary>
     Arriving,
 
-    /// <summary>They were here and left.</summary>
+    /// <summary>They are not here now: they left, or never came in.</summary>
     Left,
 }
 
@@ -296,7 +296,7 @@ public static class ScenePacketBuilder
                     text.AppendLine($"  {person.Name} is not here at first: they come in during the scene, as what must happen says.");
                     break;
                 case PersonAway.Left:
-                    text.AppendLine($"  {person.Name} has left and is not here now. They come back only if what happens next brings them back.");
+                    text.AppendLine($"  {person.Name} is not here now: they come only if what happens next brings them.");
                     break;
             }
         }

@@ -203,7 +203,7 @@ public class ScenePacketTests
         Assert.Contains("- present: of Rin (rin-id)", one, StringComparison.Ordinal);
 
         var gone = ScenePacketBuilder.Render(Packet() with { Present = [rin with { Away = PersonAway.Left }], Drawn = ["rin-id"] });
-        Assert.Contains("Rin has left and is not here now.", gone, StringComparison.Ordinal);
+        Assert.Contains("Rin is not here now: they come only if what happens next brings them.", gone, StringComparison.Ordinal);
 
         var texting = ScenePacketBuilder.Render(Packet());
         Assert.DoesNotContain("- present:", texting, StringComparison.Ordinal);

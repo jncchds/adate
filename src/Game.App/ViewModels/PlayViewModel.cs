@@ -89,8 +89,20 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string _stageLoadingText = "Opening the save…";
 
+    /// <summary>The first person on the stage, or the only one.</summary>
     [ObservableProperty]
     private Bitmap? _stageSprite;
+
+    /// <summary>The second of two people on the stage.</summary>
+    [ObservableProperty]
+    private Bitmap? _companionSprite;
+
+    /// <summary>Whether two people stand on the stage.</summary>
+    [ObservableProperty]
+    private bool _isPair;
+
+    /// <summary>Who the stage's pictures stand for, left to right, as the words last left it.</summary>
+    private IReadOnlyList<SceneFigure> _onStage = [];
 
     [ObservableProperty]
     private string? _sceneText;
@@ -279,7 +291,7 @@ public sealed partial class PlayViewModel : PageViewModel
         ReplyText = "";
         WithLine = null;
         RevealLine = null;
-        StageSprite = null;
+        Restage([]);
         Speaker = null;
         People.Clear();
         HasPeople = false;
@@ -426,6 +438,7 @@ public sealed partial class PlayViewModel : PageViewModel
         _view = new SceneView(scene.Text, scene.CharacterId, scene.Speaker, null, scene.Expression, state.PendingScene?.Choices)
         {
             Open = state.PendingScene is not null,
+            Figures = scene.Figures,
         };
 
         Heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
@@ -491,30 +504,25 @@ public sealed partial class PlayViewModel : PageViewModel
                 // The messages work without the picture.
             }
         }
-        else if (scene.CharacterId is not null)
+        else if (_view is { } shown)
         {
-            try
+            // A scene left before its words were written stands those there from the start.
+            if (!scene.Written && scene.Figures.Count == 0)
             {
-                var path = scene.SpritePath;
-                if (path is null)
+                try
                 {
-                    var presented = await _world.PresentAsync(_saveId, scene.Outcome);
-                    path = await _world.SceneSpriteAsync(_saveId, presented with { Expression = scene.Expression ?? presented.Expression });
+                    shown = _view = shown with { Figures = (await _world.PresentAsync(_saveId, scene.Outcome)).Figures };
                 }
-
-                var sprite = await PictureAsync(path);
-                if (token == _scene)
+                catch (Exception)
                 {
-                    StageSprite = sprite;
+                    // Nobody stands there until the words are written.
                 }
             }
-            catch (Exception)
+
+            if (token == _scene)
             {
-                // The words and choices work without the person's picture: it is marked, and can be drawn again.
-                if (token == _scene)
-                {
-                    SpriteWarning = SpriteFailedWarning();
-                }
+                Restage(shown.Figures);
+                await ShowFiguresAsync(shown, token);
             }
         }
 
@@ -571,10 +579,11 @@ public sealed partial class PlayViewModel : PageViewModel
             $"{StageCaption ?? "The place"} could not be drawn. Draw it again?",
             RedrawBackgroundAsync);
 
-    private WarningItem SpriteFailedWarning() =>
+    /// <param name="who">Whoever could not be drawn, by name; the person speaking when not said.</param>
+    private WarningItem SpriteFailedWarning(string? who = null) =>
         new(
             "This person could not be drawn.",
-            $"{Speaker ?? "This person"} could not be drawn. Draw them again?",
+            $"{who ?? Speaker ?? "This person"} could not be drawn. Draw them again?",
             RedrawSpriteAsync);
 
     /// <summary>Asks for the scene's words again, before anything has been said in it. Nothing else is asked for.</summary>
@@ -667,13 +676,13 @@ public sealed partial class PlayViewModel : PageViewModel
         }
     }
 
-    /// <summary>Draws the person again, and only the person.</summary>
+    /// <summary>Draws the people again, and only them: anyone already drawn keeps their picture.</summary>
     private async Task RedrawSpriteAsync()
     {
         SpriteWarning = null;
         if (_view is { } view)
         {
-            await (IsPhone ? ShowPortraitAsync(view, _scene) : ShowSpriteAsync(view, _scene));
+            await (IsPhone ? ShowPortraitAsync(view, _scene) : ShowFiguresAsync(view, _scene));
         }
     }
 
@@ -991,7 +1000,7 @@ public sealed partial class PlayViewModel : PageViewModel
                 StageBackground = null;
             }
 
-            StageSprite = null;
+            Restage([]);
             Speaker = null;
             Exchanges.Clear();
             WithLine = null;
@@ -1021,14 +1030,16 @@ public sealed partial class PlayViewModel : PageViewModel
             NoteLine = outcome.Note;
 
             // Whoever the scene is about steps in at their resting expression.
+            // Only those there from the start stand on the stage before the words bring anyone else in.
             var presented = await Task.Run(() => _world.PresentAsync(_saveId, outcome));
             _view = presented;
             Speaker = presented.Name;
+            Restage(presented.Figures);
             WritingText = "Setting the scene…";
 
-            // The picture, the person and the words at once: the image service and the model work side by side.
+            // The picture, the people and the words at once: the image service and the model work side by side.
             var background = ShowBackgroundAsync(token);
-            var sprite = phone ? ShowPortraitAsync(presented, token) : ShowSpriteAsync(presented, token);
+            var sprite = phone ? ShowPortraitAsync(presented, token) : ShowFiguresAsync(presented, token);
             var written = await Task.Run(() => _world.WriteSceneAsync(_saveId, outcome, WritingProgress(token)));
 
             if (token != _scene)
@@ -1036,8 +1047,8 @@ public sealed partial class PlayViewModel : PageViewModel
                 return;
             }
 
-            // The resting sprite is saved before the written expression's, so the later one stays.
-            if (written.CharacterId is not null && written.Expression != presented.Expression)
+            // The resting stage is saved before the written one, so the later one stays.
+            if (!SameStage(presented.Figures, written.Figures))
             {
                 await sprite;
             }
@@ -1089,32 +1100,77 @@ public sealed partial class PlayViewModel : PageViewModel
         }
     }
 
-    private async Task ShowSpriteAsync(SceneView view, int token)
+    /// <summary>
+    /// Who stands on the stage changes with the words that say so: someone who left goes at once, whoever stays keeps
+    /// their picture (moving to the one place when they are alone), and a newcomer's place is empty until they are drawn.
+    /// </summary>
+    private void Restage(IReadOnlyList<SceneFigure> figures)
     {
-        if (view.CharacterId is null)
+        Bitmap?[] shown = [StageSprite, CompanionSprite];
+        Bitmap? Kept(int place) =>
+            figures.ElementAtOrDefault(place) is { } figure && _onStage.ToList().FindIndex(f => f.CharacterId == figure.CharacterId) is var was and >= 0
+                ? shown.ElementAtOrDefault(was)
+                : null;
+
+        var (first, second) = (Kept(0), Kept(1));
+        _onStage = figures;
+        StageSprite = first;
+        CompanionSprite = second;
+        IsPair = figures.Count > 1;
+    }
+
+    /// <summary>Whether two stages show the same people at the same expressions in the same clothes.</summary>
+    private static bool SameStage(IReadOnlyList<SceneFigure> a, IReadOnlyList<SceneFigure> b) =>
+        a.Select(f => (f.CharacterId, f.Expression, f.Outfit)).SequenceEqual(b.Select(f => (f.CharacterId, f.Expression, f.Outfit)));
+
+    /// <summary>
+    /// Draws everyone on the stage for these words, each on their own: whoever could not be drawn keeps the picture
+    /// already shown, if any, and is named in a warning that offers to draw them again.
+    /// </summary>
+    private async Task ShowFiguresAsync(SceneView view, int token)
+    {
+        var figures = view.Figures;
+        if (figures.Count == 0)
+        {
+            SpriteWarning = null;
+            return;
+        }
+
+        IReadOnlyList<string?> paths;
+        try
+        {
+            paths = await _world.SceneSpriteAsync(_saveId, view);
+        }
+        catch (Exception)
+        {
+            paths = [.. figures.Select(_ => (string?)null)];
+        }
+
+        var pictures = new List<Bitmap?>();
+        foreach (var path in paths)
+        {
+            try
+            {
+                pictures.Add(path is null ? null : await PictureAsync(path));
+            }
+            catch (Exception)
+            {
+                pictures.Add(null);
+            }
+        }
+
+        // Words that arrived meanwhile changed the stage, and bring their own pictures; these are out of date.
+        if (token != _scene || !SameStage(_onStage, figures))
         {
             return;
         }
 
-        try
-        {
-            var picture = await PictureAsync(await _world.SceneSpriteAsync(_saveId, view));
+        StageSprite = pictures.ElementAtOrDefault(0) ?? StageSprite;
+        CompanionSprite = pictures.ElementAtOrDefault(1) ?? CompanionSprite;
 
-            // A written expression that arrived meanwhile has its own picture; this one is out of date.
-            if (token == _scene && _view?.Expression == view.Expression)
-            {
-                StageSprite = picture;
-                SpriteWarning = null;
-            }
-        }
-        catch (Exception)
-        {
-            // The scene works without the person's picture: it is marked, and can be drawn again.
-            if (token == _scene)
-            {
-                SpriteWarning = SpriteFailedWarning();
-            }
-        }
+        // The scene works without the pictures: whoever is missing is marked, and can be drawn again.
+        var missing = figures.Where((_, i) => pictures.ElementAtOrDefault(i) is null).Select(f => f.Name).ToList();
+        SpriteWarning = missing.Count == 0 ? null : SpriteFailedWarning(string.Join(" and ", missing));
     }
 
     /// <summary>The small round picture at the top of a conversation by text: the person at their resting expression.</summary>
@@ -1142,32 +1198,32 @@ public sealed partial class PlayViewModel : PageViewModel
     /// <summary>The written scene replaces the spinner; a different expression brings its own picture.</summary>
     private async Task ApplyWrittenAsync(SceneView written, int token)
     {
-        var expressionChanged = !IsPhone && written.CharacterId is not null && written.Expression != _view?.Expression;
+        var restaged = !IsPhone && !SameStage(_onStage, written.Figures);
 
         _outcome = _outcome is null ? null : _outcome with { Text = written.Text };
         _view = written;
-        Speaker = written.Name ?? Speaker;
+        Speaker = SpeakerOf(written) ?? Speaker;
+
+        // Who the words brought in or saw leave, in the same moment as the words themselves.
+        if (restaged)
+        {
+            Restage(written.Figures);
+        }
+
         SceneText = written.Text;
         SceneWarning = written.Fallback ? ScenePlaceholderWarning(Exchanges.Count == 0) : null;
         IsWriting = false;
         RefreshSceneControls();
 
-        if (expressionChanged)
+        if (restaged)
         {
-            try
-            {
-                var picture = await PictureAsync(await _world.SceneSpriteAsync(_saveId, written));
-                if (token == _scene)
-                {
-                    StageSprite = picture;
-                }
-            }
-            catch (Exception)
-            {
-                // Keeps the resting picture.
-            }
+            await ShowFiguresAsync(written, token);
         }
     }
+
+    /// <summary>Whose name the scene shows: the person it is about while they are there, otherwise whoever is.</summary>
+    private static string? SpeakerOf(SceneView view) =>
+        view.Figures.Count == 0 || view.Figures.Any(f => f.CharacterId == view.CharacterId) ? view.Name : view.Figures[0].Name;
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task ChooseAsync(EncounterChoice? choice)
@@ -1255,10 +1311,13 @@ public sealed partial class PlayViewModel : PageViewModel
         ScrollToEndRequested?.Invoke();
     }
 
-    /// <summary>A different expression in the answer brings the person's picture for it.</summary>
+    /// <summary>
+    /// The answer's stage: someone it saw leave goes with its words, and a different expression or outfit, or someone
+    /// who came in, brings the pictures for it.
+    /// </summary>
     private async Task ShowReactionSpriteAsync(ReactionResult result, int token)
     {
-        if (IsPhone || result.View.CharacterId is null || _view is null || (result.View.Expression == _view.Expression && !result.Redressed))
+        if (IsPhone || result.View.CharacterId is null || _view is null)
         {
             return;
         }
@@ -1269,20 +1328,17 @@ public sealed partial class PlayViewModel : PageViewModel
             Name = result.View.Name ?? _view.Name,
             Aesthetic = result.View.Aesthetic ?? _view.Aesthetic,
             Expression = result.View.Expression,
+            Figures = result.View.Figures,
         };
 
-        try
+        if (SameStage(_onStage, result.View.Figures) && !result.Redressed)
         {
-            var picture = await PictureAsync(await _world.SceneSpriteAsync(_saveId, result.View));
-            if (token == _scene)
-            {
-                StageSprite = picture;
-            }
+            return;
         }
-        catch (Exception)
-        {
-            // Keeps the picture already shown.
-        }
+
+        Restage(result.View.Figures);
+        Speaker = SpeakerOf(_view) ?? Speaker;
+        await ShowFiguresAsync(_view, token);
     }
 
     /// <summary>A proposed reply, by its index in the offered replies.</summary>

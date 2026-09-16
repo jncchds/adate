@@ -21,8 +21,8 @@ public sealed record PendingChoice(string EncounterId, string Text, IReadOnlyLis
 /// <param name="Key">The invite value and flag prefix: <c>main_li</c> or a route id.</param>
 public sealed record Invitee(string Key, string Name);
 
-/// <summary>What a turn's scene shows: its text, and who stands in front wearing which expression.</summary>
-/// <param name="CharacterId">The person in front, or null when the scene is about no one in the cast.</param>
+/// <summary>What a turn's scene shows: its text, who it is about, and who stands on the stage wearing which expression.</summary>
+/// <param name="CharacterId">The person the scene is about, or null when it is about no one in the cast.</param>
 /// <param name="Aesthetic">Their style, which picks the sprite's outfit.</param>
 /// <param name="Choices">Replies the player may give, when the scene waits for one.</param>
 public sealed record SceneView(
@@ -35,6 +35,12 @@ public sealed record SceneView(
 {
     /// <summary>Whether the scene waits for the player's reply: their own words, or one of <see cref="Choices"/>.</summary>
     public bool Open { get; init; }
+
+    /// <summary>
+    /// Who stands on the stage, left to right: only those the words have brought in and not seen leave, so it can be
+    /// nobody, the person the scene is about, or two people. Empty for texting.
+    /// </summary>
+    public IReadOnlyList<SceneFigure> Figures { get; init; } = [];
 
     /// <summary>
     /// Whether <see cref="Text"/> is the authored placeholder, because the writer failed while a model
@@ -100,7 +106,11 @@ public sealed record CurrentScene(
     string? Expression,
     string? SpritePath,
     IReadOnlyList<SceneExchange> Exchanges,
-    bool Fallback = false);
+    bool Fallback = false)
+{
+    /// <summary>Who stands on the stage, left to right, as the words last left it.</summary>
+    public IReadOnlyList<SceneFigure> Figures { get; init; } = [];
+}
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
@@ -328,7 +338,7 @@ public sealed class WorldService(
                 open.Expression,
                 open.SpritePath,
                 open.Exchanges,
-                open.Fallback);
+                open.Fallback) { Figures = open.Figures ?? [] };
         var lastPlaceId = open?.PlaceId ?? await sceneLog.GetLastPlaceIdAsync(saveId, ct).ConfigureAwait(false);
 
         return new PlayState(
@@ -1055,8 +1065,8 @@ public sealed class WorldService(
     }
 
     /// <summary>
-    /// Who a taken turn shows before anything is written: the person the scene is about, at their
-    /// temper's resting expression, so they can be on screen while the scene is still being written.
+    /// Who a taken turn shows before anything is written: the person the scene is about, at their temper's resting
+    /// expression, and on the stage only those there from the start, so nobody is drawn before the words bring them in.
     /// </summary>
     public async Task<SceneView> PresentAsync(SaveId saveId, TurnOutcome outcome, CancellationToken ct = default)
     {
@@ -1073,7 +1083,36 @@ public sealed class WorldService(
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
         var expression = ScenePresentation.Expression(null, owner.Member.RestingExpression(castContent), [.. pack.Expressions.Keys]);
 
-        return new SceneView(outcome.Text, owner.Id, owner.Name, owner.Member.Aesthetic, expression);
+        return new SceneView(outcome.Text, owner.Id, owner.Name, owner.Member.Aesthetic, expression)
+        {
+            Figures = outcome.EncounterId == JsonEncounterCatalog.PhoneId ? [] : Stage.Opening(Candidates(cast, outcome.AtFirst), [.. pack.Expressions.Keys]),
+        };
+    }
+
+    /// <summary>Everyone a scene is with who could stand on its stage, in the encounter's order.</summary>
+    private IReadOnlyList<StageCandidate> Candidates(IReadOnlyList<LoveInterest> cast, IReadOnlyList<string> with) =>
+        [
+            .. with.Select(w => cast.FirstOrDefault(li => li.Ref == w)).OfType<LoveInterest>()
+                .Select(li => new StageCandidate(li.Id, li.Name, li.Member.Aesthetic, li.Member.RestingExpression(castContent))),
+        ];
+
+    /// <summary>The stage after a block of words, with each figure's outfit and any picture already drawn kept.</summary>
+    /// <param name="wearing">What each person on the stage now wears, where the words settled it.</param>
+    private async Task<IReadOnlyList<SceneFigure>> StageAfterAsync(
+        IReadOnlyList<LoveInterest> cast,
+        IReadOnlyList<string> with,
+        IReadOnlyList<SceneFigure> shown,
+        IReadOnlyList<Presence>? present,
+        LoveInterest? owner,
+        string? ownerExpression,
+        bool firstWords,
+        IReadOnlyDictionary<Guid, Outfit> wearing,
+        CancellationToken ct)
+    {
+        var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
+        var figures = Stage.After(Candidates(cast, with), shown, present, owner?.Id, ownerExpression, firstWords, [.. pack.Expressions.Keys]);
+
+        return [.. figures.Select(f => wearing.TryGetValue(f.CharacterId, out var outfit) && outfit != f.Outfit ? f with { Outfit = outfit, SpritePath = null } : f)];
     }
 
     /// <summary>The sprite of the person a scene shows, rendered on first use. Null when it shows no one.</summary>
@@ -1112,31 +1151,66 @@ public sealed class WorldService(
         return path;
     }
 
-    /// <summary>The person a scene shows, drawn and saved with the open scene. Null when it shows no one.</summary>
-    public async Task<string?> SceneSpriteAsync(SaveId saveId, SceneView view, CancellationToken ct = default)
+    /// <summary>
+    /// Everyone on the scene's stage, drawn and saved with the open scene, in the order of <see cref="SceneView.Figures"/>.
+    /// Each is drawn on its own: a null path is someone who could not be drawn, and the others are still shown.
+    /// A picture already drawn at the same expression and outfit is not drawn again.
+    /// </summary>
+    public async Task<IReadOnlyList<string?>> SceneSpriteAsync(SaveId saveId, SceneView view, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(view);
 
         // Taken before drawing: the player may have moved on by the time the picture is ready.
         var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
 
-        string? path;
-        if (scene is not null && view is { CharacterId: { } id, Expression: { } expression })
+        var paths = new List<string?>();
+        foreach (var figure in view.Figures)
         {
-            var (dress, layer) = await WardrobeForAsync(saveId, scene, id, ct).ConfigureAwait(false);
-            path = await studio.GenerateSceneSpriteAsync(saveId, id, view.Aesthetic ?? "", expression, dress, layer).ConfigureAwait(false);
-        }
-        else
-        {
-            path = await SpriteAsync(saveId, view).ConfigureAwait(false);
+            if (figure.SpritePath is { } drawn)
+            {
+                paths.Add(drawn);
+                continue;
+            }
+
+            try
+            {
+                var (dress, layer) = scene is null ? (DressCode.Casual, null) : await WardrobeForAsync(saveId, scene, figure, ct).ConfigureAwait(false);
+                paths.Add(await studio.GenerateSceneSpriteAsync(saveId, figure.CharacterId, figure.Aesthetic ?? "", figure.Expression, dress, layer).ConfigureAwait(false));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                paths.Add(null);
+            }
         }
 
-        if (scene is not null)
+        if (scene is null)
         {
-            await sceneLog.SetPersonAsync(scene.Id, view.CharacterId, view.Name, view.Expression, path, ct).ConfigureAwait(false);
+            return paths;
         }
 
-        return path;
+        // Pictures land on the stage as it is now: a later block of words may already have changed who stands there.
+        var now = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        if (now?.Id != scene.Id)
+        {
+            return paths;
+        }
+
+        var stage = now.Written ? now.Figures ?? [] : view.Figures;
+        var drawnNow = view.Figures.Zip(paths).Where(p => p.Second is not null).ToList();
+        IReadOnlyList<SceneFigure> kept =
+        [
+            .. stage.Select(f => drawnNow.FirstOrDefault(d => d.First.CharacterId == f.CharacterId && d.First.Expression == f.Expression && d.First.Outfit == f.Outfit)
+                is { Second: { } path } ? f with { SpritePath = path } : f),
+        ];
+        await sceneLog.SetFiguresAsync(scene.Id, kept, ct).ConfigureAwait(false);
+
+        // The older columns keep the person the scene is about, as far as the stage shows them.
+        if (kept.FirstOrDefault(f => f.CharacterId == view.CharacterId) is { } about)
+        {
+            await sceneLog.SetPersonAsync(scene.Id, about.CharacterId, about.Name, about.Expression, about.SpritePath, ct).ConfigureAwait(false);
+        }
+
+        return paths;
     }
 
     /// <summary>
@@ -1167,10 +1241,11 @@ public sealed class WorldService(
     /// What someone in a scene wears (user feedback: the same outfit everywhere looked wrong): what the scene or its
     /// conversation said, or else what suits the moment, with a weather layer outdoors unless something is worn over it.
     /// </summary>
-    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, Guid characterId, CancellationToken ct)
+    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, SceneFigure figure, CancellationToken ct)
     {
+        var characterId = figure.CharacterId;
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
-        var outfit = scene.Outfit;
+        var outfit = figure.Outfit ?? (scene.CharacterId == characterId ? scene.Outfit : null);
         if (outfit is null)
         {
             var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
@@ -1209,11 +1284,13 @@ public sealed class WorldService(
                       && Promises.IsDue(p, clock) && p.Status is not PromiseStatus.Broken);
         var together = cameWith
             ? (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
-                .LastOrDefault(s => s.CharacterId == li.Id && Order(s.Clock) < Order(clock) && s.EncounterId != JsonEncounterCatalog.PhoneId)
+                .LastOrDefault(s => (s.CharacterId == li.Id || (s.Figures ?? []).Any(f => f.CharacterId == li.Id))
+                                    && Order(s.Clock) < Order(clock) && s.EncounterId != JsonEncounterCatalog.PhoneId)
             : null;
         if (together is not null)
         {
-            var kept = together.Outfit
+            var kept = (together.Figures ?? []).FirstOrDefault(f => f.CharacterId == li.Id)?.Outfit
+                ?? (together.CharacterId == li.Id ? together.Outfit : null)
                 ?? (await OutfitOptionsAsync(saveId, setting, cast, li, together.Clock, together.PlaceId, together.EncounterId, ct).ConfigureAwait(false)).Wearing;
             var there = together.PlaceId == placeId ? null : (await places.GetAsync(saveId, together.PlaceId, ct).ConfigureAwait(false))?.Name;
             return Outfits.For(li.Name, placeDress, firstDate, kept, null, there);
@@ -1254,12 +1331,25 @@ public sealed class WorldService(
 
         if (!llmOptions.Value.Enabled || outcome.EncounterId is null)
         {
-            if (sceneId is { } unwrittenId)
+            // The authored words bring in everyone the encounter is with.
+            var unwritten = presented;
+            if (presented.Figures.Count > 0)
             {
-                await sceneLog.SetWrittenAsync(unwrittenId, presented.Text, presented.Expression, false, ct).ConfigureAwait(false);
+                var cast = await CastAsync(saveId, await EnsureSettingAsync(saveId, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+                unwritten = presented with
+                {
+                    Figures = await StageAfterAsync(
+                        cast, outcome.With, presented.Figures, null, Owner(cast, outcome.With), null, true, new Dictionary<Guid, Outfit>(), ct).ConfigureAwait(false),
+                };
             }
 
-            return presented;
+            if (sceneId is { } unwrittenId)
+            {
+                await sceneLog.SetFiguresAsync(unwrittenId, unwritten.Figures, ct).ConfigureAwait(false);
+                await sceneLog.SetWrittenAsync(unwrittenId, unwritten.Text, unwritten.Expression, false, ct).ConfigureAwait(false);
+            }
+
+            return unwritten;
         }
 
         var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct, progress).ConfigureAwait(false);
@@ -1334,6 +1424,14 @@ public sealed class WorldService(
                 ct).ConfigureAwait(false);
         }
 
+        // Who the words brought in and did not see leave; what each of them wears.
+        var owner = Owner(built.Cast, outcome.With);
+        var wearing = new Dictionary<Guid, Outfit>(built.Wearing);
+        if (owner is not null && packet.Outfit is { } dressed)
+        {
+            wearing[owner.Id] = written.Outfit ?? dressed.Wearing;
+        }
+
         var result = presented with
         {
             Text = written.Text,
@@ -1343,11 +1441,15 @@ public sealed class WorldService(
             Choices = choices,
             Open = packet.OffersChoices,
             Fallback = written.Fallback,
+            Figures = presented.Figures.Count == 0 && packet.Drawn is null
+                ? []
+                : await StageAfterAsync(built.Cast, outcome.With, presented.Figures, written.Present, owner, written.Expression, true, wearing, ct).ConfigureAwait(false),
         };
 
         // Marked written last, so an interrupted scene is written again rather than left half-done.
         if (sceneId is { } writtenId)
         {
+            await sceneLog.SetFiguresAsync(writtenId, result.Figures, ct).ConfigureAwait(false);
             await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, written.Fallback, ct).ConfigureAwait(false);
         }
 
@@ -1382,7 +1484,10 @@ public sealed class WorldService(
 
     /// <param name="Known">Places the player knows.</param>
     /// <param name="MemoryLines">What the packet remembers, kept for the turn log.</param>
-    private sealed record BuiltScene(IReadOnlyList<LoveInterest> Cast, IReadOnlyList<PlaceRecord> Known, ScenePacket Packet, SceneWorld World, List<string> MemoryLines);
+    /// <param name="Wearing">What everyone drawn here other than the person the scene is about wears.</param>
+    private sealed record BuiltScene(
+        IReadOnlyList<LoveInterest> Cast, IReadOnlyList<PlaceRecord> Known, ScenePacket Packet, SceneWorld World, List<string> MemoryLines,
+        IReadOnlyDictionary<Guid, Outfit> Wearing);
 
     /// <summary>
     /// Everything the writer is given for a turn's scene, with the quality material that is switched on: each
@@ -1419,7 +1524,8 @@ public sealed class WorldService(
                 relationship.Stage,
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
                 quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct, progress).ConfigureAwait(false) : null,
-                RoutineForWriter(saveId, setting, li, flags, known)));
+                RoutineForWriter(saveId, setting, li, flags, known),
+                (outcome.Arrives ?? []).Contains(li.Ref) ? PersonAway.Arriving : null));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1455,6 +1561,16 @@ public sealed class WorldService(
         var outfit = dressed is null
             ? null
             : await OutfitOptionsAsync(saveId, setting, cast, dressed, outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, ct).ConfigureAwait(false);
+
+        // Anyone else who can be drawn here wears what suits them; only the person the scene is about is asked to pick.
+        var others = new Dictionary<Guid, Outfit>();
+        var otherOutfits = new List<PacketOutfit>();
+        foreach (var other in dressed is null ? [] : cast.Where(li => outcome.With.Contains(li.Ref) && li.Id != dressed.Id))
+        {
+            var offered = await OutfitOptionsAsync(saveId, setting, cast, other, outcome.VisitedAt, outcome.PlaceId, outcome.EncounterId, ct).ConfigureAwait(false);
+            others[other.Id] = offered.Wearing;
+            otherOutfits.Add(offered with { Settled = true });
+        }
 
         var packet = new ScenePacket(
             setting.DisplayName,
@@ -1504,7 +1620,9 @@ public sealed class WorldService(
                 ? happenings.Pick(saveId.ToString(), place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt)
                 : null,
             VariedChoices: quality.VariedChoices,
-            Outfit: outfit);
+            Outfit: outfit,
+            OtherOutfits: otherOutfits,
+            Drawn: dressed is null ? null : [dressed.Id.ToString(), .. others.Keys.Select(id => id.ToString())]);
 
         var world = new SceneWorld(
             facts,
@@ -1513,7 +1631,7 @@ public sealed class WorldService(
             stages,
             Summoned: presentIds);
 
-        return new BuiltScene(cast, known, packet, world, memoryLines);
+        return new BuiltScene(cast, known, packet, world, memoryLines, others);
     }
 
     /// <summary>
@@ -1761,7 +1879,8 @@ public sealed class WorldService(
     {
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var duty = openScene is null ? null : TurnOutcomeJson.Deserialize(openScene.OutcomeJson).Duty;
-        var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct).ConfigureAwait(false);
+        var shown = openScene?.Figures;
+        var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct, shown).ConfigureAwait(false);
         var (setting, cast, flags, known, presentPeople, before, packet) =
             (built.Setting, built.Cast, built.Flags, built.Known, built.PresentPeople, built.Before, built.Packet);
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
@@ -1883,9 +2002,23 @@ public sealed class WorldService(
 
         agreed = swapped is null ? agreed : agreed is null ? swapped : $"{swapped} {agreed}";
 
+        // Who is still here once the answer is shown, and whether the person it is about changed what they wear.
         var redressed = false;
+        var wearing = new Dictionary<Guid, Outfit>();
+        if (owner is not null && reaction.Outfit is { } put && packet.Outfit is { } had && put != had.Wearing)
+        {
+            wearing[owner.Id] = put;
+        }
+
+        // Texting has no stage; a scene whose stage was never kept stands everyone it is with.
+        IReadOnlyList<SceneFigure> figures = scene.EncounterId == JsonEncounterCatalog.PhoneId
+            ? []
+            : await StageAfterAsync(cast, scene.With, shown ?? [], reaction.Present, owner, reaction.Expression, shown is null, wearing, ct).ConfigureAwait(false);
+
         if (openScene is not null)
         {
+            await sceneLog.SetFiguresAsync(openScene.Id, figures, ct).ConfigureAwait(false);
+
             var exchange = new SceneExchange(words, reaction.Text, popup, agreed, Proposed: chosenTags is not null, Fallback: warn);
             if (rewrite)
             {
@@ -1906,7 +2039,7 @@ public sealed class WorldService(
         }
 
         return new ReactionResult(
-            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression) { Fallback = warn },
+            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression) { Fallback = warn, Figures = figures },
             popup,
             agreed,
             transcript,
@@ -1928,9 +2061,12 @@ public sealed class WorldService(
 
     /// <summary>Everything the writer is given to answer a reply in a waiting scene, with the quality material that is switched on.</summary>
     /// <param name="looseEndsOverride">Loose ends to use instead of the save's own, for replaying a past scene.</param>
+    /// <param name="shown">Who stands on the stage now; anyone the scene is with but not among them is not here. Null when unknown.</param>
     private async Task<BuiltReaction> BuildReactionPacketAsync(
-        SaveId saveId, PendingScene scene, string? duty, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct)
+        SaveId saveId, PendingScene scene, string? duty, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct,
+        IReadOnlyList<SceneFigure>? shown = null)
     {
+        var byText = scene.EncounterId == JsonEncounterCatalog.PhoneId;
         var quality = llmOptions.Value;
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
         var cast = await CastAsync(saveId, setting, ct).ConfigureAwait(false);
@@ -1955,7 +2091,8 @@ public sealed class WorldService(
                 before[li.Id].Stage,
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
                 quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null,
-                RoutineForWriter(saveId, setting, li, flags, known)));
+                RoutineForWriter(saveId, setting, li, flags, known),
+                !byText && shown is not null && shown.All(f => f.CharacterId != li.Id) ? PersonAway.Left : null));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1963,7 +2100,8 @@ public sealed class WorldService(
 
         // What the person here is wearing now, as the scene or an earlier reply left it, and what they could change into.
         PacketOutfit? outfit = null;
-        if (Owner(cast, scene.With) is { } dressed && scene.EncounterId != JsonEncounterCatalog.PhoneId)
+        var dressed = byText ? null : Owner(cast, scene.With);
+        if (dressed is not null)
         {
             var offered = await OutfitOptionsAsync(saveId, setting, cast, dressed, scene.Clock, scene.PlaceId, scene.EncounterId, ct).ConfigureAwait(false);
             var wearing = (await sceneLog.ListAsync(saveId, ct).ConfigureAwait(false))
@@ -1996,7 +2134,13 @@ public sealed class WorldService(
             Duty: duty,
             LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, scene.Clock.Day, looseEndsOverride, ct).ConfigureAwait(false) : null,
             VariedChoices: quality.VariedChoices,
-            Outfit: outfit);
+            Outfit: outfit,
+            OtherOutfits:
+            [
+                .. (shown ?? []).Where(f => f.CharacterId != dressed?.Id && f.Outfit is not null)
+                    .Select(f => new PacketOutfit(f.Name, f.Outfit!, [f.Outfit!.Dress], Settled: true)),
+            ],
+            Drawn: dressed is null ? null : [dressed.Id.ToString(), .. presentPeople.Where(li => li.Id != dressed.Id).Select(li => li.Id.ToString())]);
 
         return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
     }

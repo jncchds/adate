@@ -488,6 +488,20 @@ a.choice small {
     --box-h: calc(100cqh - 2 * var(--inset));
 }
 
+/*
+ * Two people on the stage, as the app's StageLayout with Pair: each stands at an edge, 27% of the width (at most a
+ * third), and the words sit between them. Upright, each takes 60% of the picture from their own side.
+ */
+.play-area.pair {
+    --figure-w: min(max(220px, min(27cqw, 80cqh)), calc(100cqw / 3));
+    --room: max(0px, calc(100cqw - 2 * var(--figure-w)));
+}
+
+.play-figure.companion {
+    left: auto;
+    right: 0;
+}
+
 .play-stage,
 .play-figure {
     position: absolute;
@@ -539,6 +553,10 @@ a.choice small {
 
     .play-figure {
         width: 100%;
+    }
+
+    .play-area.pair .play-figure {
+        width: 60%;
     }
 
     .play-textbox {

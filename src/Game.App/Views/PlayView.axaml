@@ -54,7 +54,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsPhone}">
+    <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsPhone}" Pair="{Binding IsPair}">
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" Classes.blurred="{Binding IsPhone}" />
@@ -83,7 +83,7 @@
             </ItemsControl>
         </Panel>
 
-        <!-- The person the scene is about, at the left in landscape and over the picture in portrait; and
+        <!-- Whoever stands on the stage first, at the left in landscape and over the picture in portrait; and
              while the picture is on its way, a spinner saying what is being drawn, where no text box covers it. -->
         <Panel>
             <ctl:SpriteFrame IsVisible="{Binding !IsPhone}">
@@ -101,6 +101,13 @@
             <!-- Nobody stands there because the drawing failed: the warning offers to draw them again. -->
             <ContentControl Content="{Binding SpriteWarning}" ContentTemplate="{StaticResource Warning}"
                             IsVisible="{Binding !IsPhone}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
+        </Panel>
+
+        <!-- The second of two people, at the right in landscape and from the right in portrait; no room with one. -->
+        <Panel>
+            <ctl:SpriteFrame IsVisible="{Binding IsPair}">
+                <Image Source="{Binding CompanionSprite}" />
+            </ctl:SpriteFrame>
         </Panel>
 
         <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->

@@ -3,17 +3,18 @@ using Avalonia.Controls;
 
 namespace Game.App.Controls;
 
-/// <summary>Where the stage, the person and the words go.</summary>
+/// <summary>Where the stage, the people and the words go.</summary>
 /// <param name="Stage">The picture: the whole area in landscape, the top in portrait.</param>
-/// <param name="Figure">Where the person stands.</param>
+/// <param name="Figure">Where the person stands, or the first of two.</param>
 /// <param name="Side">The words and choices, which scroll on their own.</param>
 /// <param name="Stacked">Portrait: the words sit under the picture instead of over it.</param>
-public readonly record struct StageRegions(Rect Stage, Rect Figure, Rect Side, bool Stacked);
+/// <param name="Companion">Where the second of two people stands; empty with one.</param>
+public readonly record struct StageRegions(Rect Stage, Rect Figure, Rect Side, bool Stacked, Rect Companion = default);
 
 /// <summary>
 /// Keeps the picture on screen whatever the shape of the window. Children, in order: the stage, the
-/// figure and the side; any further children are overlays across the whole area, drawn above the rest
-/// (the back button, the caption), so the person never covers them.
+/// figure, the companion and the side; any further children are overlays across the whole area, drawn above
+/// the rest (the back button, the caption), so nobody standing there covers them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,17 +22,26 @@ public readonly record struct StageRegions(Rect Stage, Rect Figure, Rect Side, b
 /// like a visual novel: the background fills the screen, the person stands at the left, and the
 /// words sit in a translucent box over the lower part of the rest. The box grows to nearly the full
 /// height when <see cref="Tall"/> is set, for screens with no one standing there (the map, endings).
+/// With <see cref="Pair"/>, two people stand at the left and right edges, a little narrower, and the
+/// box sits between them.
 /// </para>
 /// <para>
 /// Portrait (phones at about 9:20, tablets upright) stacks them: the picture and the person take the
 /// top, up to a square, so a standing person still reads at phone size, and the words scroll below.
-/// A box over the lower half of a tall narrow screen would cover the person.
+/// A box over the lower half of a tall narrow screen would cover the person. Two people share the top,
+/// one from each side, overlapping a little in the middle.
 /// </para>
 /// </remarks>
 public sealed class StageLayout : Panel
 {
     /// <summary>The person's share of a landscape width.</summary>
     public const double FigureShare = 0.36;
+
+    /// <summary>Each person's share of a landscape width when two stand there: narrower, so the box between them still reads.</summary>
+    public const double PairFigureShare = 0.27;
+
+    /// <summary>Each person's share of a portrait width when two stand there; together more than the width, so they overlap.</summary>
+    public const double StackedPairShare = 0.6;
 
     /// <summary>The person's column is never wider than this share of the height, or they stand in empty space.</summary>
     public const double MaxFigureWidthPerHeight = 0.8;
@@ -59,7 +69,10 @@ public sealed class StageLayout : Panel
     public static readonly StyledProperty<bool> FullStageProperty =
         AvaloniaProperty.Register<StageLayout, bool>(nameof(FullStage));
 
-    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty, FullStageProperty);
+    public static readonly StyledProperty<bool> PairProperty =
+        AvaloniaProperty.Register<StageLayout, bool>(nameof(Pair));
+
+    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty, FullStageProperty, PairProperty);
 
     /// <summary>Whether the words may take nearly the full height: set when no one stands on the stage.</summary>
     public bool Tall
@@ -78,24 +91,45 @@ public sealed class StageLayout : Panel
         set => SetValue(FullStageProperty, value);
     }
 
+    /// <summary>Whether two people stand on the stage, so the companion gets a place of their own.</summary>
+    public bool Pair
+    {
+        get => GetValue(PairProperty);
+        set => SetValue(PairProperty, value);
+    }
+
     public bool IsStacked { get; private set; }
 
-    public static StageRegions Split(Size size, bool tall, bool fullStage = false)
+    public static StageRegions Split(Size size, bool tall, bool fullStage = false, bool pair = false)
     {
         var width = size.Width;
         var height = size.Height;
 
         if (width >= height)
         {
+            var boxHeight = BoxHeight(height, tall);
+
+            if (pair)
+            {
+                var eachWidth = Math.Min(Math.Max(MinFigureWidth, Math.Min(width * PairFigureShare, height * MaxFigureWidthPerHeight)), width / 3);
+
+                // The box is centred between the two, and capped for line length.
+                var between = Math.Max(0, width - (2 * eachWidth));
+                var pairBoxWidth = Math.Min(between, MaxBoxWidth);
+
+                return new StageRegions(
+                    new Rect(size),
+                    new Rect(0, 0, eachWidth, height),
+                    new Rect(eachWidth + ((between - pairBoxWidth) / 2), height - Inset - boxHeight, pairBoxWidth, boxHeight),
+                    false,
+                    new Rect(width - eachWidth, 0, eachWidth, height));
+            }
+
             var figureWidth = Math.Min(Math.Max(MinFigureWidth, Math.Min(width * FigureShare, height * MaxFigureWidthPerHeight)), width / 2);
 
             // The box is centred in what is left beside the person, and capped for line length.
             var room = Math.Max(0, width - figureWidth - Inset);
             var boxWidth = Math.Min(room, MaxBoxWidth);
-            var boxHeight = tall
-                ? height - (2 * Inset)
-                : Math.Max(height * BoxShare, Math.Min(height - (2 * Inset), MinBoxHeight));
-            boxHeight = Math.Max(0, boxHeight);
 
             return new StageRegions(
                 new Rect(size),
@@ -106,8 +140,26 @@ public sealed class StageLayout : Panel
 
         var stageHeight = Math.Min(height * StackedStageShare, width);
         var stage = fullStage ? new Rect(size) : new Rect(0, 0, width, stageHeight);
-        return new StageRegions(stage, stage, new Rect(0, stageHeight, width, height - stageHeight), true);
+        var side = new Rect(0, stageHeight, width, height - stageHeight);
+        if (!pair)
+        {
+            return new StageRegions(stage, stage, side, true);
+        }
+
+        var share = stage.Width * StackedPairShare;
+        return new StageRegions(
+            stage,
+            new Rect(stage.X, stage.Y, share, stage.Height),
+            side,
+            true,
+            new Rect(stage.Right - share, stage.Y, share, stage.Height));
     }
+
+    private static double BoxHeight(double height, bool tall) =>
+        Math.Max(0, tall ? height - (2 * Inset) : Math.Max(height * BoxShare, Math.Min(height - (2 * Inset), MinBoxHeight)));
+
+    /// <summary>The children's places in order; with one person the companion has no room at all.</summary>
+    private static Rect[] Rects(StageRegions regions) => [regions.Stage, regions.Figure, regions.Companion, regions.Side];
 
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -115,8 +167,7 @@ public sealed class StageLayout : Panel
             double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
 
-        var regions = Split(size, Tall, FullStage);
-        Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
+        var rects = Rects(Split(size, Tall, FullStage, Pair));
         for (var i = 0; i < Children.Count; i++)
         {
             Children[i].Measure(i < rects.Length ? rects[i].Size : size);
@@ -127,8 +178,8 @@ public sealed class StageLayout : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var regions = Split(finalSize, Tall, FullStage);
-        Rect[] rects = [regions.Stage, regions.Figure, regions.Side];
+        var regions = Split(finalSize, Tall, FullStage, Pair);
+        var rects = Rects(regions);
         for (var i = 0; i < Children.Count; i++)
         {
             Children[i].Arrange(i < rects.Length ? rects[i] : new Rect(finalSize));
