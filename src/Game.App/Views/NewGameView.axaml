@@ -47,8 +47,8 @@
             <ComboBox ItemsSource="{Binding Subjects}" SelectedItem="{Binding Subject}" HorizontalAlignment="Stretch" />
             <TextBlock Classes="small" Text="Everyone else you can fall for shares this." />
             <TextBlock Classes="label" Text="Age" />
-            <NumericUpDown Value="{Binding Age}" Minimum="18" Maximum="99" Increment="1" FormatString="0" />
-            <TextBlock Classes="small" Text="Adults only. It is what the content rules are computed from." />
+            <NumericUpDown Value="{Binding Age}" Minimum="{Binding MinimumAge}" Maximum="99" Increment="1" FormatString="0" />
+            <TextBlock Classes="small" Text="{Binding AgeHint}" />
 
             <ItemsControl ItemsSource="{Binding Features}">
                 <ItemsControl.ItemTemplate>

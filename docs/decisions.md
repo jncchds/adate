@@ -1750,3 +1750,17 @@ apps, every new save was created with `Ceiling.PG13` hard-coded, and all three s
   unchanged at every tier.
 * **The age clamp is untouched**: anyone under 18 is PG-13 whatever the save, the pack or the scene asks
   for, and no configuration reaches that path.
+
+## The age floor goes back to 16, where the design put it
+
+User feedback: the game capped the minimum love-interest age at 18, though the design says 16. Everything
+below the configuration already allowed it — `ContentPolicy.LowestPermittedMinimumAge`, the age bands, the
+appearance validation — so only `Studio:Content:MinimumCharacterAge` (18 in both apps) and two hard-coded
+`18`s in the new-game age inputs held it up. The configured floor is now 16, and both age inputs read it
+rather than restating a number.
+
+The clamp is untouched and is what makes the floor safe to lower: a character under 18 resolves to PG13
+with intimacy faded and the narration constrained with it, computed from their own age, with no parameter
+and no configuration path. Migration 002 enforces the same thing in the schema, refusing art above PG13
+for an under-18 character and refusing to lower an age below 18 once such art exists. A game that wants
+adults only sets its floor back to 18.

@@ -105,8 +105,8 @@
 
         <label>
             Age
-            <InputNumber @bind-Value="_form.Age" min="18" max="99" />
-            <small>Adults only. It is what the content rules are computed from.</small>
+            <InputNumber @bind-Value="_form.Age" min="@Studio.MinimumCharacterAge" max="99" />
+            <small>From @Studio.MinimumCharacterAge up. It is what the content rules are computed from: anyone under 18 stays PG-13 whatever this game allows.</small>
         </label>
 
         <label>

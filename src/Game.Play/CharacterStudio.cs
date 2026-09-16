@@ -43,6 +43,9 @@ public sealed class CharacterStudio(
 
     public string StylePackId => _options.StylePackId;
 
+    /// <summary>The youngest character this game permits; the under-18 clamp holds whatever it says.</summary>
+    public int MinimumCharacterAge => _options.Content.MinimumCharacterAge;
+
     /// <summary>The pack as configured. For its vocabulary; pictures use <see cref="GetPackAsync(SaveId, CancellationToken)"/>.</summary>
     public async Task<StylePack> GetPackAsync(CancellationToken ct = default) =>
         await packs.LoadAsync(_options.StylePackId, ct).ConfigureAwait(false);

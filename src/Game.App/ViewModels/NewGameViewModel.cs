@@ -108,6 +108,11 @@ public sealed partial class NewGameViewModel : PageViewModel
     public IReadOnlyList<ContentChoice> ContentLevels { get; } =
         [.. new[] { Ceiling.PG13, Ceiling.Suggestive, Ceiling.Explicit }.Select(c => new ContentChoice(c))];
 
+    public int MinimumAge => _studio.MinimumCharacterAge;
+
+    public string AgeHint =>
+        $"From {MinimumAge} up. It is what the content rules are computed from: anyone under 18 stays PG-13 whatever this game allows.";
+
     public IReadOnlyList<FeatureField> Features { get; }
 
     public IReadOnlyList<TemperAxisItem> Temper { get; }
