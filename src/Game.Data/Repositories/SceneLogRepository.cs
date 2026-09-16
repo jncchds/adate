@@ -19,7 +19,7 @@ public sealed class SceneLogRepository(Database database)
 
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
-        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback
+        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback, figures_json
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -129,6 +129,13 @@ public sealed class SceneLogRepository(Database database)
             ("$expression", expression),
             ("$sprite", spritePath));
 
+    /// <summary>Who stands on the stage now, left to right; empty when everyone has left.</summary>
+    public Task SetFiguresAsync(long sceneId, IReadOnlyList<SceneFigure> figures, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(figures);
+        return UpdateAsync(sceneId, "figures_json = $figures", ct, ("$figures", JsonSerializer.Serialize(figures, Json)));
+    }
+
     /// <summary>The finished words, and the expression they end on when they say one.</summary>
     /// <param name="fallback">Whether the words are the authored placeholder, because the writer failed.</param>
     public Task SetWrittenAsync(long sceneId, string text, string? expression, bool fallback = false, CancellationToken ct = default) =>
@@ -201,6 +208,16 @@ public sealed class SceneLogRepository(Database database)
     {
         string? Text(int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
 
+        var character = Text(9) is { } id ? Guid.Parse(id) : (Guid?)null;
+        var outfit = Text(15) is { } dress ? new Outfit(dress, Text(16)) : null;
+
+        // Scenes from before the stage was kept stood their one person in the older columns.
+        IReadOnlyList<SceneFigure> figures = Text(18) is { } stored
+            ? JsonSerializer.Deserialize<List<SceneFigure>>(stored, Json) ?? []
+            : character is { } who && Text(11) is { } expression
+                ? [new SceneFigure(who, Text(10) ?? "", null, expression, outfit, Text(12))]
+                : [];
+
         return new StoredScene(
             reader.GetInt64(0),
             new ClockState(reader.GetInt32(1), Enum.Parse<TimeOfDay>(reader.GetString(2))),
@@ -210,13 +227,14 @@ public sealed class SceneLogRepository(Database database)
             reader.GetInt64(6) == 1,
             reader.GetString(7),
             Text(8),
-            Text(9) is { } character ? Guid.Parse(character) : null,
+            character,
             Text(10),
             Text(11),
             Text(12),
             Text(13) is { } exchanges ? JsonSerializer.Deserialize<List<SceneExchange>>(exchanges, Json) ?? [] : [],
             reader.GetInt64(14) == 1,
-            Text(15) is { } dress ? new Outfit(dress, Text(16)) : null,
-            reader.GetInt64(17) == 1);
+            outfit,
+            reader.GetInt64(17) == 1,
+            figures);
     }
 }

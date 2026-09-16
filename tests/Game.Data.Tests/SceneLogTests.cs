@@ -105,4 +105,31 @@ public class SceneLogTests
         Assert.Equal("office", await log.GetLastPlaceIdAsync(save.Id));
         Assert.Equal(2, (await log.ListAsync(save.Id)).Count);
     }
+
+    [Fact]
+    public async Task Who_stands_on_the_stage_is_kept_and_a_scene_from_before_stands_its_one_person()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var log = new SceneLogRepository(db.Database);
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var (rin, kai) = (Guid.NewGuid(), Guid.NewGuid());
+
+        var id = await log.StartAsync(save.Id, new ClockState(9, TimeOfDay.Evening), "bar", "route.introduced.meet", "{}", "Rin waves Kai over.");
+        Assert.Empty((await log.GetOpenAsync(save.Id))!.Figures!);
+
+        // Before: the one person in the older columns.
+        await log.SetPersonAsync(id, rin, "Rin", "smile", "img/rin.png");
+        await log.SetOutfitAsync(id, new Outfit(DressCode.Casual));
+        var older = Assert.Single((await log.GetOpenAsync(save.Id))!.Figures!);
+        Assert.Equal(new SceneFigure(rin, "Rin", null, "smile", new Outfit(DressCode.Casual), "img/rin.png"), older);
+
+        IReadOnlyList<SceneFigure> both = [new(rin, "Rin", "casual", "smile", SpritePath: "img/rin.png"), new(kai, "Kai", "sporty", "laughing", new Outfit(DressCode.Casual, "a hoodie"))];
+        await log.SetFiguresAsync(id, both);
+        Assert.Equal(both, (await log.GetOpenAsync(save.Id))!.Figures!);
+
+        // Everyone left: an empty stage, not the older columns again.
+        await log.SetFiguresAsync(id, []);
+        Assert.Empty((await log.ListAsync(save.Id)).Single().Figures!);
+    }
 }
