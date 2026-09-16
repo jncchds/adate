@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Game.Core.Places;
 using Game.Core.Saves;
 using Game.Core.Settings;
@@ -32,7 +33,43 @@ public static class DebugLines
 public sealed record PersonTarget(string Key, string Name);
 
 /// <summary>One bubble of a conversation by text: theirs, the player's own, or a note on what came of it.</summary>
-public sealed record MessageItem(string Text, bool IsMine, bool IsNote);
+/// <param name="Warning">What came out wrong in this bubble, or null when it is as it should be.</param>
+public sealed record MessageItem(string Text, bool IsMine, bool IsNote, WarningItem? Warning = null);
+
+/// <summary>
+/// Something on screen that is not what it should be: words the writer could not write, or a picture that
+/// could not be drawn. The warning stands beside it, and pressing it asks before that one thing, and only
+/// that one thing, is asked for again.
+/// </summary>
+/// <param name="label">What went wrong, on the warning itself.</param>
+/// <param name="question">What the confirmation asks.</param>
+/// <param name="again">Asks for that part again.</param>
+public sealed partial class WarningItem(string label, string question, Func<Task> again) : ObservableObject
+{
+    [ObservableProperty]
+    private bool _isAsking;
+
+    /// <summary>False once it is too late to ask again, when the warning is only a mark.</summary>
+    [ObservableProperty]
+    private bool _canRetry = true;
+
+    public string Label { get; } = label;
+
+    public string Question { get; } = question;
+
+    [RelayCommand]
+    private void Ask() => IsAsking = !IsAsking;
+
+    [RelayCommand]
+    private void Dismiss() => IsAsking = false;
+
+    [RelayCommand]
+    private async Task AgainAsync()
+    {
+        IsAsking = false;
+        await again().ConfigureAwait(true);
+    }
+}
 
 /// <summary>One temper axis in the new-game form, with the writing of whichever end is picked.</summary>
 public sealed partial class TemperAxisItem : ObservableObject
@@ -88,6 +125,10 @@ public sealed partial class ExchangeItem(string reply) : ObservableObject
 
     [ObservableProperty]
     private string? _agreed;
+
+    /// <summary>The warning beside a placeholder answer, or null when the answer was written.</summary>
+    [ObservableProperty]
+    private WarningItem? _warning;
 
     public string Reply { get; } = reply;
 }

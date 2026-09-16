@@ -31,6 +31,27 @@
         <DataTemplate x:Key="Note" x:DataType="sys:String">
             <TextBlock Classes="note" Text="{Binding}" />
         </DataTemplate>
+
+        <!--
+            Something that came out wrong, marked where it stands: placeholder words the writer could not write,
+            or a picture that could not be drawn. Pressing the mark asks whether to try that one thing again.
+        -->
+        <DataTemplate x:Key="Warning" x:DataType="vm:WarningItem">
+            <StackPanel Spacing="8" HorizontalAlignment="Left">
+                <Button Classes="warn" Content="⚠" Command="{Binding AskCommand}" IsVisible="{Binding CanRetry}"
+                        ToolTip.Tip="{Binding Label}" AutomationProperties.Name="{Binding Label}" />
+                <TextBlock Classes="warn" Text="⚠" IsVisible="{Binding !CanRetry}" ToolTip.Tip="{Binding Label}" />
+                <Border Classes="confirm" IsVisible="{Binding IsAsking}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding Question}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="accent" Content="Try again" Command="{Binding AgainCommand}" />
+                            <Button Content="Not now" Command="{Binding DismissCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsPhone}">
@@ -70,10 +91,16 @@
             </ctl:SpriteFrame>
             <Border Classes="loading" IsVisible="{Binding IsStageLoading}">
                 <StackPanel Spacing="10">
-                    <ctl:Spinner Classes="spinner" />
+                    <ctl:Spinner Classes="spinner" IsVisible="{Binding BackgroundWarning, Converter={x:Static ObjectConverters.IsNull}}" />
                     <TextBlock Classes="lede" Text="{Binding StageLoadingText}" TextAlignment="Center" MaxWidth="240" />
+                    <ContentControl Content="{Binding BackgroundWarning}" ContentTemplate="{StaticResource Warning}"
+                                    HorizontalAlignment="Center" />
                 </StackPanel>
             </Border>
+
+            <!-- Nobody stands there because the drawing failed: the warning offers to draw them again. -->
+            <ContentControl Content="{Binding SpriteWarning}" ContentTemplate="{StaticResource Warning}"
+                            IsVisible="{Binding !IsPhone}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
         </Panel>
 
         <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->
@@ -104,6 +131,7 @@
                         <StackPanel IsVisible="{Binding IsScene}" Spacing="12">
                             <TextBlock Classes="story" Text="{Binding SceneText}"
                                        IsVisible="{Binding SceneText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <ContentControl Content="{Binding SceneWarning}" ContentTemplate="{StaticResource Warning}" />
                             <TextBlock Classes="small" Text="{Binding WithLine}"
                                        IsVisible="{Binding WithLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Classes="small" Text="{Binding RevealLine}"
@@ -123,6 +151,7 @@
                                             </Border>
                                             <TextBlock Classes="story reaction" Text="{Binding Reaction}"
                                                        IsVisible="{Binding Reaction, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                            <ContentControl Content="{Binding Warning}" ContentTemplate="{StaticResource Warning}" />
                                             <Border Classes="popup" IsVisible="{Binding Popup, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                                 <TextBlock Text="{Binding Popup}" TextWrapping="Wrap" />
                                             </Border>
@@ -298,6 +327,7 @@
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
                                 <TextBlock FontWeight="SemiBold" Text="{Binding Speaker}" />
                                 <TextBlock Classes="small" Text="{Binding Heading}" />
+                                <ContentControl Content="{Binding SpriteWarning}" ContentTemplate="{StaticResource Warning}" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -307,9 +337,12 @@
                             <ItemsControl ItemsSource="{Binding Messages}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:MessageItem">
-                                        <Border Classes="bubble" Classes.mine="{Binding IsMine}" Classes.note="{Binding IsNote}">
-                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
-                                        </Border>
+                                        <StackPanel Spacing="4">
+                                            <Border Classes="bubble" Classes.mine="{Binding IsMine}" Classes.note="{Binding IsNote}">
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                            </Border>
+                                            <ContentControl Content="{Binding Warning}" ContentTemplate="{StaticResource Warning}" />
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

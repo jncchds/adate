@@ -95,6 +95,18 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private string? _sceneText;
 
+    /// <summary>The warning beside placeholder words the writer could not write, or null when the scene was written.</summary>
+    [ObservableProperty]
+    private WarningItem? _sceneWarning;
+
+    /// <summary>The warning where the place's picture should be, or null while it is on its way or drawn.</summary>
+    [ObservableProperty]
+    private WarningItem? _backgroundWarning;
+
+    /// <summary>The warning where the person should stand, or null when they were drawn.</summary>
+    [ObservableProperty]
+    private WarningItem? _spriteWarning;
+
     /// <summary>The name of whoever the scene is about, shown on a tag above the words.</summary>
     [ObservableProperty]
     private string? _speaker;
@@ -277,6 +289,9 @@ public sealed partial class PlayViewModel : PageViewModel
         NoteLine = null;
         IsPhone = false;
         PhonePortrait = null;
+        SceneWarning = null;
+        BackgroundWarning = null;
+        SpriteWarning = null;
 
         if (state.Scene is { } scene)
         {
@@ -417,6 +432,7 @@ public sealed partial class PlayViewModel : PageViewModel
         StageCaption = place?.Name ?? outcome.PlaceId;
         StageLoadingText = $"Drawing {StageCaption}…";
         SceneText = scene.Written ? scene.Text : null;
+        SceneWarning = scene.Written && scene.Fallback ? ScenePlaceholderWarning(scene.Exchanges.Count == 0) : null;
         IsWriting = !scene.Written;
         WritingText = "Writing the scene…";
         WithLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
@@ -425,7 +441,13 @@ public sealed partial class PlayViewModel : PageViewModel
         Speaker = scene.Speaker;
         foreach (var exchange in scene.Exchanges)
         {
-            Exchanges.Add(new ExchangeItem(exchange.Reply) { Reaction = exchange.Reaction, Popup = exchange.Popup, Agreed = exchange.Agreed });
+            Exchanges.Add(new ExchangeItem(exchange.Reply)
+            {
+                Reaction = exchange.Reaction,
+                Popup = exchange.Popup,
+                Agreed = exchange.Agreed,
+                Warning = exchange.Fallback ? AnswerPlaceholderWarning(exchange == scene.Exchanges[^1]) : null,
+            });
         }
 
         Mode = PlayMode.Scene;
@@ -454,6 +476,7 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene)
             {
                 StageLoadingText = "The picture could not be drawn.";
+                BackgroundWarning = BackgroundFailedWarning();
             }
         }
 
@@ -487,7 +510,11 @@ public sealed partial class PlayViewModel : PageViewModel
             }
             catch (Exception)
             {
-                // The words and choices work without the person's picture.
+                // The words and choices work without the person's picture: it is marked, and can be drawn again.
+                if (token == _scene)
+                {
+                    SpriteWarning = SpriteFailedWarning();
+                }
             }
         }
 
@@ -512,6 +539,141 @@ public sealed partial class PlayViewModel : PageViewModel
             {
                 Working = false;
             }
+        }
+    }
+
+    /// <summary>The warning beside placeholder words, offering the scene's words again before anything is said in it.</summary>
+    /// <param name="canRetry">False once the conversation has started, when the warning is only a mark.</param>
+    private WarningItem ScenePlaceholderWarning(bool canRetry) =>
+        new(
+            "These are placeholder words: the scene could not be written.",
+            "The scene could not be written, so these words stand in for it. Write it again?",
+            RewriteSceneAsync)
+        {
+            CanRetry = canRetry,
+        };
+
+    /// <summary>The warning beside a placeholder answer, offering the last answer again.</summary>
+    /// <param name="canRetry">False for an earlier answer, once the conversation has moved past it.</param>
+    private WarningItem AnswerPlaceholderWarning(bool canRetry) =>
+        new(
+            "This is a placeholder answer: the reply could not be answered.",
+            "Your reply could not be answered, so these words stand in for it. Answer it again?",
+            RewriteReactionAsync)
+        {
+            CanRetry = canRetry,
+        };
+
+    /// <summary>Only the picture is drawn again: the words and everything else in the scene stay as they are.</summary>
+    private WarningItem BackgroundFailedWarning() =>
+        new(
+            "The place could not be drawn.",
+            $"{StageCaption ?? "The place"} could not be drawn. Draw it again?",
+            RedrawBackgroundAsync);
+
+    private WarningItem SpriteFailedWarning() =>
+        new(
+            "This person could not be drawn.",
+            $"{Speaker ?? "This person"} could not be drawn. Draw them again?",
+            RedrawSpriteAsync);
+
+    /// <summary>Asks for the scene's words again, before anything has been said in it. Nothing else is asked for.</summary>
+    private async Task RewriteSceneAsync()
+    {
+        if (_outcome is not { } outcome || Working)
+        {
+            return;
+        }
+
+        Working = true;
+        var token = _scene;
+        SceneText = null;
+        SceneWarning = null;
+        IsWriting = true;
+        WritingText = "Writing the scene again…";
+        RefreshSceneControls();
+
+        try
+        {
+            var written = await Task.Run(() => _world.WriteSceneAsync(_saveId, outcome, WritingProgress(token)));
+            if (token != _scene)
+            {
+                return;
+            }
+
+            await ApplyWrittenAsync(written, token);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            Working = false;
+        }
+    }
+
+    /// <summary>Asks for the last answer again, in place of the placeholder that stood in for it.</summary>
+    private async Task RewriteReactionAsync()
+    {
+        if (Exchanges.Count == 0 || Working)
+        {
+            return;
+        }
+
+        Working = true;
+        var token = _scene;
+        var exchange = Exchanges[^1];
+        exchange.Reaction = null;
+        exchange.Warning = null;
+        WritingText = Speaker is { } who ? $"{who} is answering again…" : "Writing what happens again…";
+        IsWriting = true;
+        RefreshSceneControls();
+
+        try
+        {
+            if (await Task.Run(() => _world.RewriteReactionAsync(_saveId)) is { } result && token == _scene)
+            {
+                ApplyReaction(exchange, result);
+                await ShowReactionSpriteAsync(result, token);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            Working = false;
+            IsWriting = false;
+            RefreshSceneControls();
+        }
+    }
+
+    /// <summary>Draws the place again, and only the place.</summary>
+    private async Task RedrawBackgroundAsync()
+    {
+        BackgroundWarning = null;
+        StageBackground = null;
+        StageLoadingText = StageCaption is { } place ? $"Drawing {place}…" : "Drawing the place…";
+
+        if (Mode == PlayMode.Scene && _outcome is not null)
+        {
+            await ShowBackgroundAsync(_scene);
+        }
+        else if (_state is { } state)
+        {
+            await LoadPicturesAsync(state);
+        }
+    }
+
+    /// <summary>Draws the person again, and only the person.</summary>
+    private async Task RedrawSpriteAsync()
+    {
+        SpriteWarning = null;
+        if (_view is { } view)
+        {
+            await (IsPhone ? ShowPortraitAsync(view, _scene) : ShowSpriteAsync(view, _scene));
         }
     }
 
@@ -576,12 +738,23 @@ public sealed partial class PlayViewModel : PageViewModel
             Messages.Add(new MessageItem(message, false, false));
         }
 
+        // The warning goes on the last bubble of whatever stood in for the words, where the reader is left.
+        if (SceneWarning is { } scene && Messages.Count > 0)
+        {
+            Messages[^1] = Messages[^1] with { Warning = scene };
+        }
+
         foreach (var exchange in Exchanges)
         {
             Messages.Add(new MessageItem(TextMessages.Unquote(exchange.Reply), true, false));
             foreach (var message in TextMessages.Split(exchange.Reaction))
             {
                 Messages.Add(new MessageItem(message, false, false));
+            }
+
+            if (exchange.Warning is { } answer && Messages.Count > 0)
+            {
+                Messages[^1] = Messages[^1] with { Warning = answer };
             }
 
             foreach (var note in new[] { exchange.Popup, exchange.Agreed }.OfType<string>())
@@ -645,6 +818,7 @@ public sealed partial class PlayViewModel : PageViewModel
         catch (Exception)
         {
             StageLoadingText = "The picture could not be drawn.";
+            BackgroundWarning = BackgroundFailedWarning();
         }
 
         // The lineup: each person met, at their resting expression, drawn once and cached.
@@ -809,6 +983,9 @@ public sealed partial class PlayViewModel : PageViewModel
             _view = null;
             IsPhone = phone;
             PhonePortrait = null;
+            SceneWarning = null;
+            BackgroundWarning = null;
+            SpriteWarning = null;
             if (!phone)
             {
                 StageBackground = null;
@@ -899,6 +1076,7 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene)
             {
                 StageBackground = picture;
+                BackgroundWarning = null;
             }
         }
         catch (Exception)
@@ -906,6 +1084,7 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene)
             {
                 StageLoadingText = "The picture could not be drawn.";
+                BackgroundWarning = BackgroundFailedWarning();
             }
         }
     }
@@ -925,11 +1104,16 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene && _view?.Expression == view.Expression)
             {
                 StageSprite = picture;
+                SpriteWarning = null;
             }
         }
         catch (Exception)
         {
-            // The scene works without the person's picture.
+            // The scene works without the person's picture: it is marked, and can be drawn again.
+            if (token == _scene)
+            {
+                SpriteWarning = SpriteFailedWarning();
+            }
         }
     }
 
@@ -942,11 +1126,16 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene)
             {
                 PhonePortrait = picture;
+                SpriteWarning = null;
             }
         }
         catch (Exception)
         {
-            // The messages work without the picture.
+            // The messages work without the picture: it is marked, and can be drawn again.
+            if (token == _scene)
+            {
+                SpriteWarning = SpriteFailedWarning();
+            }
         }
     }
 
@@ -959,6 +1148,7 @@ public sealed partial class PlayViewModel : PageViewModel
         _view = written;
         Speaker = written.Name ?? Speaker;
         SceneText = written.Text;
+        SceneWarning = written.Fallback ? ScenePlaceholderWarning(Exchanges.Count == 0) : null;
         IsWriting = false;
         RefreshSceneControls();
 
@@ -1025,6 +1215,13 @@ public sealed partial class PlayViewModel : PageViewModel
     {
         var exchange = new ExchangeItem(words);
         Exchanges.Add(exchange);
+
+        // Once something has been said in the scene its words stand: the warning stays as a mark alone.
+        if (SceneWarning is { } scene)
+        {
+            scene.CanRetry = false;
+        }
+
         WritingText = Speaker is { } who ? $"{who} is answering…" : "Writing what happens…";
         IsWriting = true;
         RefreshSceneControls();
@@ -1038,6 +1235,14 @@ public sealed partial class PlayViewModel : PageViewModel
         exchange.Reaction = result.View.Text;
         exchange.Popup = result.Popup;
         exchange.Agreed = result.Agreed;
+        exchange.Warning = result.Fallback ? AnswerPlaceholderWarning(canRetry: true) : null;
+
+        // Only the last answer can be asked for again: an earlier one keeps its mark alone.
+        foreach (var earlier in Exchanges.Where(e => e != exchange && e.Warning is not null))
+        {
+            earlier.Warning!.CanRetry = false;
+        }
+
         _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null, Open = result.Open };
         if (result.Together && _state is not null)
         {
