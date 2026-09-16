@@ -1764,3 +1764,28 @@ with intimacy faded and the narration constrained with it, computed from their o
 and no configuration path. Migration 002 enforces the same thing in the schema, refusing art above PG13
 for an under-18 character and refusing to lower an age below 18 once such art exists. A game that wants
 adults only sets its floor back to 18.
+
+## What came out wrong says so, and can be asked for again — one part at a time
+
+User request: whenever placeholder text is shown, mark it with a warning the player can press, with a
+confirmation, to try generating it again; and consider the same for the background and the person's sprite.
+Until now a failed writer showed the encounter's authored line with nothing to say it was a stand-in, and a
+failed picture left a spinner's last words on the stage.
+
+* **The failure travels with the thing.** `SceneView.Fallback` and `ReactionResult.Fallback` say the words
+  are the placeholder, and migration 016 keeps the scene's own flag in `scene_log`, with `SceneExchange`
+  carrying one for each answer, so a reopened save still knows which words stood in. The flag is set only
+  when a model was configured and failed: with no model every line is authored, and there is nothing to
+  ask for again.
+* **Each warning retries its own part and nothing else.** The scene's words are written again from the
+  turn that was already taken, so who is there, where, and what happens are untouched. A picture is drawn
+  again on its own. Nothing re-rolls the scene.
+* **Asking for an answer again puts the scene back first.** `RewriteReactionAsync` restores the waiting
+  scene as it stood before the reply, answers the same reply afresh, and replaces the exchange it failed
+  rather than adding one. A chosen reply is re-answered with empty tags, because its own tags were already
+  scored; free words are scored by what the new answer reads in them, because the placeholder read nothing.
+* **The scene's words can be asked for again only before anything is said in it.** Once the player has
+  replied, the transcript is built on those words, so the warning stays as a mark with no button. The same
+  holds for an answer that is no longer the last one.
+* **The player is asked first**, on both frontends, because writing or drawing again costs a model call and
+  the words on screen are replaced by the answer.

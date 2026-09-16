@@ -53,6 +53,35 @@ public class SceneLogTests
     }
 
     [Fact]
+    public async Task Words_the_writer_could_not_write_are_marked_and_the_answer_asked_for_again_takes_its_place()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var log = new SceneLogRepository(db.Database);
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+
+        var id = await log.StartAsync(save.Id, new ClockState(1, TimeOfDay.Midday), "corner-cafe", "quiet.company", "{}", "Rin is here too.");
+        Assert.False((await log.GetOpenAsync(save.Id))!.Fallback);
+
+        await log.SetWrittenAsync(id, "Rin is here too.", null, fallback: true);
+        await log.AddExchangeAsync(id, new SceneExchange("Say hello", "Rin takes that in.", Proposed: true, Fallback: true));
+
+        var stood = await log.GetOpenAsync(save.Id);
+        Assert.True(stood!.Fallback);
+        Assert.True(stood.Exchanges.Single() is { Proposed: true, Fallback: true });
+
+        // Asked for again: the scene's words and the answer take the place of the placeholders, not a second turn.
+        await log.SetWrittenAsync(id, "Rin looks up from a book.", "happy");
+        await log.ReplaceLastExchangeAsync(id, new SceneExchange("Say hello", "Rin smiles back.", Proposed: true));
+
+        var written = await log.GetOpenAsync(save.Id);
+        Assert.False(written!.Fallback);
+        Assert.Equal("Rin looks up from a book.", written.Text);
+        Assert.Equal("Rin smiles back.", written.Exchanges.Single().Reaction);
+        Assert.False(written.Exchanges.Single().Fallback);
+    }
+
+    [Fact]
     public async Task The_next_turn_closes_the_last_scene_and_continue_closes_the_open_one()
     {
         using var db = new TempDatabase();
