@@ -62,11 +62,27 @@
                     <img src="@_stageSprite" alt="@_speaker" />
                 }
             </div>
+            @* Nobody stands there because the drawing failed: the warning offers to draw them again. *@
+            @if (_spriteFailed && !_isPhone && _mode == Mode.Scene)
+            {
+                <div class="drawn-none" role="status">
+                    @Mark(Warned.Sprite)
+                    @Asked(Warned.Sprite)
+                </div>
+            }
             @if (_stageBackground is null && _mode != Mode.Error)
             {
                 <div class="loading" role="status">
-                    <span class="spinner" aria-hidden="true"></span>
+                    @if (_backgroundFailed)
+                    {
+                        @Mark(Warned.Background)
+                    }
+                    else
+                    {
+                        <span class="spinner" aria-hidden="true"></span>
+                    }
                     <p>@_stageLoadingText</p>
+                    @Asked(Warned.Background)
                 </div>
             }
         </div>
@@ -96,7 +112,8 @@
                     case Mode.Scene:
                         @if (!string.IsNullOrEmpty(_sceneText))
                         {
-                            <p class="story">@_sceneText</p>
+                            <p class="story">@_sceneText@if (_sceneFallback) {<text> </text>@Mark(Warned.Scene, _exchanges.Count == 0)}</p>
+                            @Asked(Warned.Scene)
                         }
                         @if (_withLine is not null)
                         {
@@ -120,7 +137,11 @@
                                 </div>
                                 @if (exchange.Reaction is not null)
                                 {
-                                    <p class="story reaction">@exchange.Reaction</p>
+                                    <p class="story reaction">@exchange.Reaction@if (exchange.Fallback) {<text> </text>@Mark(Warned.Reaction, exchange == _exchanges[^1])}</p>
+                                    @if (exchange.Fallback && exchange == _exchanges[^1])
+                                    {
+                                        @Asked(Warned.Reaction)
+                                    }
                                 }
                                 @if (exchange.Popup is not null)
                                 {
@@ -288,12 +309,21 @@
                         <strong>@_speaker</strong>
                         <span class="small">@_heading</span>
                     </span>
+                    @if (_spriteFailed)
+                    {
+                        @Mark(Warned.Sprite)
+                    }
                 </header>
+                @Asked(Warned.Sprite)
 
                 <div class="thread" @ref="_thread">
                     @foreach (var message in _messages)
                     {
-                        <p class="bubble @(message.Mine ? "mine" : null) @(message.Note ? "note" : null)">@message.Text</p>
+                        <p class="bubble @(message.Mine ? "mine" : null) @(message.Note ? "note" : null)">@message.Text@if (message.Warn is { } warned) {<text> </text>@Mark(warned, message.CanRetry)}</p>
+                        @if (message.Warn is { } asked && message.CanRetry)
+                        {
+                            @Asked(asked)
+                        }
                     }
                     @if (_isWriting)
                     {
@@ -403,6 +433,13 @@
     private string? _stageSprite;
     private string? _sceneText;
     private string? _speaker;
+
+    // What came out wrong and is marked with a warning, and which warning's confirmation is open.
+    private bool _sceneFallback;
+    private bool _backgroundFailed;
+    private bool _spriteFailed;
+    private Warned? _asking;
+
     private bool _isWriting;
     private string _writingText = "Writing the scene…";
     private string? _withLine;
@@ -444,10 +481,69 @@
         public string? Popup { get; set; }
 
         public string? Agreed { get; set; }
+
+        /// <summary>Whether the answer is the placeholder because the writer failed.</summary>
+        public bool Fallback { get; set; }
     }
 
     /// <summary>One bubble of a conversation by text: theirs, the player's own, or a note on what came of it.</summary>
-    private sealed record Message(string Text, bool Mine, bool Note);
+    /// <param name="Warn">What came out wrong in this bubble, or null when it is as it should be.</param>
+    /// <param name="CanRetry">Whether this is the one the player may ask for again.</param>
+    private sealed record Message(string Text, bool Mine, bool Note, Warned? Warn = null, bool CanRetry = false);
+
+    /// <summary>Something on screen that is not what it should be: placeholder words, or a picture that failed.</summary>
+    private enum Warned
+    {
+        Scene,
+        Reaction,
+        Background,
+        Sprite,
+    }
+
+    private static string Label(Warned what) => what switch
+    {
+        Warned.Scene => "These are placeholder words: the scene could not be written.",
+        Warned.Reaction => "This is a placeholder answer: the reply could not be answered.",
+        Warned.Background => "The place could not be drawn.",
+        _ => "This person could not be drawn.",
+    };
+
+    private string Question(Warned what) => what switch
+    {
+        Warned.Scene => "The scene could not be written, so these words stand in for it. Write it again?",
+        Warned.Reaction => "Your reply could not be answered, so these words stand in for it. Answer it again?",
+        Warned.Background => $"{_caption ?? "The place"} could not be drawn. Draw it again?",
+        _ => $"{_speaker ?? "This person"} could not be drawn. Draw them again?",
+    };
+
+    /// <summary>The warning beside something that came out wrong; pressing it asks whether to try again.</summary>
+    /// <param name="canRetry">False once it is too late to try again, when the warning is only a mark.</param>
+    private RenderFragment Mark(Warned what, bool canRetry = true) => __builder =>
+    {
+        @if (canRetry)
+        {
+            <button type="button" class="warn" title="@Label(what)" aria-label="@Label(what)" disabled="@_working" @onclick="() => Ask(what)">⚠</button>
+        }
+        else
+        {
+            <span class="warn" title="@Label(what)" role="img" aria-label="@Label(what)">⚠</span>
+        }
+    };
+
+    /// <summary>The confirmation the warning opens: nothing is asked for again until the player says so.</summary>
+    private RenderFragment Asked(Warned what) => __builder =>
+    {
+        @if (_asking == what)
+        {
+            <div class="confirm" role="alertdialog" aria-label="@Label(what)">
+                <p>@Question(what)</p>
+                <div class="confirm-buttons">
+                    <button type="button" class="accent" disabled="@_working" @onclick="() => TryAgainAsync(what)">Try again</button>
+                    <button type="button" @onclick="() => _asking = null">Not now</button>
+                </div>
+            </div>
+        }
+    };
 
     /// <summary>An encounter's own choice, or a proposed reply by its index.</summary>
     private sealed record ChoiceButton(string Text, EncounterChoice? Authored, int? Index);
@@ -586,6 +682,10 @@
         _notes = [];
         _isPhone = false;
         _phonePortrait = null;
+        _sceneFallback = false;
+        _backgroundFailed = false;
+        _spriteFailed = false;
+        _asking = null;
 
         if (state.Scene is { } scene)
         {
@@ -714,6 +814,7 @@
         _stageLoadingText = $"Drawing {_caption}…";
         _stageBackground = null;
         _sceneText = scene.Written ? scene.Text : null;
+        _sceneFallback = scene.Written && scene.Fallback;
         _isWriting = !scene.Written;
         _writingText = "Writing the scene…";
         _withLine = outcome.With.Count > 0 ? $"With: {string.Join(", ", outcome.With.Select(Who))}" : null;
@@ -722,7 +823,13 @@
         _speaker = scene.Speaker;
         foreach (var exchange in scene.Exchanges)
         {
-            _exchanges.Add(new Exchange(exchange.Reply) { Reaction = exchange.Reaction, Popup = exchange.Popup, Agreed = exchange.Agreed });
+            _exchanges.Add(new Exchange(exchange.Reply)
+            {
+                Reaction = exchange.Reaction,
+                Popup = exchange.Popup,
+                Agreed = exchange.Agreed,
+                Fallback = exchange.Fallback,
+            });
         }
 
         _mode = Mode.Scene;
@@ -745,6 +852,7 @@
             }
 
             _stageBackground = background;
+            _backgroundFailed = false;
             await RefreshAsync();
         }
         catch (Exception)
@@ -752,6 +860,7 @@
             if (token == _scene)
             {
                 _stageLoadingText = "The picture could not be drawn.";
+                _backgroundFailed = true;
                 await RefreshAsync();
             }
         }
@@ -786,7 +895,12 @@
             }
             catch (Exception)
             {
-                // The words and choices work without the person's picture.
+                // The words and choices work without the person's picture: it is marked, and can be drawn again.
+                if (token == _scene)
+                {
+                    _spriteFailed = true;
+                    await RefreshAsync();
+                }
             }
         }
 
@@ -864,10 +978,22 @@
     private List<Message> Messages()
     {
         List<Message> messages = [.. TextMessages.Split(_sceneText).Select(m => new Message(m, false, false))];
+
+        // The warning goes on the last bubble of whatever stood in for the words, where the reader is left.
+        if (_sceneFallback && messages.Count > 0)
+        {
+            messages[^1] = messages[^1] with { Warn = Warned.Scene, CanRetry = _exchanges.Count == 0 };
+        }
+
         foreach (var exchange in _exchanges)
         {
             messages.Add(new Message(TextMessages.Unquote(exchange.Reply), true, false));
             messages.AddRange(TextMessages.Split(exchange.Reaction).Select(m => new Message(m, false, false)));
+            if (exchange.Fallback && messages.Count > 0)
+            {
+                messages[^1] = messages[^1] with { Warn = Warned.Reaction, CanRetry = exchange == _exchanges[^1] };
+            }
+
             messages.AddRange(new[] { exchange.Popup, exchange.Agreed }.OfType<string>().Select(note => new Message(note, false, true)));
         }
 
@@ -926,6 +1052,7 @@
         catch (Exception)
         {
             _stageLoadingText = "The picture could not be drawn.";
+            _backgroundFailed = true;
             await RefreshAsync();
         }
 
@@ -1083,6 +1210,10 @@
             _stageSprite = null;
             _speaker = null;
             _exchanges.Clear();
+            _sceneFallback = false;
+            _backgroundFailed = false;
+            _spriteFailed = false;
+            _asking = null;
             _withLine = null;
             _revealLine = null;
             _noteLine = null;
@@ -1168,6 +1299,7 @@
             if (token == _scene)
             {
                 _stageBackground = picture;
+                _backgroundFailed = false;
                 await RefreshAsync();
             }
         }
@@ -1176,8 +1308,130 @@
             if (token == _scene)
             {
                 _stageLoadingText = "The picture could not be drawn.";
+                _backgroundFailed = true;
                 await RefreshAsync();
             }
+        }
+    }
+
+    /// <summary>Opens the confirmation for a warning; a second press closes it again.</summary>
+    private void Ask(Warned what) => _asking = _asking == what ? null : what;
+
+    /// <summary>The player has asked for it again: the words are written afresh, or the picture drawn afresh.</summary>
+    private async Task TryAgainAsync(Warned what)
+    {
+        _asking = null;
+
+        switch (what)
+        {
+            case Warned.Scene:
+                await RewriteSceneAsync();
+                break;
+
+            case Warned.Reaction:
+                await RewriteReactionAsync();
+                break;
+
+            case Warned.Background:
+                _backgroundFailed = false;
+                _stageBackground = null;
+                _stageLoadingText = _caption is { } place ? $"Drawing {place}…" : "Drawing the place…";
+                await RefreshAsync();
+                if (_mode == Mode.Scene && _outcome is not null)
+                {
+                    await ShowBackgroundAsync(_scene);
+                }
+                else if (_state is { } state)
+                {
+                    await LoadPicturesAsync(state);
+                }
+
+                break;
+
+            case Warned.Sprite:
+                _spriteFailed = false;
+                await RefreshAsync();
+                if (_view is { } view)
+                {
+                    await (_isPhone ? ShowPortraitAsync(view, _scene) : ShowSpriteAsync(view, _scene));
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>Asks for the scene's words again, before anything has been said in it.</summary>
+    private async Task RewriteSceneAsync()
+    {
+        if (_outcome is not { } outcome || _working)
+        {
+            return;
+        }
+
+        _working = true;
+        var token = _scene;
+        _sceneText = null;
+        _isWriting = true;
+        _writingText = "Writing the scene again…";
+        RefreshSceneControls();
+        await RefreshAsync();
+
+        try
+        {
+            var written = await Task.Run(() => World.WriteSceneAsync(SaveId, outcome, WritingProgress(token)));
+            if (token != _scene)
+            {
+                return;
+            }
+
+            await ApplyWrittenAsync(written, token);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            _working = false;
+            await RefreshAsync();
+        }
+    }
+
+    /// <summary>Asks for the last answer again, in place of the placeholder that stood in for it.</summary>
+    private async Task RewriteReactionAsync()
+    {
+        if (_exchanges.Count == 0 || _working)
+        {
+            return;
+        }
+
+        _working = true;
+        var token = _scene;
+        var exchange = _exchanges[^1];
+        exchange.Reaction = null;
+        exchange.Fallback = false;
+        _writingText = _speaker is { } who ? $"{who} is answering again…" : "Writing what happens again…";
+        _isWriting = true;
+        RefreshSceneControls();
+        await RefreshAsync();
+
+        try
+        {
+            if (await Task.Run(() => World.RewriteReactionAsync(SaveId)) is { } result && token == _scene)
+            {
+                ApplyReaction(exchange, result);
+                await ShowReactionSpriteAsync(result, token);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            _working = false;
+            _isWriting = false;
+            await RefreshAsync();
         }
     }
 
@@ -1196,12 +1450,18 @@
             if (token == _scene && _view?.Expression == view.Expression)
             {
                 _stageSprite = picture;
+                _spriteFailed = false;
                 await RefreshAsync();
             }
         }
         catch (Exception)
         {
-            // The scene works without the person's picture.
+            // The scene works without the person's picture: it is marked, and can be drawn again.
+            if (token == _scene)
+            {
+                _spriteFailed = true;
+                await RefreshAsync();
+            }
         }
     }
 
@@ -1214,12 +1474,18 @@
             if (token == _scene)
             {
                 _phonePortrait = picture;
+                _spriteFailed = false;
                 await RefreshAsync();
             }
         }
         catch (Exception)
         {
-            // The messages work without the picture.
+            // The messages work without the picture: it is marked, and can be drawn again.
+            if (token == _scene)
+            {
+                _spriteFailed = true;
+                await RefreshAsync();
+            }
         }
     }
 
@@ -1232,6 +1498,7 @@
         _view = written;
         _speaker = written.Name ?? _speaker;
         _sceneText = written.Text;
+        _sceneFallback = written.Fallback;
         _isWriting = false;
         RefreshSceneControls();
         await RefreshAsync();
@@ -1311,6 +1578,7 @@
         exchange.Reaction = result.View.Text;
         exchange.Popup = result.Popup;
         exchange.Agreed = result.Agreed;
+        exchange.Fallback = result.Fallback;
         _view = (_view ?? result.View) with { Choices = result.Next is { Count: > 0 } next ? next : null, Open = result.Open };
         if (result.Together && _state is not null)
         {

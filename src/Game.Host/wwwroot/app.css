@@ -50,6 +50,8 @@ h1:focus {
     --notice-bg: #1c1c1e;
     --popup: #3a2f55;
     --stage-bg: #101012;
+    --warn: #f0b429;
+    --warn-bg: rgba(240, 180, 41, 0.15);
 }
 
 body {
@@ -1019,4 +1021,71 @@ section.phone {
     font-size: 12px;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/*
+ * Something that came out wrong is marked where it stands: placeholder words the writer could not write,
+ * or a picture that could not be drawn. Pressing the mark asks whether to try that one thing again.
+ */
+.warn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    margin: 0 0 0 4px;
+    padding: 0 4px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--warn);
+    font-size: 15px;
+    line-height: 1;
+    vertical-align: baseline;
+}
+
+button.warn {
+    cursor: pointer;
+}
+
+button.warn:hover,
+button.warn:focus-visible {
+    background: var(--warn-bg);
+}
+
+.confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 6px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--warn);
+    border-radius: 8px;
+    background: var(--warn-bg);
+    text-align: left;
+}
+
+.confirm p {
+    margin: 0;
+    color: var(--fg);
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.confirm-buttons button {
+    margin: 0;
+}
+
+.drawn-none {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 260px;
 }
