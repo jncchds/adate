@@ -18,6 +18,7 @@ public sealed record TurnContext(
 /// <param name="GameOver">Whether this was the last slot of the calendar.</param>
 /// <param name="Duty">The work the player is here for, when their shift is at this place now; the scene reflects it.</param>
 /// <param name="Note">Something the player should know about the turn itself, such as a missed shift.</param>
+/// <param name="Arrives">Those in <paramref name="With"/> who come in during the scene rather than being there at first.</param>
 public sealed record TurnOutcome(
     ClockState VisitedAt,
     ClockState Next,
@@ -30,7 +31,13 @@ public sealed record TurnOutcome(
     bool GameOver,
     IReadOnlyList<EncounterChoice>? Choices = null,
     string? Duty = null,
-    string? Note = null);
+    string? Note = null,
+    IReadOnlyList<string>? Arrives = null)
+{
+    /// <summary>Who is there when the scene begins, before the words have brought anyone else in.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<string> AtFirst => [.. With.Where(w => Arrives is null || !Arrives.Contains(w))];
+}
 
 /// <summary>Picks the encounter for a turn. Pure: the same state always picks the same encounter.</summary>
 public static class EncounterEvaluator
@@ -179,7 +186,8 @@ public static class TurnPlanner
             encounter?.Reveals ?? [],
             encounter?.With ?? [],
             next.IsPast(setting.Days),
-            encounter?.Choices ?? []);
+            encounter?.Choices ?? [],
+            Arrives: encounter?.Arrives ?? []);
     }
 
     /// <summary><c>key</c> sets <c>true</c>; <c>key=value</c> sets the value.</summary>

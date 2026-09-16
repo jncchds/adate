@@ -244,6 +244,7 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                     Requires: [$"{MainLiRef}.dating", $"{EncounterEvaluator.InviteKey}={MainLiRef}", "!introduced.met"],
                     Sets: ["introduced.met", "introduced.place=" + TurnPlanner.PlaceValue, "introduced.slot=" + TurnPlanner.SlotValue],
                     With: [MainLiRef, who],
+                    Arrives: [who],
                     Priority: OpeningPriority + 6,
                     Text: "Halfway through the evening {main_li} waves someone over: {who}, an old friend, who stays for a drink.");
             }
@@ -422,6 +423,14 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
                          && !routes.Contains(who[VariantPrefix.Length..]))
                 {
                     Fail($"is with '{who}', but the cast has no route '{who[VariantPrefix.Length..]}'. Known: {string.Join(", ", routes)}.");
+                }
+            }
+
+            foreach (var who in encounter.Arrives ?? [])
+            {
+                if (!(encounter.With ?? []).Contains(who))
+                {
+                    Fail($"has '{who}' arrive, but they are not with it.");
                 }
             }
 

@@ -32,4 +32,32 @@ public class TurnOutcomeJsonTests
         Assert.Equal("Stay a while", Assert.Single(read.Choices!).Text);
         Assert.Equal(["kindness"], read.Choices![0].Tags!);
     }
+
+    [Fact]
+    public void Who_arrives_later_reads_back_and_is_not_there_at_first()
+    {
+        var outcome = new TurnOutcome(
+            new ClockState(9, TimeOfDay.Evening), new ClockState(9, TimeOfDay.Night), "bar", "route.introduced.meet", "",
+            new Dictionary<string, string>(), [], ["main_li", "variant:introduced"], false, Arrives: ["variant:introduced"]);
+
+        var read = TurnOutcomeJson.Deserialize(TurnOutcomeJson.Serialize(outcome));
+
+        Assert.Equal(["variant:introduced"], read.Arrives!);
+        Assert.Equal(["main_li"], read.AtFirst);
+    }
+
+    [Fact]
+    public void A_turn_stored_before_arrivals_has_everyone_there_at_first()
+    {
+        var stored = TurnOutcomeJson.Serialize(new TurnOutcome(
+            new ClockState(2, TimeOfDay.Morning), new ClockState(2, TimeOfDay.Afternoon), "cafe", null, "",
+            new Dictionary<string, string>(), [], ["main_li"], false));
+        var json = System.Text.Json.Nodes.JsonNode.Parse(stored)!.AsObject();
+        Assert.True(json.Remove("arrives"));
+
+        var read = TurnOutcomeJson.Deserialize(json.ToJsonString());
+
+        Assert.Null(read.Arrives);
+        Assert.Equal(["main_li"], read.AtFirst);
+    }
 }

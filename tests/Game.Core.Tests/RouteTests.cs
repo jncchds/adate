@@ -230,6 +230,7 @@ public class RouteTests
         var meet = Turn(setting, encounters, dating, evening, place, invite: "main_li");
         Assert.Equal("route.introduced.meet", meet.EncounterId);
         Assert.Equal(["main_li", "variant:introduced"], meet.With);
+        Assert.Equal(["main_li"], meet.AtFirst);
         Assert.Equal(place, dating["introduced.place"]);
     }
 

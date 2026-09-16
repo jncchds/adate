@@ -22,6 +22,10 @@ public sealed record EncounterPlace(string? Id = null, string? PlaceFlag = null,
 /// <param name="Sets">Flags it sets: <c>key</c> (to <c>true</c>) or <c>key=value</c>.</param>
 /// <param name="Reveals">Place ids that become known.</param>
 /// <param name="With">Who is there: <c>main_li</c> or <c>variant:{route}</c>. Recorded on the visit.</param>
+/// <param name="Arrives">
+/// Those in <paramref name="With"/> who are not there at first and come in during the scene, so nobody draws
+/// them before the words bring them in.
+/// </param>
 /// <param name="Priority">Higher wins when several match. Setting events use <c>100</c>.</param>
 /// <param name="Text">
 /// Placeholder prose until the LLM writes scenes (build step 9). May use <c>{main_li}</c>,
@@ -42,7 +46,8 @@ public sealed record EncounterDefinition(
     IReadOnlyList<string>? With = null,
     int Priority = 50,
     string Text = "",
-    IReadOnlyList<EncounterChoice>? Choices = null);
+    IReadOnlyList<EncounterChoice>? Choices = null,
+    IReadOnlyList<string>? Arrives = null);
 
 /// <summary>One answer to an encounter's choice. Its flags are set when the player picks it.</summary>
 /// <param name="Tags">
