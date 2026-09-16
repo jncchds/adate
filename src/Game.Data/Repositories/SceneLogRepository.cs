@@ -19,7 +19,7 @@ public sealed class SceneLogRepository(Database database)
 
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
-        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over
+        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -130,8 +130,15 @@ public sealed class SceneLogRepository(Database database)
             ("$sprite", spritePath));
 
     /// <summary>The finished words, and the expression they end on when they say one.</summary>
-    public Task SetWrittenAsync(long sceneId, string text, string? expression, CancellationToken ct = default) =>
-        UpdateAsync(sceneId, "written = 1, text = $text, expression = COALESCE($expression, expression)", ct, ("$text", text), ("$expression", expression));
+    /// <param name="fallback">Whether the words are the authored placeholder, because the writer failed.</param>
+    public Task SetWrittenAsync(long sceneId, string text, string? expression, bool fallback = false, CancellationToken ct = default) =>
+        UpdateAsync(
+            sceneId,
+            "written = 1, text = $text, expression = COALESCE($expression, expression), fallback = $fallback",
+            ct,
+            ("$text", text),
+            ("$expression", expression),
+            ("$fallback", fallback ? "1" : "0"));
 
     /// <summary>What the person wears: as the scene was written, or as the conversation changed it.</summary>
     public Task SetOutfitAsync(long sceneId, Outfit outfit, CancellationToken ct = default)
@@ -148,6 +155,18 @@ public sealed class SceneLogRepository(Database database)
         return UpdateAsync(
             sceneId,
             "exchanges_json = json_insert(COALESCE(exchanges_json, '[]'), '$[#]', json($exchange))",
+            ct,
+            ("$exchange", JsonSerializer.Serialize(exchange, Json)));
+    }
+
+    /// <summary>Rewrites the last exchange in place, when its answer is asked for again.</summary>
+    public Task ReplaceLastExchangeAsync(long sceneId, SceneExchange exchange, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(exchange);
+
+        return UpdateAsync(
+            sceneId,
+            "exchanges_json = json_replace(COALESCE(exchanges_json, '[]'), '$[#-1]', json($exchange))",
             ct,
             ("$exchange", JsonSerializer.Serialize(exchange, Json)));
     }
@@ -197,6 +216,7 @@ public sealed class SceneLogRepository(Database database)
             Text(12),
             Text(13) is { } exchanges ? JsonSerializer.Deserialize<List<SceneExchange>>(exchanges, Json) ?? [] : [],
             reader.GetInt64(14) == 1,
-            Text(15) is { } dress ? new Outfit(dress, Text(16)) : null);
+            Text(15) is { } dress ? new Outfit(dress, Text(16)) : null,
+            reader.GetInt64(17) == 1);
     }
 }

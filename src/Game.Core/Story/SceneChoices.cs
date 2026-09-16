@@ -23,7 +23,15 @@ public sealed record PendingScene(
     int Replies = 0);
 
 /// <summary>One exchange of a scene's conversation: the player's words, and how the others answered.</summary>
-public sealed record SceneExchange(string Reply, string? Reaction, string? Popup = null, string? Agreed = null);
+/// <param name="Proposed">Whether the reply was one of the offered choices, whose tags are scored once however the answer is written.</param>
+/// <param name="Fallback">Whether the answer is the placeholder because the writer failed, so it can be asked for again.</param>
+public sealed record SceneExchange(
+    string Reply,
+    string? Reaction,
+    string? Popup = null,
+    string? Agreed = null,
+    bool Proposed = false,
+    bool Fallback = false);
 
 /// <summary>
 /// A scene is a conversation (user feedback: a single reply and a reaction felt hollow). The player can

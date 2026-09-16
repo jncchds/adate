@@ -35,6 +35,12 @@ public sealed record SceneView(
 {
     /// <summary>Whether the scene waits for the player's reply: their own words, or one of <see cref="Choices"/>.</summary>
     public bool Open { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="Text"/> is the authored placeholder, because the writer failed while a model
+    /// was configured. The player is shown a warning, and can ask for the words again.
+    /// </summary>
+    public bool Fallback { get; init; }
 }
 
 /// <summary>The other people's reaction to a reply, and a popup when the reaction was considerable.</summary>
@@ -44,6 +50,7 @@ public sealed record SceneView(
 /// <param name="Open">Whether the scene still takes a reply: the player's own words even when nothing was proposed.</param>
 /// <param name="Redressed">Whether the person put something on or changed, so their sprite is drawn again even at the same expression.</param>
 /// <param name="Together">Whether the two just set off somewhere together, so there is nobody to text and nowhere else to go.</param>
+/// <param name="Fallback">Whether the answer is the placeholder because the writer failed: the player is warned, and can ask again.</param>
 public sealed record ReactionResult(
     SceneView View,
     string? Popup,
@@ -52,7 +59,8 @@ public sealed record ReactionResult(
     IReadOnlyList<ProposedChoice>? Next = null,
     bool Open = false,
     bool Redressed = false,
-    bool Together = false);
+    bool Together = false,
+    bool Fallback = false);
 
 /// <summary>Where the player stands with someone they have met.</summary>
 /// <param name="Left">Why they walked away, or null while they are still around.</param>
@@ -91,7 +99,8 @@ public sealed record CurrentScene(
     string? Speaker,
     string? Expression,
     string? SpritePath,
-    IReadOnlyList<SceneExchange> Exchanges);
+    IReadOnlyList<SceneExchange> Exchanges,
+    bool Fallback = false);
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
 /// <param name="Opening">The opening the player chose, or null if they have not chosen yet.</param>
@@ -318,7 +327,8 @@ public sealed class WorldService(
                 open.Speaker,
                 open.Expression,
                 open.SpritePath,
-                open.Exchanges);
+                open.Exchanges,
+                open.Fallback);
         var lastPlaceId = open?.PlaceId ?? await sceneLog.GetLastPlaceIdAsync(saveId, ct).ConfigureAwait(false);
 
         return new PlayState(
@@ -925,7 +935,7 @@ public sealed class WorldService(
         var moment = new PendingScene(open.Clock, open.PlaceId, pending.EncounterId, encounter.With ?? [], open.Text, []);
         await state.SavePendingSceneAsync(saveId, moment, ct).ConfigureAwait(false);
 
-        return await RespondCoreAsync(saveId, moment, choice.Text, chosenTags: [], logChoice: false, choicePopup: popup, ct).ConfigureAwait(false);
+        return await RespondCoreAsync(saveId, moment, choice.Text, chosenTags: [], logChoice: false, choicePopup: popup, rewrite: false, ct).ConfigureAwait(false);
     }
 
     /// <summary>The turn-log kind every choice the player makes is recorded under, for the ending's recap.</summary>
@@ -1246,7 +1256,7 @@ public sealed class WorldService(
         {
             if (sceneId is { } unwrittenId)
             {
-                await sceneLog.SetWrittenAsync(unwrittenId, presented.Text, presented.Expression, ct).ConfigureAwait(false);
+                await sceneLog.SetWrittenAsync(unwrittenId, presented.Text, presented.Expression, false, ct).ConfigureAwait(false);
             }
 
             return presented;
@@ -1332,12 +1342,13 @@ public sealed class WorldService(
                 : ScenePresentation.Expression(written.Expression, presented.Expression, [.. pack.Expressions.Keys]),
             Choices = choices,
             Open = packet.OffersChoices,
+            Fallback = written.Fallback,
         };
 
         // Marked written last, so an interrupted scene is written again rather than left half-done.
         if (sceneId is { } writtenId)
         {
-            await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, ct).ConfigureAwait(false);
+            await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, written.Fallback, ct).ConfigureAwait(false);
         }
 
         return result;
@@ -1697,7 +1708,37 @@ public sealed class WorldService(
             chosenTags = null;
         }
 
-        return await RespondCoreAsync(saveId, scene, words, chosenTags, logChoice: true, choicePopup: null, ct).ConfigureAwait(false);
+        return await RespondCoreAsync(saveId, scene, words, chosenTags, logChoice: true, choicePopup: null, rewrite: false, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks for the last answer again, when it came back as the placeholder. The scene is put back as it
+    /// stood before the reply and the same reply is answered afresh, so nothing is counted twice: a chosen
+    /// reply keeps the score its tags already earned, and free words are scored by what the new answer reads
+    /// in them. Returns null when there is no answered scene to rewrite.
+    /// </summary>
+    public async Task<ReactionResult?> RewriteReactionAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var open = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
+        if (open is null || open.Exchanges.Count == 0)
+        {
+            return null;
+        }
+
+        var last = open.Exchanges[^1];
+        var outcome = TurnOutcomeJson.Deserialize(open.OutcomeJson);
+
+        // The scene as the writer read it before this reply: its words and every exchange before the last.
+        var text = open.Exchanges
+            .Take(open.Exchanges.Count - 1)
+            .Aggregate(open.Text, (sofar, e) => SceneConversation.Transcript(sofar, e.Reply, e.Reaction ?? ""));
+
+        // Put back the scene that was waiting, so the reply is answered as it was the first time.
+        var scene = new PendingScene(open.Clock, open.PlaceId, open.EncounterId, outcome.With, text, [], open.Exchanges.Count - 1);
+        await state.SavePendingSceneAsync(saveId, scene, ct).ConfigureAwait(false);
+
+        return await RespondCoreAsync(
+            saveId, scene, last.Reply, last.Proposed ? [] : null, logChoice: false, choicePopup: last.Popup, rewrite: true, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1707,6 +1748,7 @@ public sealed class WorldService(
     /// <param name="chosenTags">A proposed choice's tags, or empty for a choice already scored; null for free text.</param>
     /// <param name="logChoice">False when the choice was already logged for the recap.</param>
     /// <param name="choicePopup">A popup the choice already earned, shown instead of this reaction's.</param>
+    /// <param name="rewrite">True when the placeholder answer is being asked for again: it takes the place of the exchange it failed.</param>
     private async Task<ReactionResult> RespondCoreAsync(
         SaveId saveId,
         PendingScene scene,
@@ -1714,6 +1756,7 @@ public sealed class WorldService(
         IReadOnlyList<string>? chosenTags,
         bool logChoice,
         string? choicePopup,
+        bool rewrite,
         CancellationToken ct)
     {
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
@@ -1726,6 +1769,10 @@ public sealed class WorldService(
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
             packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.MaxRepliesFor(scene.EncounterId), ct).ConfigureAwait(false);
+
+        // Without a model every answer is the placeholder, and there is nothing to try again: the warning
+        // is only for a writer that was asked and failed.
+        var warn = reaction.Fallback && llmOptions.Value.Enabled;
 
         // "{want}" in a tag means the want of the person the scene is about.
         var tags = reaction.Tags.Select(t => t.Replace(StoryContent.WantToken, owner?.Member.WantId ?? "", StringComparison.Ordinal)).ToList();
@@ -1839,7 +1886,15 @@ public sealed class WorldService(
         var redressed = false;
         if (openScene is not null)
         {
-            await sceneLog.AddExchangeAsync(openScene.Id, new SceneExchange(words, reaction.Text, popup, agreed), ct).ConfigureAwait(false);
+            var exchange = new SceneExchange(words, reaction.Text, popup, agreed, Proposed: chosenTags is not null, Fallback: warn);
+            if (rewrite)
+            {
+                await sceneLog.ReplaceLastExchangeAsync(openScene.Id, exchange, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await sceneLog.AddExchangeAsync(openScene.Id, exchange, ct).ConfigureAwait(false);
+            }
 
             // Something put on or changed into in the conversation, like a jacket the player offered, is drawn from now on
             // and kept into the next slot together.
@@ -1851,14 +1906,15 @@ public sealed class WorldService(
         }
 
         return new ReactionResult(
-            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression),
+            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression) { Fallback = warn },
             popup,
             agreed,
             transcript,
             next,
             stillOpen,
             redressed,
-            goingTogether);
+            goingTogether,
+            warn);
     }
 
     private sealed record BuiltReaction(
