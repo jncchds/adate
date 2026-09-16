@@ -198,6 +198,20 @@ public sealed record StylePack
     public IReadOnlyDictionary<string, IReadOnlyList<string>> NegativeByCeiling { get; init; }
         = new Dictionary<string, IReadOnlyList<string>>();
 
+    /// <summary>
+    /// The pack as far as <paramref name="ceiling"/> allows: anything above it is dropped, so the content gate, the
+    /// negatives and the cache key all follow the save's own choice. The lowest supported ceiling is always kept,
+    /// so a pack can still render.
+    /// </summary>
+    public StylePack ClampedTo(Ceiling ceiling)
+    {
+        var kept = SupportedCeilings.Where(c => c <= ceiling).ToList();
+
+        return kept.Count == SupportedCeilings.Count
+            ? this
+            : this with { SupportedCeilings = kept.Count > 0 ? kept : [SupportedCeilings.Min()] };
+    }
+
     public bool Supports(Ceiling ceiling) => SupportedCeilings.Contains(ceiling);
 
     /// <summary>

@@ -10,6 +10,17 @@ using Game.Play;
 
 namespace Game.App.ViewModels;
 
+/// <summary>One content level in the list, shown the way people write it.</summary>
+public sealed record ContentChoice(Ceiling Level)
+{
+    public override string ToString() => Level switch
+    {
+        Ceiling.PG13 => "PG-13",
+        Ceiling.Suggestive => "Suggestive",
+        _ => "Explicit",
+    };
+}
+
 /// <summary>Where the story happens, who the player is, and who they will meet.</summary>
 public sealed partial class NewGameViewModel : PageViewModel
 {
@@ -32,6 +43,9 @@ public sealed partial class NewGameViewModel : PageViewModel
 
     [ObservableProperty]
     private string _visualStyle = Game.Core.Style.VisualStyle.LabelFor(Game.Core.Style.VisualStyle.Default);
+
+    [ObservableProperty]
+    private ContentChoice _contentLevel = new(Ceiling.PG13);
 
     [ObservableProperty]
     private string _liName = "";
@@ -90,6 +104,9 @@ public sealed partial class NewGameViewModel : PageViewModel
     public IReadOnlyList<string> Genders { get; } = ["woman", "man", "nonbinary"];
 
     public IReadOnlyList<string> VisualStyles { get; } = [.. Game.Core.Style.VisualStyle.Presets.Select(p => p.Label)];
+
+    public IReadOnlyList<ContentChoice> ContentLevels { get; } =
+        [.. new[] { Ceiling.PG13, Ceiling.Suggestive, Ceiling.Explicit }.Select(c => new ContentChoice(c))];
 
     public IReadOnlyList<FeatureField> Features { get; }
 
@@ -171,7 +188,7 @@ public sealed partial class NewGameViewModel : PageViewModel
             var save = await _services.Get<SaveRepository>().CreateAsync(
                 _studio.StylePackId,
                 _studio.PackFingerprint(),
-                Ceiling.PG13,
+                ContentLevel.Level,
                 Setting?.Id ?? throw new ArgumentException("Choose a setting."),
                 playerName,
                 PlayerGender ?? "woman",

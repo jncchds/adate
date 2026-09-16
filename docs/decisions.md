@@ -1730,3 +1730,23 @@ movie night), and when going together lock out every other option, or standing t
   scene that set off.
 * **Outfits follow the lock.** Only a going-together meeting carries what someone wore into the next scene, across
   midnight too. Seeing them again in the next slot otherwise lets them have changed.
+## The game chooses how far it goes, and starts at PG-13
+
+User feedback: there was no content toggle anywhere, and it should be off by default. Explicit content
+was in fact unreachable, held down by three separate caps: `Studio:Content:MaxCeiling` was `PG13` in both
+apps, every new save was created with `Ceiling.PG13` hard-coded, and all three style packs declared
+`"supportedCeilings": ["PG13"]`.
+
+* **The choice is per save, made at new game** (PG-13, Suggestive, Explicit; PG-13 selected), because the
+  ceiling is already stored per save and is what the scene, reaction and epilogue writers read. A running
+  game's level does not change, like its setting or its visual style.
+* **`MaxCeiling` stays what its name says**: the deployment's maximum, now `Explicit`, so the per-save
+  choice is the one that decides. Lower it to keep a machine at PG-13 whatever a save asks for.
+* **The packs render what the save allows.** `StylePack.ClampedTo` drops the ceilings above the save's,
+  and `GetPackAsync(saveId)` applies it, so the content gate, the negatives and the cache key all follow
+  one number. A pack that starts above the save keeps its mildest tier rather than rendering nothing.
+* **The anime packs now declare all three tiers**, with a `Suggestive` entry in `negativeByCeiling` that
+  still negates nudity. `PG13` keeps its own list, and `alwaysNegative` (the minor-safety terms) is
+  unchanged at every tier.
+* **The age clamp is untouched**: anyone under 18 is PG-13 whatever the save, the pack or the scene asks
+  for, and no configuration reaches that path.

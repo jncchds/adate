@@ -36,6 +36,9 @@
             <AutoCompleteBox Text="{Binding VisualStyle}" ItemsSource="{Binding VisualStyles}"
                              FilterMode="None" MinimumPrefixLength="0" MaxLength="80" HorizontalAlignment="Stretch" />
             <TextBlock Classes="small" Text="Pick one or type your own, such as oil painting. Every picture in the game is drawn in it." />
+            <TextBlock Classes="label" Text="Content" />
+            <ComboBox ItemsSource="{Binding ContentLevels}" SelectedItem="{Binding ContentLevel}" HorizontalAlignment="Stretch" />
+            <TextBlock Classes="small" Text="How far the writing and the pictures may go. Kept with this game. Anyone under 18 stays PG-13 whatever you pick." />
 
             <TextBlock Classes="h2" Text="Who you will meet" />
             <TextBlock Classes="label" Text="Their name" />

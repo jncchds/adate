@@ -35,7 +35,9 @@
   },
   "mattingModel": "ZhengPeng7/BiRefNet",
   "supportedCeilings": [
-    "PG13"
+    "PG13",
+    "Suggestive",
+    "Explicit"
   ],
   "positivePrefix": [
     "Anime illustration",
@@ -437,6 +439,13 @@
     "surprised": "a surprised facial expression with wide eyes and parted lips"
   },
   "negativeByCeiling": {
+    "Suggestive": [
+      "nude",
+      "nudity",
+      "topless",
+      "exposed nipples",
+      "bottomless"
+    ],
     "PG13": [
       "nsfw",
       "nudity",

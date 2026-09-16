@@ -73,6 +73,16 @@
             </datalist>
             <small>Pick one or type your own, such as oil painting. Every picture in the game is drawn in it.</small>
         </label>
+
+        <label>
+            Content
+            <InputSelect @bind-Value="_form.Ceiling">
+                <option value="PG13">PG-13</option>
+                <option value="Suggestive">Suggestive</option>
+                <option value="Explicit">Explicit</option>
+            </InputSelect>
+            <small>How far the writing and the pictures may go. Kept with this game. Anyone under 18 stays PG-13 whatever you pick.</small>
+        </label>
     </div>
 
     <h2>Who you will meet</h2>
@@ -258,7 +268,7 @@
             var save = await Saves.CreateAsync(
                 Studio.StylePackId,
                 Studio.PackFingerprint(),
-                Ceiling.PG13,
+                _form.Ceiling,
                 _form.SettingId,
                 playerName,
                 _form.PlayerGender,
@@ -292,6 +302,7 @@
         public string PlayerGender { get; set; } = "woman";
         public string NarrationLanguage { get; set; } = Game.Core.Story.NarrationLanguage.Default;
         public string VisualStyle { get; set; } = Game.Core.Style.VisualStyle.LabelFor(Game.Core.Style.VisualStyle.Default);
+        public Ceiling Ceiling { get; set; } = Ceiling.PG13;
         public string LiName { get; set; } = "";
         public string Subject { get; set; } = "female";
         public int Age { get; set; } = 24;

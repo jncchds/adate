@@ -185,7 +185,9 @@ public class ShippedContentTests
 
         Assert.NotEmpty(pack.SupportedCeilings);
         Assert.True(pack.Supports(Ceiling.PG13));
-        Assert.False(pack.Supports(Ceiling.Explicit));
+
+        // The pack offers the tiers; how far a game goes is the save's own choice, which clamps the pack.
+        Assert.False(pack.ClampedTo(Ceiling.PG13).Supports(Ceiling.Explicit));
     }
 
     /// <summary>

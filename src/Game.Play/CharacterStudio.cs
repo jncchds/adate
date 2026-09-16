@@ -54,7 +54,8 @@ public sealed class CharacterStudio(
         var style = await saves.GetVisualStyleAsync(saveId, ct).ConfigureAwait(false);
         var ceiling = (await saves.GetAsync(saveId, ct).ConfigureAwait(false))?.Ceiling ?? Ceiling.PG13;
 
-        return VisualStyle.Apply(pack, style, ceiling);
+        // The save chooses how far its pictures go; the pack and the age clamp still cap it.
+        return VisualStyle.Apply(pack.ClampedTo(ceiling), style, ceiling);
     }
 
     /// <summary>

@@ -35,7 +35,9 @@
   },
   "mattingModel": "birefnet.safetensors",
   "supportedCeilings": [
-    "PG13"
+    "PG13",
+    "Suggestive",
+    "Explicit"
   ],
   "positivePrefix": [
     "masterpiece",
@@ -277,6 +279,13 @@
     "surprised": "(surprised:1.2), wide eyes, open mouth"
   },
   "negativeByCeiling": {
+    "Suggestive": [
+      "nude",
+      "nudity",
+      "topless",
+      "exposed nipples",
+      "bottomless"
+    ],
     "PG13": [
       "nsfw",
       "nude",
