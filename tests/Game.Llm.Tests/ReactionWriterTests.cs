@@ -69,6 +69,29 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task A_reaction_says_who_is_still_here_and_is_kept_whatever_it_says()
+    {
+        var packet = Packet() with { Drawn = ["maya-id"] };
+        var llm = new FakeLlm(
+            () => """{ "text": "Maya grabs her coat and goes.", "expression": "sad", "tags": [], "present": [] }""",
+            () => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "present": [{ "id": "someone-else", "expression": "grinning" }] }""",
+            () => """{ "text": "Maya laughs.", "expression": "smile", "tags": [] }""");
+
+        var left = await Writer(llm).WriteAsync(packet, "Maya waves.", "Tell her to leave", null, "Fallback.");
+        var odd = await Writer(llm).WriteAsync(packet, "Maya waves.", "Tell her a joke", null, "Fallback.");
+        var unsaid = await Writer(llm).WriteAsync(packet, "Maya waves.", "Tell her a joke", null, "Fallback.");
+
+        Assert.False(left.Fallback || odd.Fallback || unsaid.Fallback);
+        Assert.Empty(left.Present!);
+        Assert.Equal([new Presence("someone-else", "grinning")], odd.Present!);
+        Assert.Null(unsaid.Present);
+        Assert.Contains("- present: of Maya (maya-id)", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("- expression: how Maya looks at the end", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("present", Writer(llm).Schema(packet)["required"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.DoesNotContain("present", Writer(llm).Schema(Packet())["required"]!.AsArray().Select(n => n!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task A_reply_can_put_a_jacket_on_the_person_and_nothing_changes_otherwise()
     {
         var wearing = Outfits.For("Maya", DressCode.Waterfront, firstDate: false, null, null, null) with { Settled = true };

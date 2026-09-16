@@ -21,6 +21,9 @@ public sealed record SceneResponseChoice(string Text, IReadOnlyList<string>? Tag
 /// <summary>What the main person wears, unchecked: C# keeps it only when the dress is one it offered.</summary>
 public sealed record SceneResponseOutfit(string? Dress, string? Over);
 
+/// <summary>Someone the answer says is here at its end, and how they look, unchecked.</summary>
+public sealed record SceneResponsePresence(string Id, string? Expression);
+
 /// <summary>The JSON half of a written scene.</summary>
 public sealed record SceneResponse(
     string Text,
@@ -33,7 +36,8 @@ public sealed record SceneResponse(
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
-    SceneResponseOutfit? Outfit = null);
+    SceneResponseOutfit? Outfit = null,
+    IReadOnlyList<SceneResponsePresence>? Present = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -44,6 +48,7 @@ public sealed record SceneResponse(
 /// <param name="Resolved">Loose ends from the packet the scene settled.</param>
 /// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
 /// <param name="Outfit">What the main person wears, when the answer picked one of the codes offered.</param>
+/// <param name="Present">Who the answer says is here at the end and how they look; null when it said nothing or nobody is drawn.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -58,7 +63,8 @@ public sealed record WrittenScene(
     IReadOnlyList<string>? Threads = null,
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
-    Game.Core.Story.Outfit? Outfit = null);
+    Game.Core.Story.Outfit? Outfit = null,
+    IReadOnlyList<Presence>? Present = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -237,7 +243,8 @@ public sealed class SceneWriter(
                         packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
                         Settled(packet, response.Resolved),
                         [.. (response.Routines ?? []).Where(r => r is not null)],
-                        Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over));
+                        Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over),
+                        Present(packet, response.Present));
                 }
 
                 lastReasons = reasons;
@@ -340,6 +347,12 @@ public sealed class SceneWriter(
             required.Add("outfit");
         }
 
+        if (packet.Drawn is { Count: > 0 })
+        {
+            properties["present"] = PresenceProperty(packet);
+            required.Add("present");
+        }
+
         if (packet.LooseEnds is not null)
         {
             ThreadProperties(properties);
@@ -379,6 +392,29 @@ public sealed class SceneWriter(
             ["additionalProperties"] = false,
         },
     };
+
+    /// <summary>The present field: who of those who can be drawn is here at the end, and how each looks. Shared with the reaction writer's schema.</summary>
+    internal static JsonObject PresenceProperty(ScenePacket packet) => new()
+    {
+        ["type"] = "array",
+        ["items"] = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["id"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. (packet.Drawn ?? []).Select(id => (JsonNode)JsonValue.Create(id)!)]) },
+                ["expression"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. packet.Expressions.Select(e => (JsonNode)JsonValue.Create(e)!)]) },
+            },
+            ["required"] = new JsonArray("id", "expression"),
+            ["additionalProperties"] = false,
+        },
+    };
+
+    /// <summary>Who an answer says is here at its end, unchecked: the stage keeps only people the scene is with.</summary>
+    internal static IReadOnlyList<Presence>? Present(ScenePacket packet, IReadOnlyList<SceneResponsePresence>? present) =>
+        packet.Drawn is not { Count: > 0 } || present is null
+            ? null
+            : [.. present.Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Id)).Select(p => new Presence(p.Id.Trim(), p.Expression))];
 
     /// <summary>The outfit field: a dress code among those offered, and anything worn over it. Shared with the reaction writer's schema.</summary>
     /// <param name="nullable">True for a reaction, where null means nothing changed.</param>

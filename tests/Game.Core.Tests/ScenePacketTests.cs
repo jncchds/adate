@@ -168,4 +168,44 @@ public class ScenePacketTests
         Assert.DoesNotContain("thing number 1\n", text, StringComparison.Ordinal);
         Assert.Contains("## What must happen", text, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void With_two_people_the_writer_hears_who_comes_in_later_what_each_wears_and_is_asked_who_is_here_at_the_end()
+    {
+        var rin = Packet().Present[0];
+        var kai = new PacketPerson("kai-id", "Kai", ["Talks fast."], RelationshipStage.Stranger, null, Away: PersonAway.Arriving);
+        var packet = Packet() with
+        {
+            Present = [kai, rin],
+            Outfit = new PacketOutfit("Kai", new Outfit(DressCode.Casual), [DressCode.Casual]),
+            OtherOutfits = [new PacketOutfit("Rin", new Outfit(DressCode.Evening), [DressCode.Evening], Settled: true)],
+            Drawn = ["kai-id", "rin-id"],
+        };
+
+        var text = ScenePacketBuilder.Render(packet);
+
+        Assert.Contains("Kai is not here at first: they come in during the scene", text, StringComparison.Ordinal);
+        Assert.Contains("Kai has not been anywhere else the player knows of today.", text, StringComparison.Ordinal);
+        Assert.Contains("Rin is wearing", text, StringComparison.Ordinal);
+        Assert.Contains("- expression: how Kai looks at the end", text, StringComparison.Ordinal);
+        Assert.Contains("- present: of Kai (kai-id), Rin (rin-id), each one who is here at the end", text, StringComparison.Ordinal);
+        Assert.Contains("- present:", ScenePacketBuilder.Render(packet, ScenePart.Extract), StringComparison.Ordinal);
+        Assert.DoesNotContain("- present:", ScenePacketBuilder.Render(packet, ScenePart.Prose), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Alone_with_one_person_the_expression_is_theirs_by_name_and_someone_who_left_is_said_to_have_left()
+    {
+        var rin = Packet().Present[0];
+
+        var one = ScenePacketBuilder.Render(Packet() with { Drawn = ["rin-id"] });
+        Assert.Contains("- expression: how Rin looks at the end", one, StringComparison.Ordinal);
+        Assert.Contains("- present: of Rin (rin-id)", one, StringComparison.Ordinal);
+
+        var gone = ScenePacketBuilder.Render(Packet() with { Present = [rin with { Away = PersonAway.Left }], Drawn = ["rin-id"] });
+        Assert.Contains("Rin has left and is not here now.", gone, StringComparison.Ordinal);
+
+        var texting = ScenePacketBuilder.Render(Packet());
+        Assert.DoesNotContain("- present:", texting, StringComparison.Ordinal);
+    }
 }

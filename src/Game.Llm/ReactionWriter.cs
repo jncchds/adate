@@ -18,8 +18,10 @@ public sealed record ReactionResponse(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<SceneResponsePlace>? Places = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
-    SceneResponseOutfit? Outfit = null);
+    SceneResponseOutfit? Outfit = null,
+    IReadOnlyList<SceneResponsePresence>? Present = null);
 
+/// <param name="Present">Who the answer says is here at the end and how they look; null when it said nothing or nobody is drawn.</param>
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
 /// <param name="Meet">A meeting the two just agreed on, unchecked; C# decides whether it becomes a promise.</param>
 /// <param name="Threads">New loose ends the reaction left open; null when threads are off.</param>
@@ -42,7 +44,8 @@ public sealed record WrittenReaction(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<Game.Core.Places.PlaceProposal>? Places = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
-    Outfit? Outfit = null);
+    Outfit? Outfit = null,
+    IReadOnlyList<Presence>? Present = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -160,7 +163,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                         + "## What was written next\n" + prose
                         + "\n\n## Fill in\n- The continuation above is already written. Do not rewrite it: fill in the fields from what it says.\n"
                         + string.Concat(NarrationLanguage.DataRules(packet.Language, packet.PlayerGender).Select(rule => $"- {rule}\n"))
-                        + $"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.\n"
+                        + $"- {ScenePacketBuilder.ExpressionRule(packet)}\n"
+                        + (ScenePacketBuilder.PresenceRule(packet) is { } presence ? $"- {presence}\n" : "")
                         + fieldRules;
                     var raw = await llm.CompleteJsonAsync(new LlmRequest(ExtractSystemPrompt, extract, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
                     response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json) is { } read ? read with { Text = prose } : null;
@@ -227,7 +231,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                             p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim(), p.Look)),
                     ],
                     Routines: [.. (response.Routines ?? []).Where(r => r is not null)],
-                    Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over));
+                    Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over),
+                    Present: SceneWriter.Present(packet, response.Present));
             }
 
             lastReasons = reasons;
@@ -306,6 +311,12 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         {
             properties["outfit"] = SceneWriter.OutfitProperty(outfit, nullable: true);
             required.Add("outfit");
+        }
+
+        if (packet.Drawn is { Count: > 0 })
+        {
+            properties["present"] = SceneWriter.PresenceProperty(packet);
+            required.Add("present");
         }
 
         if (packet.LooseEnds is not null)

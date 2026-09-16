@@ -9,8 +9,26 @@ namespace Game.Core.Story;
 /// <param name="RevealedWant">Their want, once the player has learned it; never before.</param>
 /// <param name="Voice">How they talk, written once for them; null when voices are off or not yet written.</param>
 /// <param name="Routine">Their usual week, so they can mention it: "weekday mornings at the dock; nights at home".</param>
+/// <param name="Away">Why they are not here now although the scene is with them: they come in later, or they left.</param>
 public sealed record PacketPerson(
-    string Id, string Name, IReadOnlyList<string> Temper, RelationshipStage Stage, string? RevealedWant, string? Voice = null, string? Routine = null);
+    string Id,
+    string Name,
+    IReadOnlyList<string> Temper,
+    RelationshipStage Stage,
+    string? RevealedWant,
+    string? Voice = null,
+    string? Routine = null,
+    PersonAway? Away = null);
+
+/// <summary>Why someone the scene is with is not here now.</summary>
+public enum PersonAway
+{
+    /// <summary>They come in during the scene, as what must happen says.</summary>
+    Arriving,
+
+    /// <summary>They were here and left.</summary>
+    Left,
+}
 
 /// <summary>A loose end an earlier scene left open, numbered so a scene can say it settled it.</summary>
 public sealed record PacketThread(long Id, string Text, int Day);
@@ -39,7 +57,12 @@ public enum ScenePart
 /// <param name="LooseEnds">Open loose ends to pick up; null when threads are off, which also leaves them out of the answer.</param>
 /// <param name="Happening">One small thing going on here now, from content.</param>
 /// <param name="VariedChoices">Whether proposed replies are asked to differ in kind.</param>
-/// <param name="Outfit">What the main person here can be wearing; null when nobody here is drawn.</param>
+/// <param name="Outfit">What the person the scene is about can be wearing; null when nobody here is drawn.</param>
+/// <param name="OtherOutfits">What anyone else drawn here is wearing, settled: only the person the scene is about picks.</param>
+/// <param name="Drawn">
+/// The ids of the people who can stand on the stage, the person the scene is about first; the answer says which of them
+/// are here at its end. Null when nobody is drawn, such as texting.
+/// </param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -64,7 +87,9 @@ public sealed record ScenePacket(
     IReadOnlyList<PacketThread>? LooseEnds = null,
     string? Happening = null,
     bool VariedChoices = false,
-    PacketOutfit? Outfit = null);
+    PacketOutfit? Outfit = null,
+    IReadOnlyList<PacketOutfit>? OtherOutfits = null,
+    IReadOnlyList<string>? Drawn = null);
 
 public static class ScenePacketBuilder
 {
@@ -171,6 +196,35 @@ public static class ScenePacketBuilder
                "Otherwise null.";
     }
 
+    /// <summary>What the answer's expression is: how the person the scene is about looks, named, for scenes and reactions alike.</summary>
+    public static string ExpressionRule(ScenePacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+
+        var who = packet.Drawn is [var first, ..] && packet.Present.FirstOrDefault(p => p.Id == first) is { } owner
+            ? owner.Name
+            : "the main person here";
+        return $"expression: how {who} looks at the end, one of {string.Join(", ", packet.Expressions)}.";
+    }
+
+    /// <summary>
+    /// What the answer's present is: who of those who can be drawn is here at its end, and how each looks, so nobody
+    /// stands on the stage before the words bring them in or after they leave. Null when nobody here is drawn.
+    /// </summary>
+    public static string? PresenceRule(ScenePacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+
+        if (packet.Drawn is not { Count: > 0 } drawn)
+        {
+            return null;
+        }
+
+        var people = drawn.Select(id => packet.Present.FirstOrDefault(p => p.Id == id) is { } person ? $"{person.Name} ({id})" : id);
+        return $"present: of {string.Join(", ", people)}, each one who is here at the end, with their id and how they look (one of {string.Join(", ", packet.Expressions)}). " +
+               "Leave out anyone who has left or has not come in yet; an empty list if nobody is.";
+    }
+
     /// <summary>What makes proposed replies worth choosing between, for scenes and reactions alike.</summary>
     public const string VariedChoiceRule =
         " Make them different in kind (for example a question, a playful line, a bold or sincere move, or something to do), " +
@@ -235,9 +289,20 @@ public static class ScenePacketBuilder
             {
                 text.AppendLine($"  {person.Name}'s usual week: {routine}. They may mention it when it comes up naturally.");
             }
+
+            switch (person.Away)
+            {
+                case PersonAway.Arriving:
+                    text.AppendLine($"  {person.Name} is not here at first: they come in during the scene, as what must happen says.");
+                    break;
+                case PersonAway.Left:
+                    text.AppendLine($"  {person.Name} has left and is not here now. They come back only if what happens next brings them back.");
+                    break;
+            }
         }
 
-        if (packet.Outfit is { } outfit)
+        IEnumerable<PacketOutfit> outfits = packet.Outfit is null ? [] : [packet.Outfit];
+        foreach (var outfit in outfits.Concat(packet.OtherOutfits ?? []))
         {
             text.AppendLine(outfit switch
             {
@@ -351,7 +416,12 @@ public static class ScenePacketBuilder
             }
         }
 
-        text.AppendLine($"- expression: how the main person here looks at the end, one of {string.Join(", ", packet.Expressions)}.");
+        text.AppendLine($"- {ExpressionRule(packet)}");
+        if (PresenceRule(packet) is { } presence)
+        {
+            text.AppendLine($"- {presence}");
+        }
+
         if (packet.Outfit is { Settled: false } offered)
         {
             text.AppendLine($"- {OutfitRule(offered)}");
