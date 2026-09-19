@@ -45,6 +45,7 @@ public static class LlmServiceCollectionExtensions
         services.AddTransient<VoiceWriter>();
         services.AddTransient<ThreadWriter>();
         services.AddTransient<PlanWriter>();
+        services.AddTransient<NameWriter>();
         services.AddTransient<SceneWriter>();
         services.AddTransient<ReactionWriter>();
         services.AddTransient<EpilogueWriter>();

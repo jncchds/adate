@@ -182,6 +182,7 @@ public sealed class WorldService(
     VoiceWriter voiceWriter,
     ThreadWriter threadWriter,
     PlanWriter planWriter,
+    NameWriter nameWriter,
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
     IEmbeddingClient embeddings,
@@ -2405,7 +2406,8 @@ public sealed class WorldService(
         {
             var variants = cast.Skip(1).ToList();
             var assigned = RouteAssigner.Assign(variants, routes);
-            var picked = routes.PickNames(main.Appearance.Subject, variants.Count, identities.Select(i => i.Name).OfType<string>(), main.AnchorSeed ?? 0);
+            var taken = identities.Select(i => i.Name).OfType<string>().ToList();
+            var picked = await NamesForAsync(saveId, setting, main.Appearance.Subject, variants.Count, taken, main.AnchorSeed ?? 0, ct).ConfigureAwait(false);
 
             for (var i = 0; i < variants.Count; i++)
             {
@@ -2435,6 +2437,27 @@ public sealed class WorldService(
         }
 
         return interests;
+    }
+
+    /// <summary>
+    /// Names for the cast: written for this story and in its language, and topped up from the shipped
+    /// pool when the model gave back fewer than there are people to name, or none at all.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> NamesForAsync(
+        SaveId saveId,
+        SettingDefinition setting,
+        string subject,
+        int count,
+        IReadOnlyList<string> taken,
+        long seed,
+        CancellationToken ct)
+    {
+        var language = await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false);
+        var written = await nameWriter.WriteAsync(subject, count, taken, setting.DisplayName, setting.Tone, language, ct).ConfigureAwait(false);
+
+        return written.Count >= count
+            ? [.. written.Take(count)]
+            : [.. written, .. routes.PickNames(subject, count - written.Count, [.. taken, .. written], seed)];
     }
 
     /// <summary>
