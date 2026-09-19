@@ -2879,6 +2879,15 @@ public sealed class WorldService(
     private async Task<SettingDefinition> PlanAsync(
         SaveId saveId, SettingDefinition setting, CancellationToken ct, IProgress<string>? progress)
     {
+        // A save that already has places was laid out before there was planning, and is very likely being
+        // played. Planning it now would rename the streets under someone mid-story, so it keeps the setting
+        // it started with and is simply recorded as laid out.
+        if ((await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false)).Count > 0)
+        {
+            await plans.SaveAsync(saveId, planned: false, [], new Dictionary<string, string>(), ct).ConfigureAwait(false);
+            return setting;
+        }
+
         progress?.Report("Laying out the town…");
 
         var language = await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false);
