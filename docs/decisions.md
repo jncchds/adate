@@ -1789,3 +1789,30 @@ failed picture left a spinner's last words on the stage.
   holds for an answer that is no longer the last one.
 * **The player is asked first**, on both frontends, because writing or drawing again costs a model call and
   the words on screen are replaced by the answer.
+
+## Two people on the stage, and only while the words have them there
+
+User question: do we need to think of a situation where we have multiple LIs on the screen at once? One
+authored beat already did it — `route.introduced.meet` is with the main LI and a variant, the date waving
+an old friend over — and the drawn layer collapsed it to one person, picking the variant, so the date doing
+the introducing was never seen. The user then asked for two figures, with nobody drawn before the words
+mention them and nobody left standing after they go.
+
+* **Two is the maximum, by construction.** `With` comes from the encounter and an invite is a single
+  nullable string, so no scene can hold three. The stage is two slots, not an N-layout, and `Owner()` keeps
+  its meaning: whom the scene is about, for the outfit it picks, its threads, promises and its name tag.
+* **Who is drawn comes from the words, never from the cast.** `Stage.After` takes who the answer says is
+  present; an encounter's new `Arrives` list keeps a late arrival off the stage until the words bring them
+  in, and the writer's `present` (id and expression each) takes anyone who leaves back off it. When the
+  answer says nothing usable — no model, a failed writer, only unknown ids — the scene's own words stand
+  everyone it is with, and a later answer leaves the stage as it was. Presence is never a reason to reject
+  an answer.
+* **The packet says whose face it means.** The expression rule had asked for "the main person here" with
+  two people named; it now names them, which was a real bug for the one beat that has two.
+* **The stage is kept with the scene** (migration 017, `figures_json`), so reopening a save stands the same
+  people in the same clothes at the same expressions. A scene from before reads its one person out of the
+  older columns, and null there means the stage is not known, which stands everyone rather than nobody.
+* **The pictures stay one person each.** Sprites are matted and backgrounds are drawn people-free, so two
+  figures is two sprites composited into two slots; nothing in the Z-Image prompts changed, and they still
+  say "only this one person". Each figure is drawn on its own, so one that fails is named in its own
+  warning while the other still stands there.
