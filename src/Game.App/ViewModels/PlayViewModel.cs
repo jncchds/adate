@@ -148,7 +148,7 @@ public sealed partial class PlayViewModel : PageViewModel
     [ObservableProperty]
     private Bitmap? _phonePortrait;
 
-    /// <summary>People whose number the player has, to text from where they are once a scene's conversation is over.</summary>
+    /// <summary>People whose number the player has, to text from where they are when there is no conversation to interrupt.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContacts))]
     private IReadOnlyList<ChoiceItem> _contacts = [];
@@ -729,8 +729,10 @@ public sealed partial class PlayViewModel : PageViewModel
         CanReply = replies is not null;
         ShowContinue = showContinue;
 
-        // Once a scene's conversation is over the player can text someone from there: anyone but who is here.
-        Contacts = showContinue && !IsPhone && _outcome is { } here
+        // The player can text someone from wherever they are: once a scene's conversation is over, and at a
+        // place with nobody there at all, where there is no conversation to interrupt (user request: with
+        // nothing happening somewhere, texting should be an option). Never whoever is standing right here.
+        Contacts = !IsPhone && _outcome is { } here && (showContinue || (authored is null && here.With.Count == 0))
             ? [.. (_state?.Contacts ?? [])
                 .Where(c => here.With.All(w => Who(w) != c.Name))
                 .Select(c => new ChoiceItem($"Text {c.Name}", TextCommand, new PersonTarget(c.Key, c.Name)))]

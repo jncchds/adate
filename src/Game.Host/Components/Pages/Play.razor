@@ -986,8 +986,10 @@
         _canReply = replies is not null;
         _showContinue = showContinue;
 
-        // Once a scene's conversation is over the player can text someone from there: anyone but who is here.
-        _contacts = showContinue && !_isPhone && _outcome is { } here
+        // The player can text someone from wherever they are: once a scene's conversation is over, and at a
+        // place with nobody there at all, where there is no conversation to interrupt (user request: with
+        // nothing happening somewhere, texting should be an option). Never whoever is standing right here.
+        _contacts = !_isPhone && _outcome is { } here && (showContinue || (authored is null && here.With.Count == 0))
             ? [.. (_state?.Contacts ?? []).Where(c => here.With.All(w => Who(w) != c.Name))]
             : [];
         _messages = _isPhone ? Messages() : [];
