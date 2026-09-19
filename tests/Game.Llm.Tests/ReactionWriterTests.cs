@@ -338,6 +338,18 @@ public class ReactionWriterTests
     }
 
     [Fact]
+    public async Task Agreeing_to_go_now_means_going_as_they_are()
+    {
+        var llm = new FakeLlm(() => Answer("Maya picks up her bag."));
+        await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Ask her to come along", ["adventure"], "Maya takes that in.");
+
+        // Without this the writer agrees to set off now and then has her say she will change first, which the
+        // next scene cannot honour: she walks straight there in the clothes she has on.
+        Assert.Contains("means leaving now, as they are", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("they are agreeing to meet later, not to go now", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_reply_that_only_puts_something_on_leaves_the_clothes_underneath_alone()
     {
         var llm = new FakeLlm(() => """

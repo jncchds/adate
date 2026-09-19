@@ -127,6 +127,9 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                   $"in how many days ({MeetingAgreement.Now} for today, otherwise 1 to {MeetingAgreement.MaxDaysAhead}) " +
                   $"and the time of day: {MeetingAgreement.NowSlot} when they set off together straight away, otherwise Morning, Midday, Afternoon, Evening or Night " +
                   $"(it is {packet.Clock.Slot} now, so later today is a later time with 0 days). Otherwise null.\n"
+                  + "- Setting off together straight away means leaving now, as they are. Nobody stops to change, to fetch " +
+                  "something or to get ready first: if someone needs to do that before they go, they are agreeing to meet later, " +
+                  "not to go now.\n"
                   + "- numbers: true only if, in this reaction, the other person actually gives the player their phone number or the two swap numbers. " +
                   "Whether they do is theirs to decide, from their temper and how well they know the player; they may say no or not yet. Otherwise false.\n"
                   + $"- {ScenePacketBuilder.RoutineRule}\n"

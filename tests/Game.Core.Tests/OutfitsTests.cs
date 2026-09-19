@@ -96,6 +96,28 @@ public class OutfitsTests
     }
 
     [Fact]
+    public void Coming_straight_here_together_the_prose_may_not_talk_about_changing()
+    {
+        var packet = new ScenePacket(
+            "Small town", "Slow summer.", new World.ClockState(3, Scenes.TimeOfDay.Evening), "lookout-hill", "Lookout Hill", "Alex",
+            [new PacketPerson("sam-id", "Samantha", ["Speaks evenly."], RelationshipStage.Acquaintance, null)],
+            [], [], "Samantha is here with the player.", Ceiling.PG13, ["neutral", "smile"],
+            Outfit: Outfits.For(
+                "Samantha", DressCode.Casual, firstDate: false,
+                kept: new Outfit(DressCode.Waterfront, null, "a navy swimsuit, denim shorts"),
+                cameFromDress: null, cameFromName: "The old pier"));
+
+        var text = ScenePacketBuilder.Render(packet);
+
+        Assert.Contains("came straight here with the player and is still in a navy swimsuit, denim shorts", text, StringComparison.Ordinal);
+        Assert.Contains("Do not write them changing, having changed, going to change", text, StringComparison.Ordinal);
+
+        // Someone who did have a slot to themselves is under no such rule.
+        var ownWay = packet with { Outfit = Outfits.For("Samantha", DressCode.Casual, firstDate: false, null, null, null) };
+        Assert.DoesNotContain("came straight here with the player", ScenePacketBuilder.Render(ownWay), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Once_a_scene_has_shown_them_they_can_change_in_front_of_the_player()
     {
         var pier = new Outfit(DressCode.Waterfront, null, "a navy swimsuit, denim shorts");

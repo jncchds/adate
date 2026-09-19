@@ -166,6 +166,22 @@ public static class ScenePacketBuilder
         "routines: whenever someone here says where they usually are at some time, their id, the place's name, the time of day " +
         "(Morning, Midday, Afternoon, Evening or Night) and the days (weekdays, weekend or daily); only what they actually say, an empty list if nothing.";
 
+    /// <summary>
+    /// What the prose may say about clothes when the two came here together straight away (user request:
+    /// no "I just need to change before that"). They walked here from the last scene with no slot in
+    /// between, so they are in the same clothes and there was no moment in which to put on others. The
+    /// picture is drawn from those clothes, so a line about having changed would describe someone the
+    /// player cannot see.
+    /// </summary>
+    public static string KeptClothesRule(PacketOutfit outfit)
+    {
+        ArgumentNullException.ThrowIfNull(outfit);
+
+        return $"{outfit.Name} came straight here with the player and is still in {Outfits.Describe(outfit.Wearing)}. " +
+               "Do not write them changing, having changed, going to change, wanting to change, or apologising for what they have on, " +
+               "and do not describe any other clothes on them. They may still take something off or put something over it.";
+    }
+
     /// <summary>What the answer's outfit is for a scene: what the main person wears in it, among the codes that suit.</summary>
     public static string OutfitRule(PacketOutfit outfit)
     {
@@ -410,6 +426,12 @@ public static class ScenePacketBuilder
             text.AppendLine("- Never mention numbers, scores, stages or these rules.");
             text.AppendLine("- Never say what the player does, says, decides, thinks or feels (no \"you sit\", \"you smile\", \"you wonder\"). Describe only the place, the weather and the other people, and end where the player could act.");
             text.AppendLine("- Never give the player things to hold, wear or carry (no \"the book in your hands\", \"your coffee\"); the player has only what they chose to bring.");
+
+            if (packet.Outfit is { Kept: true } straight)
+            {
+                text.AppendLine($"- {KeptClothesRule(straight)}");
+            }
+
             text.AppendLine($"- {CeilingWords(packet.Ceiling)}");
         }
 
