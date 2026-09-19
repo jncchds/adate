@@ -88,7 +88,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         IReadOnlyList<string>? chosenTags,
         string fallbackText,
         int replyNumber = 1,
-        int maxReplies = 1,
+        int ceiling = 1,
+        int windDownAfter = int.MaxValue,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(packet);
@@ -131,7 +132,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                   + $"- {ScenePacketBuilder.RoutineRule}\n"
                   + (packet.Outfit is { } outfit ? $"- {ScenePacketBuilder.OutfitChangeRule(outfit)}\n" : ""))
             + $"- {ScenePacketBuilder.PlaceRule}\n"
-            + Conversation(replyNumber, maxReplies, alone, packet.VariedChoices)
+            + Conversation(replyNumber, ceiling, windDownAfter, alone, packet.VariedChoices)
             + (packet.LooseEnds is null ? "" : ScenePacketBuilder.ThreadRules + "\n");
 
         var twoPass = settings.TwoPass;
@@ -215,7 +216,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 // The conversation goes on only with usable replies to offer; otherwise this answer closes it,
                 // and the reaction itself is still kept.
                 var nextReasons = new List<string>();
-                var next = replyNumber < maxReplies && response!.Ends is false
+                var next = replyNumber < ceiling && response!.Ends is false
                     ? SceneWriter.CheckChoices(response.Choices, story, cast, nextReasons)
                     : [];
                 var goesOn = next.Count >= SceneWriter.MinChoices && nextReasons.Count == 0;
@@ -340,12 +341,20 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         };
     }
 
-    /// <summary>Whether the moment may go on, and what the player could say next when it does.</summary>
-    private static string Conversation(int replyNumber, int maxReplies, bool alone = false, bool varied = false) =>
-        replyNumber >= maxReplies
+    /// <summary>
+    /// Whether the moment may go on, and what the player could say next when it does. The writer is not
+    /// told a quota, because a conversation should end where it has run out of things to say rather than
+    /// on a count; past <paramref name="windDownAfter"/> it is asked to start looking for that ending, and
+    /// only the ceiling closes a scene outright.
+    /// </summary>
+    private static string Conversation(int replyNumber, int ceiling, int windDownAfter, bool alone = false, bool varied = false) =>
+        replyNumber >= ceiling
             ? "- ends: true. This is the player's last reply here: close the moment naturally, without deciding anything for the player.\n"
               + "- choices: an empty list.\n"
-            : $"- This is the player's reply {replyNumber} of at most {maxReplies} in this scene.\n"
+            : (replyNumber >= windDownAfter
+                ? $"- This moment has been going for {replyNumber} exchanges, which is long. Unless something is genuinely unfinished "
+                  + "between them, start bringing it to a close: let it reach its end rather than cutting it off.\n"
+                : "")
               + (alone
                   ? "- ends: true when there is nothing more to do here for now; otherwise false, ending where the player could do something else.\n"
                     + "- choices: when ends is false, two or three short, different things the player could do next here, in the player's own voice, "

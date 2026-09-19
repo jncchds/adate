@@ -96,6 +96,39 @@ public class OutfitsTests
     }
 
     [Fact]
+    public void Once_a_scene_has_shown_them_they_can_change_in_front_of_the_player()
+    {
+        var pier = new Outfit(DressCode.Waterfront, null, "a navy swimsuit, denim shorts");
+        var arriving = Outfits.For("Samantha", DressCode.Casual, firstDate: false, kept: pier, cameFromDress: null, cameFromName: "The old pier");
+        var settled = arriving with { Settled = true };
+
+        // Arriving with no time to change, she is in what she had on; once the scene has her, the words
+        // may put her in something else, which is the one way clothes change mid-conversation.
+        Assert.Equal(pier, Outfits.Accept(arriving, DressCode.Waterfront, "", "a green cocktail dress"));
+        Assert.Equal(
+            new Outfit(DressCode.Waterfront, null, "a green cocktail dress"),
+            Outfits.Accept(settled, DressCode.Waterfront, "", "a green cocktail dress"));
+    }
+
+    [Fact]
+    public void A_change_that_names_no_clothes_leaves_the_ones_they_have_on()
+    {
+        var settled = Outfits.For("Samantha", DressCode.Waterfront, firstDate: false, null, null, null) with
+        {
+            Wearing = new Outfit(DressCode.Waterfront, null, "a white linen sundress, flat sandals"),
+            Settled = true,
+        };
+
+        // Putting a jacket on must not quietly undress her back to the style pack's wardrobe.
+        Assert.Equal(
+            new Outfit(DressCode.Waterfront, "the player's jacket", "a white linen sundress, flat sandals"),
+            Outfits.Accept(settled, DressCode.Waterfront, "the player's jacket", ""));
+
+        // Changing to another dress code is a real change, so the old clothes do not follow her into it.
+        Assert.Equal(new Outfit(DressCode.Swim), Outfits.Accept(settled, DressCode.Swim, "", ""));
+    }
+
+    [Fact]
     public void The_writer_is_told_the_clothes_a_scene_already_named_rather_than_the_dress_code()
     {
         Assert.Equal(

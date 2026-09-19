@@ -34,20 +34,50 @@ public sealed record SceneExchange(
     bool Fallback = false);
 
 /// <summary>
-/// A scene is a conversation (user feedback: a single reply and a reaction felt hollow). The player can
-/// reply a few times; each answer may offer what to say next, and the last one closes the moment.
+/// A scene is a conversation (user feedback: a single reply and a reaction felt hollow). It runs for as
+/// long as it is going somewhere: the writer says when the moment has run its course, and until it does
+/// each answer offers what to say next.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Nothing here is a budget the player is spending. A conversation used to stop dead at four replies
+/// whatever was being said (user request: do not limit the length, and do not make it endless either), so
+/// the count is no longer shown to the writer as a quota. What ends a scene is the writer judging it over.
+/// </para>
+/// <para>
+/// A ceiling remains, because a writer that never says so would hold the player in one slot forever and
+/// grow the prompt by an exchange every turn: the whole conversation is sent back with each reply. It sits
+/// far above any moment worth writing, and the wind-down below is what a long scene should actually end by,
+/// so reaching the ceiling means something has gone wrong rather than that a scene was long.
+/// </para>
+/// </remarks>
 public static class SceneConversation
 {
-    /// <summary>How many times the player can reply within one scene.</summary>
-    public const int MaxReplies = 4;
+    /// <summary>
+    /// The most replies a scene will take before it is closed whatever the writer says. A runaway guard,
+    /// not a length: a moment that has taken this many turns stopped going anywhere long before.
+    /// </summary>
+    public const int ReplyCeiling = 20;
 
-    /// <summary>How many times the player can reply by text: a few messages between other things, not a scene.</summary>
-    public const int PhoneMaxReplies = 2;
+    /// <summary>The same for texting, which is a few messages between other things rather than a scene.</summary>
+    public const int PhoneReplyCeiling = 8;
 
-    /// <summary>The reply limit for a scene of this encounter.</summary>
-    public static int MaxRepliesFor(string? encounterId) =>
-        encounterId == JsonEncounterCatalog.PhoneId ? PhoneMaxReplies : MaxReplies;
+    /// <summary>
+    /// The reply after which the writer is asked to start bringing the moment to a close. Nothing stops at
+    /// it; it is where a scene that has said what it had to say is nudged towards an ending, so conversations
+    /// finish by running their course rather than by hitting the ceiling.
+    /// </summary>
+    public const int WindDownAfter = 6;
+
+    public const int PhoneWindDownAfter = 3;
+
+    /// <summary>The ceiling for a scene of this encounter.</summary>
+    public static int CeilingFor(string? encounterId) =>
+        encounterId == JsonEncounterCatalog.PhoneId ? PhoneReplyCeiling : ReplyCeiling;
+
+    /// <summary>Where a scene of this encounter starts being nudged towards its ending.</summary>
+    public static int WindDownFor(string? encounterId) =>
+        encounterId == JsonEncounterCatalog.PhoneId ? PhoneWindDownAfter : WindDownAfter;
 
     /// <summary>The scene so far with one more exchange, as the writer reads it for the next reply.</summary>
     public static string Transcript(string sceneText, string reply, string reaction)

@@ -46,8 +46,11 @@ public class TextMessagesTests
     [Fact]
     public void A_conversation_by_text_is_shorter_than_a_scene()
     {
-        Assert.Equal(SceneConversation.PhoneMaxReplies, SceneConversation.MaxRepliesFor(JsonEncounterCatalog.PhoneId));
-        Assert.Equal(SceneConversation.MaxReplies, SceneConversation.MaxRepliesFor(JsonEncounterCatalog.QuietCompanyId));
-        Assert.True(SceneConversation.PhoneMaxReplies < SceneConversation.MaxReplies);
+        Assert.Equal(SceneConversation.PhoneReplyCeiling, SceneConversation.CeilingFor(JsonEncounterCatalog.PhoneId));
+        Assert.Equal(SceneConversation.ReplyCeiling, SceneConversation.CeilingFor(JsonEncounterCatalog.QuietCompanyId));
+        Assert.True(SceneConversation.PhoneReplyCeiling < SceneConversation.ReplyCeiling);
+
+        Assert.Equal(SceneConversation.PhoneWindDownAfter, SceneConversation.WindDownFor(JsonEncounterCatalog.PhoneId));
+        Assert.Equal(SceneConversation.WindDownAfter, SceneConversation.WindDownFor(JsonEncounterCatalog.QuietCompanyId));
     }
 }

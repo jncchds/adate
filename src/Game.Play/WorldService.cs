@@ -1809,7 +1809,7 @@ public sealed class WorldService(
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var written = await reactionWriter.WriteAsync(
-            built.Packet, stored.Text, reply, null, $"{owner?.Name ?? "They"} takes that in.", 1, SceneConversation.MaxRepliesFor(stored.EncounterId), ct).ConfigureAwait(false);
+            built.Packet, stored.Text, reply, null, $"{owner?.Name ?? "They"} takes that in.", 1, SceneConversation.CeilingFor(stored.EncounterId), SceneConversation.WindDownFor(stored.EncounterId), ct).ConfigureAwait(false);
         return new ReplayedReaction(stored.Text, reply, ScenePacketBuilder.Render(built.Packet), written, watch.Elapsed.TotalSeconds);
     }
 
@@ -1904,7 +1904,7 @@ public sealed class WorldService(
 
         var owner = Owner(cast, scene.With);
         var reaction = await reactionWriter.WriteAsync(
-            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.MaxRepliesFor(scene.EncounterId), ct).ConfigureAwait(false);
+            packet, scene.Text, words, chosenTags, $"{owner?.Name ?? "They"} takes that in.", scene.Replies + 1, SceneConversation.CeilingFor(scene.EncounterId), SceneConversation.WindDownFor(scene.EncounterId), ct).ConfigureAwait(false);
 
         // Without a model every answer is the placeholder, and there is nothing to try again: the warning
         // is only for a writer that was asked and failed.
@@ -1958,7 +1958,7 @@ public sealed class WorldService(
         // The scene waits again, holding everything said so far, up to a limit: with what the answer proposes the
         // player could say next, or with nothing proposed, for the player's own words beside Continue.
         var transcript = SceneConversation.Transcript(scene.Text, words, reaction.Text);
-        var stillOpen = scene.Replies + 1 < SceneConversation.MaxRepliesFor(scene.EncounterId);
+        var stillOpen = scene.Replies + 1 < SceneConversation.CeilingFor(scene.EncounterId);
         IReadOnlyList<ProposedChoice> next = stillOpen && !reaction.Fallback && !reaction.Ends ? reaction.Choices ?? [] : [];
         if (stillOpen)
         {

@@ -89,9 +89,17 @@ public static partial class Outfits
     /// rather than costing the scene.
     /// </summary>
     /// <remarks>
-    /// Someone with no time to change keeps exactly what they had on, whatever the answer says. The clothes are
-    /// what is drawn, so letting a scene rename them would put the person in a new outfit between one moment and
-    /// the next, which is the thing the kept outfit exists to prevent.
+    /// <para>
+    /// Someone dressed for a scene with no time to change keeps exactly what they had on, whatever the answer
+    /// says. The clothes are what is drawn, so letting the scene rename them would put the person in a new
+    /// outfit between one moment and the next, which is the thing the kept outfit exists to prevent. They may
+    /// still put something on over them.
+    /// </para>
+    /// <para>
+    /// Once the scene has shown them — <see cref="PacketOutfit.Settled"/> — that no longer holds. A change
+    /// then is one the words have just narrated, someone going to change or coming back in something else, and
+    /// it is the one way clothes change in front of the player.
+    /// </para>
     /// </remarks>
     public static Outfit? Accept(PacketOutfit? offered, string? dress, string? over, string? garments = null)
     {
@@ -106,9 +114,9 @@ public static partial class Outfits
             return null;
         }
 
-        return offered.Kept
+        return offered is { Kept: true, Settled: false }
             ? offered.Wearing with { Over = CleanOver(over) ?? offered.Wearing.Over }
-            : new Outfit(code, CleanOver(over), CleanGarments(garments));
+            : new Outfit(code, CleanOver(over), CleanGarments(garments) ?? (code == offered.Wearing.Dress ? offered.Wearing.Garments : null));
     }
 
     /// <summary>

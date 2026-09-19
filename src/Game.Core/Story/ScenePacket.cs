@@ -201,10 +201,11 @@ public static class ScenePacketBuilder
 
         var codes = string.Join("; ", outfit.Codes.Select(c => $"{c} ({DressCode.Words(c)})"));
         return $"outfit: only if, in this reaction, {outfit.Name} changes what they wear, puts something on or takes it off " +
-               "(puts on a jacket the player offers, takes off a sweater, changes to swim): " +
+               "(puts on a jacket the player offers, takes off a sweater, goes to change, comes back in something else): " +
                $"dress, one of {codes}, over: what they now wear over it in a few English words, or an empty string for nothing, " +
-               $"and garments: the clothes they are now in, in English, naming each with its colour, under {Outfits.MaxGarmentsLength} characters. " +
-               "They are what is drawn, so name only clothes the reaction says they changed into. Otherwise null.";
+               $"and garments: the clothes they are in once they have, in English, naming each with its colour, under {Outfits.MaxGarmentsLength} characters. " +
+               $"{outfit.Name} is drawn again in whatever this names, so set it only when the words above say they changed, " +
+               $"and name the clothes the words describe. They are wearing {Outfits.Describe(outfit.Wearing)}. Otherwise null.";
     }
 
     /// <summary>What the answer's expression is: how the person the scene is about looks, named, for scenes and reactions alike.</summary>

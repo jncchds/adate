@@ -158,11 +158,13 @@ public class ReactionWriterTests
     {
         var llm = new FakeLlm(() => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Ask about her week", "tags": ["attentiveness"] }, { "text": "Tease her again", "tags": ["humour"] }] }""");
 
-        var reaction = await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Tease her about the planner", ["humour"], "Maya takes that in.", replyNumber: 1, maxReplies: 4);
+        var reaction = await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Tease her about the planner", ["humour"], "Maya takes that in.", replyNumber: 1, ceiling: 20, windDownAfter: 6);
 
         Assert.False(reaction.Ends);
         Assert.Equal(["Ask about her week", "Tease her again"], reaction.Choices!.Select(c => c.Text));
-        Assert.Contains("reply 1 of at most 4", llm.Requests[0].User, StringComparison.Ordinal);
+        // Nothing tells the writer how many replies are left: it ends the moment when the moment is over.
+        Assert.DoesNotContain("reply 1 of", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.DoesNotContain("has been going for", llm.Requests[0].User, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -171,8 +173,8 @@ public class ReactionWriterTests
         var last = new FakeLlm(() => """{ "text": "Maya waves goodbye.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Wave back", "tags": ["kindness"] }, { "text": "Call after her", "tags": ["adventure"] }] }""");
         var unusable = new FakeLlm(() => """{ "text": "Maya laughs.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Say something", "tags": ["made-up"] }] }""");
 
-        var atTheEnd = await Writer(last).WriteAsync(Packet(), "Maya looks up.", "Say goodbye", ["kindness"], "Maya takes that in.", replyNumber: 4, maxReplies: 4);
-        var withoutReplies = await Writer(unusable).WriteAsync(Packet(), "Maya looks up.", "Say hi", ["kindness"], "Maya takes that in.", replyNumber: 1, maxReplies: 4);
+        var atTheEnd = await Writer(last).WriteAsync(Packet(), "Maya looks up.", "Say goodbye", ["kindness"], "Maya takes that in.", replyNumber: 20, ceiling: 20, windDownAfter: 6);
+        var withoutReplies = await Writer(unusable).WriteAsync(Packet(), "Maya looks up.", "Say hi", ["kindness"], "Maya takes that in.", replyNumber: 1, ceiling: 20, windDownAfter: 6);
 
         Assert.True(atTheEnd.Ends);
         Assert.Empty(atTheEnd.Choices ?? []);
@@ -269,5 +271,91 @@ public class ReactionWriterTests
         Assert.True(reaction.Fallback);
         Assert.Equal("Maya takes that in.", reaction.Text);
         Assert.Equal(["attentiveness"], reaction.Tags);
+    }
+
+    [Fact]
+    public async Task A_conversation_goes_on_for_as_long_as_the_writer_keeps_it_open()
+    {
+        // Well past where a scene used to stop dead, and still going because the writer says it is.
+        var llm = new FakeLlm(() => """{ "text": "Maya leans in.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Ask what she means", "tags": ["attentiveness"] }, { "text": "Wait", "tags": ["stability"] }] }""");
+
+        var reaction = await Writer(llm).WriteAsync(
+            Packet(), "Maya looks up.", "Ask again", ["attentiveness"], "Maya takes that in.", replyNumber: 12, ceiling: 20, windDownAfter: 6);
+
+        Assert.False(reaction.Ends);
+        Assert.Equal(2, reaction.Choices!.Count);
+    }
+
+    [Fact]
+    public async Task A_long_moment_is_asked_to_find_its_ending_rather_than_cut_off()
+    {
+        var llm = new FakeLlm(() => """{ "text": "Maya gathers her things.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Walk out with her", "tags": ["kindness"] }, { "text": "Stay a while", "tags": ["stability"] }] }""");
+
+        await Writer(llm).WriteAsync(Packet(), "Maya looks up.", "Say so", ["kindness"], "Maya takes that in.", replyNumber: 7, ceiling: 20, windDownAfter: 6);
+
+        Assert.Contains("been going for 7 exchanges", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("start bringing it to a close", llm.Requests[0].User, StringComparison.Ordinal);
+
+        // A nudge, not a wall: it is still offered the choice of going on.
+        Assert.Contains("ends: true when the moment has run its course", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_ceiling_closes_a_moment_that_would_otherwise_never_end()
+    {
+        var llm = new FakeLlm(() => """{ "text": "Maya keeps talking.", "expression": "smile", "tags": [], "ends": false, "choices": [{ "text": "Go on", "tags": ["stability"] }, { "text": "Answer", "tags": ["humour"] }] }""");
+
+        var reaction = await Writer(llm).WriteAsync(
+            Packet(), "Maya looks up.", "Say more", ["stability"], "Maya takes that in.", replyNumber: 20, ceiling: 20, windDownAfter: 6);
+
+        Assert.True(reaction.Ends);
+        Assert.Empty(reaction.Choices ?? []);
+        Assert.Contains("last reply", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Someone_can_change_their_clothes_in_the_middle_of_a_conversation()
+    {
+        var llm = new FakeLlm(() => """
+            { "text": "Maya comes back down in a coat.", "expression": "smile", "tags": [], "meet": null, "numbers": false, "ends": true, "choices": [],
+              "outfit": { "dress": "casual", "over": "", "garments": "a long charcoal wool coat, black boots" } }
+            """);
+
+        var settled = Outfits.For("Maya", DressCode.Casual, firstDate: false, null, null, null) with
+        {
+            Wearing = new Outfit(DressCode.Casual, null, "a grey knit sweater, jeans"),
+            Settled = true,
+        };
+
+        var reaction = await Writer(llm).WriteAsync(
+            Packet() with { Outfit = settled }, "Maya looks up.", "Offer to walk her out", ["kindness"], "Maya takes that in.");
+
+        Assert.Equal(new Outfit(DressCode.Casual, null, "a long charcoal wool coat, black boots"), reaction.Outfit);
+
+        // The writer is told what she has on now, and that naming clothes draws her again.
+        Assert.Contains("a grey knit sweater, jeans", llm.Requests[0].User, StringComparison.Ordinal);
+        Assert.Contains("drawn again in whatever this names", llm.Requests[0].User, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_reply_that_only_puts_something_on_leaves_the_clothes_underneath_alone()
+    {
+        var llm = new FakeLlm(() => """
+            { "text": "Maya pulls the jacket round her shoulders.", "expression": "smile", "tags": [], "meet": null, "numbers": false, "ends": true, "choices": [],
+              "outfit": { "dress": "casual", "over": "the player's denim jacket", "garments": "" } }
+            """);
+
+        var settled = Outfits.For("Maya", DressCode.Casual, firstDate: false, null, null, null) with
+        {
+            Wearing = new Outfit(DressCode.Casual, null, "a grey knit sweater, jeans"),
+            Settled = true,
+        };
+
+        var reaction = await Writer(llm).WriteAsync(
+            Packet() with { Outfit = settled }, "Maya looks up.", "Offer your jacket", ["kindness"], "Maya takes that in.");
+
+        Assert.Equal(
+            new Outfit(DressCode.Casual, "the player's denim jacket", "a grey knit sweater, jeans"),
+            reaction.Outfit);
     }
 }
