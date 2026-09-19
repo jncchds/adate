@@ -2,9 +2,14 @@ using System.Text.RegularExpressions;
 
 namespace Game.Core.Story;
 
-/// <summary>What someone wears in a scene: a <see cref="DressCode"/>, and something put on over it.</summary>
+/// <summary>What someone wears in a scene: a <see cref="DressCode"/>, the clothes themselves, and something put on over them.</summary>
 /// <param name="Over">A few English words for something worn over the outfit, such as "the player's denim jacket"; null for nothing.</param>
-public sealed record Outfit(string Dress, string? Over = null);
+/// <param name="Garments">
+/// The clothes in a few English words, as the writer named them, such as "a white linen sundress, flat sandals".
+/// Null for a scene written before the writer named them, or one whose answer named nothing usable, and then the
+/// style pack's wardrobe dresses them for the <paramref name="Dress"/> as it always did.
+/// </param>
+public sealed record Outfit(string Dress, string? Over = null, string? Garments = null);
 
 /// <summary>What someone in a scene can be wearing, as the writer is told it.</summary>
 /// <param name="Name">Who wears it.</param>
@@ -25,6 +30,9 @@ public sealed record PacketOutfit(
 public static partial class Outfits
 {
     public const int MaxOverLength = 60;
+
+    /// <summary>Long enough for two or three garments with their colours and materials, short enough to stay a list of clothes.</summary>
+    public const int MaxGarmentsLength = 120;
 
     /// <param name="placeDress">The place type's dress code.</param>
     /// <param name="firstDate">Whether the scene is a first date, which dresses up where people dress up anyway.</param>
@@ -76,10 +84,16 @@ public static partial class Outfits
     }
 
     /// <summary>
-    /// The outfit an answer gives, when it is one of the codes offered: its over cleaned to a short run of words.
-    /// Null when there is no answer or it names a code not offered, which keeps what they wear rather than costing the scene.
+    /// The outfit an answer gives, when it is one of the codes offered: its clothes and its over cleaned to short
+    /// runs of words. Null when there is no answer or it names a code not offered, which keeps what they wear
+    /// rather than costing the scene.
     /// </summary>
-    public static Outfit? Accept(PacketOutfit? offered, string? dress, string? over)
+    /// <remarks>
+    /// Someone with no time to change keeps exactly what they had on, whatever the answer says. The clothes are
+    /// what is drawn, so letting a scene rename them would put the person in a new outfit between one moment and
+    /// the next, which is the thing the kept outfit exists to prevent.
+    /// </remarks>
+    public static Outfit? Accept(PacketOutfit? offered, string? dress, string? over, string? garments = null)
     {
         if (offered is null || string.IsNullOrWhiteSpace(dress))
         {
@@ -87,7 +101,33 @@ public static partial class Outfits
         }
 
         var code = offered.Codes.FirstOrDefault(c => string.Equals(c, dress.Trim(), StringComparison.OrdinalIgnoreCase));
-        return code is null ? null : new Outfit(code, CleanOver(over));
+        if (code is null)
+        {
+            return null;
+        }
+
+        return offered.Kept
+            ? offered.Wearing with { Over = CleanOver(over) ?? offered.Wearing.Over }
+            : new Outfit(code, CleanOver(over), CleanGarments(garments));
+    }
+
+    /// <summary>
+    /// The clothes as they are stored and drawn: spaces collapsed, cut at a comma or a space to fit
+    /// <see cref="MaxGarmentsLength"/>, and only words; null when nothing usable is left, which leaves the
+    /// person to the style pack's wardrobe. They reach the sprite prompt through the content gate, which
+    /// filters them phrase by phrase.
+    /// </summary>
+    public static string? CleanGarments(string? garments)
+    {
+        var text = Spaces().Replace(garments?.Trim() ?? "", " ").Trim(' ', ',', '.', ';');
+        if (text.Length > MaxGarmentsLength)
+        {
+            var cut = text[..(MaxGarmentsLength + 1)];
+            var at = cut.LastIndexOf(',') is > 0 and var comma ? comma : cut.LastIndexOf(' ');
+            text = (at > 0 ? cut[..at] : text[..MaxGarmentsLength]).Trim(' ', ',', '.', ';');
+        }
+
+        return text.Length > 0 && Words().IsMatch(text) ? text : null;
     }
 
     /// <summary>
@@ -108,11 +148,14 @@ public static partial class Outfits
         return text.Length > 0 && Words().IsMatch(text) ? text : null;
     }
 
-    /// <summary>The outfit in words for the writer: "light summer clothes, not swimwear, with a denim jacket over it".</summary>
+    /// <summary>
+    /// The outfit in words for the writer: the clothes themselves once a scene has named them ("a white linen
+    /// sundress, flat sandals"), and otherwise what the dress code asks for ("light summer clothes, not swimwear").
+    /// </summary>
     public static string Describe(Outfit outfit)
     {
         ArgumentNullException.ThrowIfNull(outfit);
-        return DressCode.Words(outfit.Dress) + (outfit.Over is { } over ? $", with {over} over it" : "");
+        return (outfit.Garments ?? DressCode.Words(outfit.Dress)) + (outfit.Over is { } over ? $", with {over} over it" : "");
     }
 
     [GeneratedRegex(@"\s+")]

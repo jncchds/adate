@@ -63,6 +63,66 @@ public class OutfitsTests
     }
 
     [Fact]
+    public void The_clothes_an_answer_names_are_kept_as_a_short_run_of_words()
+    {
+        var offered = Outfits.For("Samantha", DressCode.Waterfront, firstDate: false, null, null, null);
+
+        Assert.Equal(
+            new Outfit(DressCode.Waterfront, null, "a white linen sundress, flat sandals"),
+            Outfits.Accept(offered, "waterfront", "", "  a white linen   sundress, flat sandals. "));
+
+        // What is drawn is built from these, so a prompt injected as clothes is dropped like any other.
+        Assert.Null(Outfits.CleanGarments("<lora:x>"));
+        Assert.Null(Outfits.CleanGarments("   "));
+
+        var cut = Outfits.CleanGarments(string.Join(", ", Enumerable.Repeat("a woolly scarf", 20)))!;
+        Assert.True(cut.Length <= Outfits.MaxGarmentsLength);
+        Assert.EndsWith("scarf", cut, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Someone_with_no_time_to_change_keeps_the_very_clothes_they_had_on()
+    {
+        var pier = new Outfit(DressCode.Waterfront, null, "a navy swimsuit, denim shorts");
+        var offered = Outfits.For("Samantha", DressCode.Casual, firstDate: false, kept: pier, cameFromDress: null, cameFromName: "The old pier");
+
+        Assert.True(offered.Kept);
+
+        // The answer may still put something on over them, but it cannot dress her again.
+        Assert.Equal(pier, Outfits.Accept(offered, DressCode.Waterfront, "", "a green cocktail dress"));
+        Assert.Equal(
+            pier with { Over = "the player's jacket" },
+            Outfits.Accept(offered, DressCode.Waterfront, "the player's jacket", "a green cocktail dress"));
+    }
+
+    [Fact]
+    public void The_writer_is_told_the_clothes_a_scene_already_named_rather_than_the_dress_code()
+    {
+        Assert.Equal(
+            "a white linen sundress, flat sandals, with a borrowed jacket over it",
+            Outfits.Describe(new Outfit(DressCode.Waterfront, "a borrowed jacket", "a white linen sundress, flat sandals")));
+
+        Assert.Equal(
+            "light summer clothes, not swimwear",
+            Outfits.Describe(new Outfit(DressCode.Waterfront)));
+    }
+
+    [Fact]
+    public void The_writer_is_asked_to_name_the_clothes_unless_there_was_no_time_to_change()
+    {
+        var offered = Outfits.For("Samantha", DressCode.Waterfront, firstDate: false, null, null, null);
+        Assert.Contains("garments: the clothes themselves", ScenePacketBuilder.OutfitRule(offered), StringComparison.Ordinal);
+        Assert.Contains("drawn wearing", ScenePacketBuilder.OutfitRule(offered), StringComparison.Ordinal);
+
+        var kept = Outfits.For(
+            "Samantha", DressCode.Casual, firstDate: false,
+            kept: new Outfit(DressCode.Waterfront, null, "a navy swimsuit, denim shorts"), cameFromDress: null, cameFromName: null);
+
+        Assert.Contains("garments: leave out", ScenePacketBuilder.OutfitRule(kept), StringComparison.Ordinal);
+        Assert.Contains("a navy swimsuit, denim shorts", ScenePacketBuilder.OutfitRule(kept), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_writer_hears_what_they_still_wear_and_is_asked_to_pick_among_the_codes()
     {
         var packet = new ScenePacket(

@@ -231,7 +231,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                             p.Type ?? "", p.Name.Trim(), p.Details ?? [], string.IsNullOrWhiteSpace(p.Owner) ? null : p.Owner.Trim(), p.Look)),
                     ],
                     Routines: [.. (response.Routines ?? []).Where(r => r is not null)],
-                    Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over),
+                    Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
                     Present: SceneWriter.Present(packet, response.Present));
             }
 

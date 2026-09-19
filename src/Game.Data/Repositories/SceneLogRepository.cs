@@ -19,7 +19,8 @@ public sealed class SceneLogRepository(Database database)
 
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
-        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback, figures_json
+        speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback, figures_json,
+        dress_garments
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -151,7 +152,13 @@ public sealed class SceneLogRepository(Database database)
     public Task SetOutfitAsync(long sceneId, Outfit outfit, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(outfit);
-        return UpdateAsync(sceneId, "dress = $dress, dress_over = $over", ct, ("$dress", outfit.Dress), ("$over", outfit.Over));
+        return UpdateAsync(
+            sceneId,
+            "dress = $dress, dress_over = $over, dress_garments = $garments",
+            ct,
+            ("$dress", outfit.Dress),
+            ("$over", outfit.Over),
+            ("$garments", outfit.Garments));
     }
 
     /// <summary>Adds one exchange of the conversation to the end, in a single statement.</summary>
@@ -209,7 +216,7 @@ public sealed class SceneLogRepository(Database database)
         string? Text(int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
 
         var character = Text(9) is { } id ? Guid.Parse(id) : (Guid?)null;
-        var outfit = Text(15) is { } dress ? new Outfit(dress, Text(16)) : null;
+        var outfit = Text(15) is { } dress ? new Outfit(dress, Text(16), Text(19)) : null;
 
         // Scenes from before the stage was kept stood their one person in the older columns; with nobody there either,
         // who stands on the stage is not known.

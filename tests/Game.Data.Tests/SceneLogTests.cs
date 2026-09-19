@@ -50,6 +50,12 @@ public class SceneLogTests
 
         await log.SetOutfitAsync(id, new Outfit(DressCode.Waterfront));
         Assert.Equal(new Outfit(DressCode.Waterfront), (await log.ListAsync(save.Id)).Single().Outfit);
+
+        // The clothes the words named are what the sprite is drawn from, so they are kept with the scene.
+        await log.SetOutfitAsync(id, new Outfit(DressCode.Waterfront, null, "a white linen sundress, flat sandals"));
+        Assert.Equal(
+            new Outfit(DressCode.Waterfront, null, "a white linen sundress, flat sandals"),
+            (await log.GetOpenAsync(save.Id))!.Outfit);
     }
 
     [Fact]

@@ -1184,8 +1184,8 @@ public sealed class WorldService(
 
             try
             {
-                var (dress, layer) = scene is null ? (DressCode.Casual, null) : await WardrobeForAsync(saveId, scene, figure, ct).ConfigureAwait(false);
-                paths.Add(await studio.GenerateSceneSpriteAsync(saveId, figure.CharacterId, figure.Aesthetic ?? "", figure.Expression, dress, layer).ConfigureAwait(false));
+                var (dress, layer, garments) = scene is null ? (DressCode.Casual, null, null) : await WardrobeForAsync(saveId, scene, figure, ct).ConfigureAwait(false);
+                paths.Add(await studio.GenerateSceneSpriteAsync(saveId, figure.CharacterId, figure.Aesthetic ?? "", figure.Expression, dress, layer, garments).ConfigureAwait(false));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -1251,7 +1251,7 @@ public sealed class WorldService(
     /// What someone in a scene wears (user feedback: the same outfit everywhere looked wrong): what the scene or its
     /// conversation said, or else what suits the moment, with a weather layer outdoors unless something is worn over it.
     /// </summary>
-    private async Task<(string Dress, string? Layer)> WardrobeForAsync(SaveId saveId, StoredScene scene, SceneFigure figure, CancellationToken ct)
+    private async Task<(string Dress, string? Layer, string? Garments)> WardrobeForAsync(SaveId saveId, StoredScene scene, SceneFigure figure, CancellationToken ct)
     {
         var characterId = figure.CharacterId;
         var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
@@ -1267,10 +1267,10 @@ public sealed class WorldService(
         if (outfit.Over is not null || outfit.Dress is DressCode.Swim
             || await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false) is not { } place)
         {
-            return (outfit.Dress, outfit.Over);
+            return (outfit.Dress, outfit.Over, outfit.Garments);
         }
 
-        return (outfit.Dress, placeTypes.Get(place.TypeId).OutfitLayers?.GetValueOrDefault(WeatherOn(saveId, setting, scene.Clock.Day).Id));
+        return (outfit.Dress, placeTypes.Get(place.TypeId).OutfitLayers?.GetValueOrDefault(WeatherOn(saveId, setting, scene.Clock.Day).Id), outfit.Garments);
     }
 
     /// <summary>

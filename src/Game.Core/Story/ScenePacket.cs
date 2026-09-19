@@ -177,11 +177,21 @@ public static class ScenePacketBuilder
             : "";
         var over = outfit.Wearing.Over is { } still ? $"\"{still}\" while they still have it on, or " : "";
 
+        // The clothes named here are drawn, so what the words say and what the player sees are the same thing
+        // (user feedback: the picture showed shorts and a t-shirt while the words described a dress). Someone
+        // with no time to change is not asked for clothes at all: they keep exactly the ones they had on.
+        var garments = outfit.Kept
+            ? $" garments: leave out; {outfit.Name} is still in {Outfits.Describe(outfit.Wearing) } and had no time to change."
+            : $" garments: the clothes themselves, in English, a few plain phrases naming each one with its colour " +
+              $"(\"a cream linen sundress, flat sandals\"), under {Outfits.MaxGarmentsLength} characters. They are what " +
+              $"{outfit.Name} is drawn wearing, so describe these clothes and no others in the prose.";
+
         return $"outfit: what {outfit.Name} wears here" +
                (outfit.Kept ? "" : ", fitting where they have come from, this place and what they are doing") +
                $". dress: one of {codes}. " +
                (outfit.Kept ? $"Keep {outfit.Wearing.Dress}: there was no time to change" : $"Usually {outfit.Wearing.Dress}") + swim +
-               $". over: {over}anything worn over it in a few English words (a cardigan, a towel round the shoulders), or an empty string.";
+               $". over: {over}anything worn over it in a few English words (a cardigan, a towel round the shoulders), or an empty string." +
+               garments;
     }
 
     /// <summary>What the answer's outfit is for a reaction: a change only, such as putting on a jacket the player offers.</summary>
@@ -192,8 +202,9 @@ public static class ScenePacketBuilder
         var codes = string.Join("; ", outfit.Codes.Select(c => $"{c} ({DressCode.Words(c)})"));
         return $"outfit: only if, in this reaction, {outfit.Name} changes what they wear, puts something on or takes it off " +
                "(puts on a jacket the player offers, takes off a sweater, changes to swim): " +
-               $"dress, one of {codes}, and over: what they now wear over it in a few English words, or an empty string for nothing. " +
-               "Otherwise null.";
+               $"dress, one of {codes}, over: what they now wear over it in a few English words, or an empty string for nothing, " +
+               $"and garments: the clothes they are now in, in English, naming each with its colour, under {Outfits.MaxGarmentsLength} characters. " +
+               "They are what is drawn, so name only clothes the reaction says they changed into. Otherwise null.";
     }
 
     /// <summary>What the answer's expression is: how the person the scene is about looks, named, for scenes and reactions alike.</summary>

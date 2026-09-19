@@ -19,7 +19,7 @@ public sealed record ProposedRoutine(string Who, string Place, string Slot, stri
 public sealed record SceneResponseChoice(string Text, IReadOnlyList<string>? Tags);
 
 /// <summary>What the main person wears, unchecked: C# keeps it only when the dress is one it offered.</summary>
-public sealed record SceneResponseOutfit(string? Dress, string? Over);
+public sealed record SceneResponseOutfit(string? Dress, string? Over, string? Garments = null);
 
 /// <summary>Someone the answer says is here at its end, and how they look, unchecked.</summary>
 public sealed record SceneResponsePresence(string Id, string? Expression);
@@ -243,7 +243,7 @@ public sealed class SceneWriter(
                         packet.LooseEnds is null ? null : StoryThreads.Keep(response.Threads),
                         Settled(packet, response.Resolved),
                         [.. (response.Routines ?? []).Where(r => r is not null)],
-                        Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over),
+                        Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
                         Present(packet, response.Present));
                 }
 
@@ -425,8 +425,9 @@ public sealed class SceneWriter(
         {
             ["dress"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. outfit.Codes.Select(c => (JsonNode)JsonValue.Create(c)!)]) },
             ["over"] = new JsonObject { ["type"] = "string" },
+            ["garments"] = new JsonObject { ["type"] = "string" },
         },
-        ["required"] = new JsonArray("dress", "over"),
+        ["required"] = new JsonArray("dress", "over", "garments"),
         ["additionalProperties"] = false,
     };
 

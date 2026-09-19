@@ -282,11 +282,15 @@ public sealed class CharacterStudio(
     /// </remarks>
     /// <param name="dress">A <see cref="DressCode"/>: what the aesthetic wears for the place or the occasion.</param>
     /// <param name="layer">Something worn over the outfit for the weather, such as a rain jacket; null for none.</param>
+    /// <param name="garments">
+    /// The clothes the words put them in, as the writer named them; null leaves them to the style pack's
+    /// wardrobe for <paramref name="dress"/>, which is what a scene written before the writer named clothes has.
+    /// </param>
     public Task<string> GenerateSceneSpriteAsync(
-        SaveId saveId, Guid characterId, string aesthetic, string expression, string dress = DressCode.Casual, string? layer = null) =>
+        SaveId saveId, Guid characterId, string aesthetic, string expression, string dress = DressCode.Casual, string? layer = null, string? garments = null) =>
         jobs.RunAsync(
-            $"scene-sprite:{characterId}:{aesthetic}:{expression}:{dress}:{layer}",
-            ct => GenerateSceneSpriteCoreAsync(saveId, characterId, aesthetic, expression, dress, layer, ct));
+            $"scene-sprite:{characterId}:{aesthetic}:{expression}:{dress}:{layer}:{garments}",
+            ct => GenerateSceneSpriteCoreAsync(saveId, characterId, aesthetic, expression, dress, layer, garments, ct));
 
     private async Task<string> GenerateSceneSpriteCoreAsync(
         SaveId saveId,
@@ -295,6 +299,7 @@ public sealed class CharacterStudio(
         string expression,
         string dress,
         string? layer,
+        string? garments,
         CancellationToken ct)
     {
         var character = await characters.GetAsync(characterId, ct).ConfigureAwait(false)
@@ -304,9 +309,10 @@ public sealed class CharacterStudio(
         var compiler = compilers.For(pack.Dialect);
         var subject = pack.SubjectFor(character.Appearance.Subject);
 
-        // Casual with no layer is the everyday outfit, the same prompt as before dress codes, so sprites
-        // already drawn stay valid.
-        IReadOnlyList<string> outfit = subject.OutfitFor(aesthetic, dress);
+        // The clothes the words named are what is drawn, so the picture shows the outfit the scene describes
+        // (user feedback: a girl in shorts and a t-shirt under prose about a dress). Without them, casual with
+        // no layer is the everyday outfit, the same prompt as before dress codes, so sprites already drawn stay valid.
+        IReadOnlyList<string> outfit = Garments(garments) ?? subject.OutfitFor(aesthetic, dress);
         if (!string.IsNullOrWhiteSpace(layer))
         {
             outfit = [layer, .. outfit];
@@ -338,11 +344,26 @@ public sealed class CharacterStudio(
 
         await cache.RecordSpriteAsync(
             image.Hash, saveId, character.Id,
-            $"{(aesthetic.Length > 0 ? aesthetic : "default")}/{dress}{(string.IsNullOrWhiteSpace(layer) ? "" : "+" + layer)}",
+            $"{(aesthetic.Length > 0 ? aesthetic : "default")}/{dress}{(string.IsNullOrWhiteSpace(garments) ? "" : ":" + garments)}{(string.IsNullOrWhiteSpace(layer) ? "" : "+" + layer)}",
             "standing-full", expression, approved.Ceiling, image.RelativePath, ct)
             .ConfigureAwait(false);
 
         return image.RelativePath;
+    }
+
+    /// <summary>
+    /// The clothes a scene named, split into the phrases a prompt is built from, or null when it named none.
+    /// Each phrase goes through the content gate on its own, as an outfit's layer does.
+    /// </summary>
+    private static IReadOnlyList<string>? Garments(string? garments)
+    {
+        if (Game.Core.Story.Outfits.CleanGarments(garments) is not { } clean)
+        {
+            return null;
+        }
+
+        string[] phrases = [.. clean.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        return phrases.Length == 0 ? null : phrases;
     }
 
     // ---------------------------------------------------------------- backgrounds
