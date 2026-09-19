@@ -734,7 +734,7 @@ public sealed class WorldService(
                 $"narration: {await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false) ?? "English"}",
                 $"clock: day {play.Clock.Day} (weekday {CharacterSchedule.Weekday(play.Clock.Day)}), {play.Clock.Slot}",
                 $"opening: {play.Opening?.Id ?? "-"}   over: {play.Over}   ending: {(play.Ending is null ? "-" : "reached")}   offer: {(play.EndingOffer is null ? "-" : "open")}",
-                $"job: {play.Job?.Title ?? "-"}   on shift now: {play.OnShift}",
+                $"job: {(play.Job is { } shown ? JobText(shown.Title, PlaceName(play.Setting, play.KnownPlaces, shown.Place)) : "-")}   on shift now: {play.OnShift}",
                 $"pending choice: {(play.Pending is null ? "-" : string.Join(" | ", play.Pending.Choices.Select(c => c.Id)))}",
                 $"pending scene: {(pendingScene is null ? "-" : $"{pendingScene.EncounterId} with {string.Join(", ", pendingScene.With.Select(NameOf))}, replies {pendingScene.Replies}")}",
             ]),
