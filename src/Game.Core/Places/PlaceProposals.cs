@@ -80,6 +80,11 @@ public static partial class PlaceProposals
             reasons.Add($"The look of '{name}' is longer than {MaxLookLength} characters; give a few short visual phrases.");
         }
 
+        if (!IsDrawable(proposal.Look))
+        {
+            reasons.Add($"The look of '{name}' must be written in English: it is drawn, not shown to the player.");
+        }
+
         return reasons;
     }
 
@@ -127,6 +132,14 @@ public static partial class PlaceProposals
             Look: CleanLook(proposal.Look));
     }
 
+    /// <summary>
+    /// Whether a look can be drawn: it reaches an image model that reads English, so it has to be written in
+    /// the Latin alphabet however the story's names are written. A story in another language otherwise gets
+    /// places described to the image model in words it cannot read, and the picture ignores them.
+    /// </summary>
+    public static bool IsDrawable(string? look) =>
+        string.IsNullOrWhiteSpace(look) || !NonLatinLetter().IsMatch(look);
+
     /// <summary>Names that differ only by case, punctuation, spacing or a leading "the" are the same place.</summary>
     public static bool SameName(string a, string b)
     {
@@ -147,8 +160,17 @@ public static partial class PlaceProposals
         return slug.Length == 0 ? "place" : slug;
     }
 
-    [GeneratedRegex("[^a-z0-9]+")]
+    /// <summary>
+    /// Anything that is not a letter, a mark or a digit, in any script. Latin-only here would reduce every
+    /// name in another alphabet to nothing, which made all of them the same place and all of their ids
+    /// the same slug (found with a Russian story, where no two places could be told apart).
+    /// </summary>
+    [GeneratedRegex(@"[^\p{L}\p{M}\p{N}]+")]
     private static partial Regex NotSlug();
+
+    /// <summary>A letter that is not Latin: the look is English, so any of these means it was written in another script.</summary>
+    [GeneratedRegex(@"[\p{L}-[\p{IsBasicLatin}\p{IsLatin-1Supplement}\p{IsLatinExtended-A}]]")]
+    private static partial Regex NonLatinLetter();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();

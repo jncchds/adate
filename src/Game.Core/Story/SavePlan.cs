@@ -151,6 +151,12 @@ public static class SavePlans
             {
                 reasons.Add($"The look of '{place.Role}' must be a few short visual phrases in English, under {PlaceProposals.MaxLookLength} characters.");
             }
+            else if (!PlaceProposals.IsDrawable(place.Look))
+            {
+                reasons.Add(
+                    $"The look of '{place.Role}' is not in English. Names are in the story's language, but every look is English, " +
+                    "because it is read by an image model and never shown to the player.");
+            }
         }
 
         foreach (var missing in setting.Places.Select(p => p.Id).Where(id => !seen.Contains(id)))

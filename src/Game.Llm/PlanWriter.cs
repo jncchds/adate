@@ -272,7 +272,7 @@ public sealed class PlanWriter(ILlmClient llm, IOptions<LlmOptions> options)
             - `type`: one of the place types offered for that role.
             - `name`: what people here call it, 1 to {Game.Core.Places.PlaceProposals.MaxNameLength} characters. Specific and local, not "The Cafe": somewhere with an owner, a history or a joke behind the name. Every place needs its own name.
             - `details`: detail ids of the type you chose, or an empty list.
-            - `look`: a few short visual phrases in English for how this one looks, under {MaxLookLength} characters, such as "converted church, stained glass, mismatched chairs". It is drawn, never shown to the player. An empty string leaves it to the type.
+            - `look`: a few short visual phrases for how this one looks, under {MaxLookLength} characters, such as "converted church, stained glass, mismatched chairs". **Always in English, whatever language the names are in**: it is fed to an image model that reads only English, and the player never sees it. An empty string leaves it to the type.
 
             ### events
             {SavePlans.MinEvents} to {SavePlans.MaxEvents} dated things the whole town turns up to, each on its own day between day {SavePlans.EventMargin} and day {setting.Days - SavePlans.EventMargin}, spread across the story with the largest late. Each has:
@@ -309,7 +309,10 @@ public sealed class PlanWriter(ILlmClient llm, IOptions<LlmOptions> options)
                 ## Language
                 Write every `name`, every event name, every thread and every rewritten encounter text in {language}, and
                 name places as they would really be named in {language}, not translated from English.
-                Keep everything else exactly as listed, in English: every `role`, `type`, `detail`, `id`, `time` and `look`.
+                Keep everything else exactly as listed, in English: every `role`, `type`, `detail`, `id` and `time`.
+                Every `look` is English too, even though the name beside it is in {language}: a look is never read by
+                the player, only by an image model that understands English alone. A place called in {language} with an
+                English look is exactly right.
                 """);
         }
 

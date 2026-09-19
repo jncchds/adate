@@ -148,6 +148,27 @@ public class SavePlanTests
     }
 
     [Fact]
+    public void Places_named_in_the_storys_own_alphabet_pass_with_an_English_look()
+    {
+        Assert.Empty(Check(Plan([
+            new PlannedPlace("corner", "diner", "Кофейня «У Рози»", ["jukebox"], "rustic brick interior, cozy seating"),
+            new PlannedPlace("late", "diner", "Ночная забегаловка", [], "neon sign, chrome stools"),
+        ])));
+    }
+
+    [Fact]
+    public void A_look_the_image_model_cannot_read_is_refused()
+    {
+        var reasons = Check(Plan([
+            new PlannedPlace("corner", "diner", "Кофейня «У Рози»", [], "краснокирпичные стены, большие окна"),
+            new PlannedPlace("late", "diner", "Ночная забегаловка", [], "neon sign"),
+        ]));
+
+        Assert.Contains(reasons, r => r.Contains("look of 'corner' is not in English", StringComparison.Ordinal));
+        Assert.DoesNotContain(reasons, r => r.Contains("'late'", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void An_event_outside_the_story_or_sharing_a_day_is_refused()
     {
         var reasons = Check(Plan(events:
