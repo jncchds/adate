@@ -58,6 +58,16 @@ public sealed record EncounterChoice(string Id, string Text, IReadOnlyList<strin
 
 public interface IEncounterCatalog
 {
-    /// <summary>A setting's encounters: shared ones, its own, and one per dated event.</summary>
-    IReadOnlyList<EncounterDefinition> For(string settingId);
+    /// <summary>
+    /// A setting's encounters as one save plays it: shared ones, its own, and one per dated event on that
+    /// save's calendar. Takes the setting rather than its id because a planned save has its own (migration 018).
+    /// </summary>
+    IReadOnlyList<EncounterDefinition> For(Settings.SettingDefinition setting);
+
+    /// <summary>
+    /// Only the encounters written by hand for a setting, without the beats derived from it. These are
+    /// the ones a save's planning may rewrite the prose of: a derived beat is rewritten by changing what
+    /// it is derived from.
+    /// </summary>
+    IReadOnlyList<EncounterDefinition> Authored(string settingId);
 }

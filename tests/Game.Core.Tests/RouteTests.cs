@@ -63,7 +63,7 @@ public class RouteTests
             context[JsonEncounterCatalog.DateAgreedKey] = agreed;
         }
 
-        var outcome = TurnPlanner.Plan(setting, encounters.For(setting.Id), new TurnContext(clock, place, context, alone), place);
+        var outcome = TurnPlanner.Plan(setting, encounters.For(setting), new TurnContext(clock, place, context, alone), place);
         foreach (var (key, value) in outcome.FlagsToSet)
         {
             flags[key] = value;
@@ -200,7 +200,7 @@ public class RouteTests
         var (settings, encounters) = Content();
         var setting = settings.Get(settingId);
         // The authored meeting: the generated contact and first date are with the chance variant too.
-        var authored = encounters.For(settingId).Single(e => (e.With ?? []).Contains("variant:chance") && (e.Sets ?? []).Contains("chance.met"));
+        var authored = encounters.For(setting).Single(e => (e.With ?? []).Contains("variant:chance") && (e.Sets ?? []).Contains("chance.met"));
         var place = authored.Place.Id!;
         var flags = new Dictionary<string, string>();
 

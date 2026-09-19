@@ -223,7 +223,7 @@ public sealed class EncounterCatalogTests : IDisposable
     [Fact]
     public void A_valid_file_loads_with_the_settings_events_added()
     {
-        var encounters = Load(Valid).For("test-town");
+        var encounters = Load(Valid).For(OneSetting.Town);
 
         Assert.Equal(["tip", "event.fair"], encounters.Select(e => e.Id));
 
@@ -276,7 +276,7 @@ public sealed class EncounterCatalogTests : IDisposable
             [ { "id": "stroll", "place": {}, "once": false, "text": "A stroll." } ]
             """);
 
-        var encounters = Load(Valid).For("test-town");
+        var encounters = Load(Valid).For(OneSetting.Town);
 
         Assert.Equal(["stroll", "tip", "event.fair"], encounters.Select(e => e.Id));
         Assert.False(encounters[0].Once);

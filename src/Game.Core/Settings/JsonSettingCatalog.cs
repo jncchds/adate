@@ -112,6 +112,36 @@ public sealed class JsonSettingCatalog : ISettingCatalog
                     Fail($"place '{place.Id}' uses detail '{detail}', which place type '{type.Id}' does not offer.");
                 }
             }
+
+            // A role planning may refill must offer its authored type among the alternatives, and every
+            // alternative must dress people the same way: the dress code is what the scene writer is told,
+            // and what the player's home or the player's work is for.
+            if (place.Types is { Count: > 0 } offered)
+            {
+                if (!offered.Contains(place.Type, StringComparer.Ordinal))
+                {
+                    Fail($"place '{place.Id}' may be planned as {string.Join(", ", offered)}, which leaves out its own type '{place.Type}'.");
+                }
+
+                foreach (var alternative in offered)
+                {
+                    LocationDefinition other;
+                    try
+                    {
+                        other = placeTypes.Get(alternative);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        Fail($"place '{place.Id}' may be planned as '{alternative}', which is not a place type.");
+                        return;
+                    }
+
+                    if (!string.Equals(other.Dress, type.Dress, StringComparison.Ordinal))
+                    {
+                        Fail($"place '{place.Id}' may be planned as '{alternative}', which dresses people for '{other.Dress}' where '{place.Type}' dresses them for '{type.Dress}'.");
+                    }
+                }
+            }
         }
 
         bool Exists(string id) => ids.Contains(id);

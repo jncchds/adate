@@ -6,15 +6,15 @@
   "routinePlace": "family-shop",
   "home": "main-street",
   "homeType": "house",
-  "job": {"title":"a helper at Harlan\u0027s General Store","place":"family-shop","slots":["Morning"],"weekdays":[0,1,2,3,4,5],"trait":"stability","scene":"work a morning shift behind the counter at the general store: deliveries, regulars and the town\u0027s news","habit":"helps out at Harlan\u0027s General Store"},
+  "job": {"title":"a helper at {place}","place":"family-shop","slots":["Morning"],"weekdays":[0,1,2,3,4,5],"trait":"stability","scene":"work a morning shift behind the counter at {place}: deliveries, regulars and the town\u0027s news","habit":"helps out at {place}"},
   "places": [
-    { "id": "family-shop", "type": "family-shop", "name": "Harlan's General Store", "details": ["bell"] },
-    { "id": "rosies-diner", "type": "diner", "name": "Rosie's Diner", "details": ["pie-case"] },
-    { "id": "main-street", "type": "main-street", "name": "Main Street", "details": ["clock-tower"] },
-    { "id": "town-library", "type": "library", "name": "Willow Creek Library", "details": ["arched-windows"] },
-    { "id": "lake-pier", "type": "lake-pier", "name": "The old pier", "details": ["rowboat"] },
-    { "id": "county-fair", "type": "fairground", "name": "County fairground", "details": ["carousel"], "known": false },
-    { "id": "lookout-hill", "type": "hilltop", "name": "Lookout Hill", "details": ["wildflowers"], "known": false }
+    { "id": "family-shop", "type": "family-shop", "name": "Harlan's General Store", "details": ["bell"], "types": ["family-shop", "bookshop", "diner", "cafe"] },
+    { "id": "rosies-diner", "type": "diner", "name": "Rosie's Diner", "details": ["pie-case"], "types": ["diner", "cafe", "family-shop", "bookshop"] },
+    { "id": "main-street", "type": "main-street", "name": "Main Street", "details": ["clock-tower"], "types": ["main-street", "park"] },
+    { "id": "town-library", "type": "library", "name": "Willow Creek Library", "details": ["arched-windows"], "types": ["library", "bookshop", "cafe"] },
+    { "id": "lake-pier", "type": "lake-pier", "name": "The old pier", "details": ["rowboat"], "types": ["lake-pier", "lake-dock"] },
+    { "id": "county-fair", "type": "fairground", "name": "County fairground", "details": ["carousel"], "known": false, "types": ["fairground", "night-market", "main-street"] },
+    { "id": "lookout-hill", "type": "hilltop", "name": "Lookout Hill", "details": ["wildflowers"], "known": false, "types": ["hilltop", "park"] }
   ],
   "openings": [
     {

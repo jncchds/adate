@@ -2,10 +2,26 @@ using Game.Core.Scenes;
 
 namespace Game.Core.Settings;
 
-/// <param name="Type">A place type id from the place type catalog.</param>
+/// <summary>
+/// A role a setting needs filled: the corner shop everyone passes, the water, the place the player works.
+/// The id is what everything else points at; the type, name and details are what one save's planning made
+/// of it, or what the setting authored when there was no planning.
+/// </summary>
+/// <param name="Type">A place type id from the place type catalog. What the role is without planning.</param>
 /// <param name="Details">Detail ids from that place type. They are what make this one differ from another of its type.</param>
 /// <param name="Known">Whether the player can go there from day one. Others are learned in play.</param>
-public sealed record SettingPlace(string Id, string Type, string Name, IReadOnlyList<string>? Details = null, bool Known = true);
+/// <param name="Types">
+/// The place types planning may fill this role with, the authored <paramref name="Type"/> among them; null
+/// leaves the role fixed. A role with a dress code to keep, such as the player's home, offers only types
+/// that share it.
+/// </param>
+public sealed record SettingPlace(
+    string Id,
+    string Type,
+    string Name,
+    IReadOnlyList<string>? Details = null,
+    bool Known = true,
+    IReadOnlyList<string>? Types = null);
 
 /// <param name="HomePlace">Where the main LI can be found again after meeting (plan §4).</param>
 /// <param name="HomeWindow">When they are there, as the writing describes it.</param>

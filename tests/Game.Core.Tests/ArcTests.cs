@@ -57,7 +57,7 @@ public class ArcTests
             context[EncounterEvaluator.InviteKey] = invite;
         }
 
-        var outcome = TurnPlanner.Plan(setting, encounters.For(setting.Id), new TurnContext(clock, place, context, 0), place);
+        var outcome = TurnPlanner.Plan(setting, encounters.For(setting), new TurnContext(clock, place, context, 0), place);
         foreach (var (key, value) in outcome.FlagsToSet)
         {
             flags[key] = value;

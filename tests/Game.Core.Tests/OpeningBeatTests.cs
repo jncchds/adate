@@ -65,7 +65,7 @@ public class OpeningBeatTests
             context[JsonEncounterCatalog.DateAgreedKey] = "main_li";
         }
 
-        var outcome = TurnPlanner.Plan(setting, encounters.For(setting.Id), new TurnContext(new ClockState(day, slot), place, context, 0), place);
+        var outcome = TurnPlanner.Plan(setting, encounters.For(setting), new TurnContext(new ClockState(day, slot), place, context, 0), place);
 
         foreach (var (key, value) in outcome.FlagsToSet)
         {

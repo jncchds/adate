@@ -50,7 +50,7 @@ public class ShippedContentTests
 
         foreach (var setting in SettingCatalog().All())
         {
-            var revealed = encounters.For(setting.Id).SelectMany(e => e.Reveals ?? [])
+            var revealed = encounters.For(setting).SelectMany(e => e.Reveals ?? [])
                 .Concat(setting.Events.Select(e => e.Place))
                 .ToHashSet(StringComparer.Ordinal);
 
@@ -68,7 +68,7 @@ public class ShippedContentTests
 
         foreach (var setting in SettingCatalog().All())
         {
-            Assert.Contains(encounters.For(setting.Id), e =>
+            Assert.Contains(encounters.For(setting), e =>
                 e.Place.AloneVisitsBefore is > 0 && (e.With ?? []).Contains("variant:chance"));
         }
     }

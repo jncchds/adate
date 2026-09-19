@@ -9,12 +9,12 @@
   "job": {"title":"a camp counsellor","place":"mess-hall","slots":["Morning"],"weekdays":[0,1,2,3,4,5,6],"trait":"kindness","scene":"do morning duty as a counsellor: breakfast, the day\u0027s schedule and the small problems that come with it","habit":"works as a camp counsellor"},
   "places": [
     { "id": "staff-cabin", "type": "staff-cabin", "name": "Staff cabin", "details": ["lantern"] },
-    { "id": "mess-hall", "type": "mess-hall", "name": "The mess hall", "details": ["banners"] },
-    { "id": "lake-dock", "type": "lake-dock", "name": "The waterfront", "details": ["life-jackets"] },
-    { "id": "campfire-circle", "type": "campfire-circle", "name": "The campfire circle", "details": ["guitar"] },
-    { "id": "boathouse", "type": "boathouse", "name": "The boathouse", "details": ["lake-view"] },
-    { "id": "staff-lounge", "type": "staff-lounge", "name": "Staff lounge", "details": ["photo-wall"] },
-    { "id": "ridge-trail", "type": "forest-trail", "name": "Ridge trail", "details": ["footbridge"], "known": false }
+    { "id": "mess-hall", "type": "mess-hall", "name": "The mess hall", "details": ["banners"], "types": ["mess-hall", "staff-lounge"] },
+    { "id": "lake-dock", "type": "lake-dock", "name": "The waterfront", "details": ["life-jackets"], "types": ["lake-dock", "lake-pier"] },
+    { "id": "campfire-circle", "type": "campfire-circle", "name": "The campfire circle", "details": ["guitar"], "types": ["campfire-circle", "forest-trail"] },
+    { "id": "boathouse", "type": "boathouse", "name": "The boathouse", "details": ["lake-view"], "types": ["boathouse", "staff-lounge"] },
+    { "id": "staff-lounge", "type": "staff-lounge", "name": "Staff lounge", "details": ["photo-wall"], "types": ["staff-lounge", "boathouse", "mess-hall"] },
+    { "id": "ridge-trail", "type": "forest-trail", "name": "Ridge trail", "details": ["footbridge"], "known": false, "types": ["forest-trail", "campfire-circle"] }
   ],
   "openings": [
     {

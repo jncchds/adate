@@ -6,16 +6,16 @@
   "routinePlace": "office",
   "home": "home-stairwell",
   "homeType": "apartment",
-  "job": {"title":"a junior analyst at Meridian \u0026 Co.","place":"office","slots":["Midday","Afternoon"],"weekdays":[0,1,2,3,4],"trait":"ambition","scene":"work a shift as a junior analyst: reports, a deadline and colleagues at the next desks","habit":"works as a junior analyst at Meridian \u0026 Co."},
+  "job": {"title":"a junior analyst at {place}","place":"office","slots":["Midday","Afternoon"],"weekdays":[0,1,2,3,4],"trait":"ambition","scene":"work a shift as a junior analyst: reports, a deadline and colleagues at the next desks","habit":"works as a junior analyst at {place}"},
   "places": [
     { "id": "office", "type": "office", "name": "Meridian & Co. offices", "details": ["city-view"] },
-    { "id": "corner-cafe", "type": "cafe", "name": "The Corner Cup", "details": ["window-seats"] },
-    { "id": "riverside-park", "type": "park", "name": "Riverside Park", "details": ["cherry-trees"] },
-    { "id": "home-stairwell", "type": "stairwell", "name": "Your building's stairwell", "details": ["potted-plant"] },
-    { "id": "low-tide", "type": "bar", "name": "The Low Tide", "details": ["neon-sign", "river-view"], "known": false },
-    { "id": "paper-lantern-books", "type": "bookshop", "name": "Paper Lantern Books", "details": ["armchair"], "known": false },
-    { "id": "rooftop-garden", "type": "rooftop", "name": "The rooftop garden", "details": ["planters"], "known": false },
-    { "id": "harbour-night-market", "type": "night-market", "name": "Harbour Night Market", "details": ["red-lanterns"], "known": false }
+    { "id": "corner-cafe", "type": "cafe", "name": "The Corner Cup", "details": ["window-seats"], "types": ["cafe", "diner", "bookshop"] },
+    { "id": "riverside-park", "type": "park", "name": "Riverside Park", "details": ["cherry-trees"], "types": ["park", "main-street"] },
+    { "id": "home-stairwell", "type": "stairwell", "name": "Your building's stairwell", "details": ["potted-plant"], "types": ["stairwell", "apartment"] },
+    { "id": "low-tide", "type": "bar", "name": "The Low Tide", "details": ["neon-sign", "river-view"], "known": false, "types": ["bar", "rooftop"] },
+    { "id": "paper-lantern-books", "type": "bookshop", "name": "Paper Lantern Books", "details": ["armchair"], "known": false, "types": ["bookshop", "cafe", "library"] },
+    { "id": "rooftop-garden", "type": "rooftop", "name": "The rooftop garden", "details": ["planters"], "known": false, "types": ["rooftop", "bar"] },
+    { "id": "harbour-night-market", "type": "night-market", "name": "Harbour Night Market", "details": ["red-lanterns"], "known": false, "types": ["night-market", "main-street", "fairground"] }
   ],
   "openings": [
     {

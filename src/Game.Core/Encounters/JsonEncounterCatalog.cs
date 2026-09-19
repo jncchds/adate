@@ -86,7 +86,11 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private readonly IReadOnlyDictionary<string, IReadOnlyList<EncounterDefinition>> _bySetting;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<EncounterDefinition>> _authored;
+
+    private readonly IReadOnlyList<string> _routes;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<EncounterDefinition>> _composed = new(StringComparer.Ordinal);
 
     /// <param name="routes">
     /// The cast's route ids. Each gets generated meeting, contact and first-date beats, and an
@@ -114,31 +118,53 @@ public sealed partial class JsonEncounterCatalog : IEncounterCatalog
         }
 
         var common = Read(Path.Combine(directory, CommonFileName + ".json"));
-        var bySetting = new Dictionary<string, IReadOnlyList<EncounterDefinition>>(StringComparer.Ordinal);
+        var authored = new Dictionary<string, IReadOnlyList<EncounterDefinition>>(StringComparer.Ordinal);
+
+        _routes = routes ?? [];
 
         foreach (var setting in settings.All())
         {
-            IReadOnlyList<EncounterDefinition> all =
-            [
-                .. common,
-                .. Read(Path.Combine(directory, setting.Id + ".json")),
-                .. setting.Events.Select(Event),
-                .. OpeningBeats(setting),
-                .. RouteBeats(setting, routes ?? []),
-                .. ArcBeats(setting, routes ?? []),
-            ];
-
-            Validate(setting, all, routes);
-            bySetting[setting.Id] = all;
+            authored[setting.Id] = [.. common, .. Read(Path.Combine(directory, setting.Id + ".json"))];
+            Validate(setting, Compose(authored[setting.Id], setting, _routes), routes);
         }
 
-        _bySetting = bySetting;
+        _authored = authored;
     }
 
-    public IReadOnlyList<EncounterDefinition> For(string settingId) =>
-        _bySetting.TryGetValue(settingId, out var encounters)
-            ? encounters
+    /// <summary>
+    /// The encounters for a setting as one save plays it. The authored ones are read once; the beats
+    /// derived from the setting — its dated events, its openings, its routes and arcs — are composed for
+    /// the setting given, because a planned save has its own calendar (migration 018).
+    /// </summary>
+    public IReadOnlyList<EncounterDefinition> For(SettingDefinition setting)
+    {
+        ArgumentNullException.ThrowIfNull(setting);
+
+        var authored = _authored.TryGetValue(setting.Id, out var read)
+            ? read
+            : throw new KeyNotFoundException($"No encounters are loaded for setting '{setting.Id}'.");
+
+        // Only the dated events differ between saves of one setting; everything else derived comes from
+        // parts of the setting no plan touches. Keyed on them, this is one composition per calendar.
+        var key = setting.Id + "|" + string.Join(",", setting.Events.Select(e => $"{e.Id}@{e.Day}.{e.Time}.{e.Place}"));
+
+        return _composed.GetOrAdd(key, _ => Compose(authored, setting, _routes));
+    }
+
+    public IReadOnlyList<EncounterDefinition> Authored(string settingId) =>
+        _authored.TryGetValue(settingId, out var read)
+            ? read
             : throw new KeyNotFoundException($"No encounters are loaded for setting '{settingId}'.");
+
+    private static IReadOnlyList<EncounterDefinition> Compose(
+        IReadOnlyList<EncounterDefinition> authored, SettingDefinition setting, IReadOnlyList<string> routes) =>
+    [
+        .. authored,
+        .. setting.Events.Select(Event),
+        .. OpeningBeats(setting),
+        .. RouteBeats(setting, routes),
+        .. ArcBeats(setting, routes),
+    ];
 
     private static EncounterDefinition Event(SettingEvent ev) => new(
         $"event.{ev.Id}",

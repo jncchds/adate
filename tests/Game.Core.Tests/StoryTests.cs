@@ -78,7 +78,7 @@ public class StoryTests
         var encounters = new JsonEncounterCatalog(ContentPath("encounters"), settings);
 
         var tags = settings.All()
-            .SelectMany(s => encounters.For(s.Id))
+            .SelectMany(s => encounters.For(s))
             .SelectMany(e => e.Choices ?? [])
             .SelectMany(c => c.Tags ?? [])
             .ToList();

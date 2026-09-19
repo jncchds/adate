@@ -165,6 +165,7 @@ public sealed class WorldService(
     StoryStateRepository story,
     SceneLogRepository sceneLog,
     ThreadRepository threads,
+    PlanRepository plans,
     Game.Core.Content.ILocationCatalog placeTypes,
     ISettingCatalog settings,
     IEncounterCatalog encounters,
@@ -180,6 +181,7 @@ public sealed class WorldService(
     BibleWriter bibleWriter,
     VoiceWriter voiceWriter,
     ThreadWriter threadWriter,
+    PlanWriter planWriter,
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
     IEmbeddingClient embeddings,
@@ -188,6 +190,13 @@ public sealed class WorldService(
     IOptions<StudioOptions> options)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// The beats each save's planning rewrote, by encounter id, read once when its setting is first put
+    /// together. A plan never changes after it is laid out, so this only ever grows by one save.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> _encounterTexts =
+        new(StringComparer.Ordinal);
 
     private readonly RelationshipEngine _engine = new(storyContent);
     private readonly EndingRules _endings = new(endingContent, storyContent);
@@ -253,7 +262,7 @@ public sealed class WorldService(
         PendingChoice? pending = null;
         if (EncounterEvaluator.Holds(flags, EncounterEvaluator.PendingChoiceKey))
         {
-            var encounter = Encounter(setting, flags[EncounterEvaluator.PendingChoiceKey]);
+            var encounter = Encounter(saveId, setting, flags[EncounterEvaluator.PendingChoiceKey]);
             var placeId = encounter.Place.Id ?? (encounter.Place.PlaceFlag is { } placeFlag ? flags.GetValueOrDefault(placeFlag) : null);
             var owner = Owner(cast, encounter.With ?? []);
 
@@ -272,7 +281,7 @@ public sealed class WorldService(
 
         IReadOnlyList<Invitee> invitees = over || pending is not null || pendingScene is not null || offer is not null || ending is not null || heading is not null
             ? []
-            : [.. cast.Where(li => !HasLeft(flags, li) && CanInvite(setting, cast, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
+            : [.. cast.Where(li => !HasLeft(flags, li) && CanInvite(saveId, setting, cast, known, flags, clock, li.Key)).Select(li => new Invitee(li.Key, li.Name))];
 
         var relationships = new List<RelationshipView>();
         foreach (var li in cast.Where(li => EncounterEvaluator.Holds(flags, $"{li.Key}.met")))
@@ -475,12 +484,12 @@ public sealed class WorldService(
             flags,
             await state.CountAloneVisitsAsync(saveId, place.Id, ct).ConfigureAwait(false));
 
-        var outcome = TurnPlanner.Plan(play.Setting, Available(play.Setting, cast, flags), context, place.Name);
+        var outcome = TurnPlanner.Plan(play.Setting, Available(saveId, play.Setting, cast, flags), context, place.Name);
 
         // Someone not met yet can be run into by chance, instead of what was planned here: never over a story beat
         // that matters more than a chance meeting, a meeting the player agreed to, or bringing someone along.
         var plannedPriority = outcome.EncounterId is { } plannedId
-            ? Available(play.Setting, cast, flags).FirstOrDefault(e => e.Id == plannedId)?.Priority ?? int.MaxValue
+            ? Available(saveId, play.Setting, cast, flags).FirstOrDefault(e => e.Id == plannedId)?.Priority ?? int.MaxValue
             : 0;
         var saveKey = saveId.ToString();
         IReadOnlyList<string> settingPlaces = [.. play.Setting.Places.Select(p => p.Id)];
@@ -514,7 +523,7 @@ public sealed class WorldService(
         // At the workplace during a shift the player is working it, whatever else happens there.
         if (play.Setting.Job is { } job && job.Place == place.Id && PlayerLife.OnShift(job, play.Clock))
         {
-            outcome = outcome with { Duty = job.Scene };
+            outcome = outcome with { Duty = JobText(job.Scene, place.Name) };
         }
 
         if (invite is not null && !outcome.With.Contains(RefFor(invite)))
@@ -869,7 +878,7 @@ public sealed class WorldService(
         var lines = new List<string>();
         if (setting.Job is { } job)
         {
-            lines.Add($"{player} {job.Habit}.");
+            lines.Add($"{player} {JobText(job.Habit, PlaceName(setting, known, job.Place))}.");
         }
 
         // So an invitation over has somewhere to name: an agreed meeting there brings someone to the player's place.
@@ -903,7 +912,7 @@ public sealed class WorldService(
         var choice = pending.Choices.FirstOrDefault(c => c.Id == choiceId)
             ?? throw new InvalidOperationException($"'{choiceId}' is not an answer to the open choice.");
 
-        var encounter = Encounter(play.Setting, pending.EncounterId);
+        var encounter = Encounter(saveId, play.Setting, pending.EncounterId);
         var cast = await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false);
         var sets = new Dictionary<string, string>(TurnPlanner.Assignments(choice.Sets ?? []), StringComparer.Ordinal);
 
@@ -2347,14 +2356,29 @@ public sealed class WorldService(
 
     /// <summary>The setting's encounters minus any with someone who has left: a closed route stays closed.</summary>
     private IReadOnlyList<EncounterDefinition> Available(
+        SaveId saveId,
         SettingDefinition setting,
         IReadOnlyList<LoveInterest> cast,
         IReadOnlyDictionary<string, string> flags)
     {
         var gone = cast.Where(li => HasLeft(flags, li)).Select(li => li.Ref).ToHashSet(StringComparer.Ordinal);
-        var all = encounters.For(setting.Id);
+        var all = Available(saveId, setting);
 
         return gone.Count == 0 ? all : [.. all.Where(e => !(e.With ?? []).Any(gone.Contains))];
+    }
+
+    /// <summary>
+    /// The setting's encounters as this save reads them: any whose prose its planning rewrote for the
+    /// places it got carries the rewrite instead of the authored text.
+    /// </summary>
+    private IReadOnlyList<EncounterDefinition> Available(SaveId saveId, SettingDefinition setting)
+    {
+        var all = encounters.For(setting);
+        var rewritten = _encounterTexts.GetValueOrDefault(saveId.ToString());
+
+        return rewritten is not { Count: > 0 }
+            ? all
+            : [.. all.Select(e => rewritten.TryGetValue(e.Id, out var text) ? e with { Text = text } : e)];
     }
 
     /// <summary>
@@ -2617,11 +2641,17 @@ public sealed class WorldService(
         }
     }
 
+    /// <summary>
+    /// A line about the player's job with the place it is at filled in. The setting names the job without
+    /// naming the shop, because which shop it is now depends on how the save was planned.
+    /// </summary>
+    private static string JobText(string text, string place) => text.Replace("{place}", place, StringComparison.Ordinal);
+
     private static string RefFor(string key) =>
         key == JsonEncounterCatalog.MainLiRef ? key : JsonEncounterCatalog.VariantPrefix + key;
 
-    private EncounterDefinition Encounter(SettingDefinition setting, string id) =>
-        encounters.For(setting.Id).FirstOrDefault(e => e.Id == id)
+    private EncounterDefinition Encounter(SaveId saveId, SettingDefinition setting, string id) =>
+        Available(saveId, setting).FirstOrDefault(e => e.Id == id)
         ?? throw new InvalidOperationException($"Setting '{setting.Id}' has no encounter '{id}'.");
 
     private sealed record Names(Guid? MainLiId, string MainLi, string Player);
@@ -2761,6 +2791,7 @@ public sealed class WorldService(
 
     /// <summary>Whether some encounter would honour inviting <paramref name="key"/> at a place the player knows, now.</summary>
     private bool CanInvite(
+        SaveId saveId,
         SettingDefinition setting,
         IReadOnlyList<LoveInterest> cast,
         IReadOnlyList<PlaceRecord> known,
@@ -2770,21 +2801,106 @@ public sealed class WorldService(
     {
         var requirement = $"{EncounterEvaluator.InviteKey}={key}";
         var withInvite = new Dictionary<string, string>(flags, StringComparer.Ordinal) { [EncounterEvaluator.InviteKey] = key };
-        var inviteBeats = Available(setting, cast, flags).Where(e => (e.Requires ?? []).Contains(requirement)).ToList();
+        var inviteBeats = Available(saveId, setting, cast, flags).Where(e => (e.Requires ?? []).Contains(requirement)).ToList();
 
         return known.Any(place =>
             inviteBeats.Any(e => EncounterEvaluator.Matches(e, new TurnContext(clock, place.Id, withInvite, 0))));
     }
 
-    private async Task<SettingDefinition> EnsureSettingAsync(SaveId saveId, CancellationToken ct)
+    /// <summary>
+    /// The setting as this save plays it: its roles filled and its calendar dated by the plan laid out the
+    /// first time the save is played (migration 018), or the setting as authored for a save from before
+    /// planning, or one whose planning found no model.
+    /// </summary>
+    private async Task<SettingDefinition> EnsureSettingAsync(SaveId saveId, CancellationToken ct, IProgress<string>? progress = null)
     {
         var settingId = await saves.GetSettingIdAsync(saveId, ct).ConfigureAwait(false)
             ?? await saves.SetSettingAsync(saveId, options.Value.DefaultSettingId, ct).ConfigureAwait(false);
 
         var setting = settings.Get(settingId);
+
+        if (!await plans.IsPlannedAsync(saveId, ct).ConfigureAwait(false))
+        {
+            setting = await PlanAsync(saveId, setting, ct, progress).ConfigureAwait(false);
+        }
+        else
+        {
+            // The places are already stored, and carry what the plan made of each role; the calendar is
+            // read back, and is empty for a save laid out before there was planning.
+            var stored = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
+            var events = await plans.EventsAsync(saveId, ct).ConfigureAwait(false);
+            setting = Rebuild(setting, stored, events);
+        }
+
+        if (!_encounterTexts.ContainsKey(saveId.ToString()))
+        {
+            _encounterTexts[saveId.ToString()] = await plans.EncounterTextsAsync(saveId, ct).ConfigureAwait(false);
+        }
+
         await places.AddAsync(PlaceRecord.Authored(saveId, setting), ct).ConfigureAwait(false);
         return setting;
     }
+
+    /// <summary>
+    /// Lays out this save's own town, once. The plan's places are stored before anything else reads them,
+    /// so a role is what the plan made of it from the first turn. Without a model, the setting is played
+    /// as authored, and recorded as planned so it is not asked for again every turn.
+    /// </summary>
+    private async Task<SettingDefinition> PlanAsync(
+        SaveId saveId, SettingDefinition setting, CancellationToken ct, IProgress<string>? progress)
+    {
+        progress?.Report("Laying out the town…");
+
+        var language = await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false);
+        var beats = Plannable(setting);
+        var plan = await planWriter.WriteAsync(setting, placeTypes, beats, language, ct).ConfigureAwait(false);
+
+        var planned = plan is null ? setting : SavePlans.Apply(setting, plan);
+        var records = plan is null ? PlaceRecord.Authored(saveId, planned) : SavePlans.Records(saveId, planned, plan);
+
+        // Whoever gets here first writes the plan; a second caller reads what that one stored.
+        if (!await plans.SaveAsync(saveId, plan is not null, planned.Events, plan?.EncounterTexts ?? new Dictionary<string, string>(), ct).ConfigureAwait(false))
+        {
+            var stored = await places.ListAsync(saveId, knownOnly: false, ct).ConfigureAwait(false);
+            return Rebuild(setting, stored, await plans.EventsAsync(saveId, ct).ConfigureAwait(false));
+        }
+
+        await places.AddAsync(records, ct).ConfigureAwait(false);
+
+        foreach (var thread in plan?.Threads ?? [])
+        {
+            await threads.AddAsync(saveId, null, thread, 1, ct).ConfigureAwait(false);
+        }
+
+        return planned;
+    }
+
+    /// <summary>The setting with each role as the save stored it, and the save's own calendar when it has one.</summary>
+    private static SettingDefinition Rebuild(
+        SettingDefinition setting, IReadOnlyList<PlaceRecord> stored, IReadOnlyList<SettingEvent> events)
+    {
+        var byId = stored.ToDictionary(p => p.Id, p => p, StringComparer.Ordinal);
+
+        return setting with
+        {
+            Places =
+            [
+                .. setting.Places.Select(role => byId.TryGetValue(role.Id, out var record)
+                    ? role with { Type = record.TypeId, Name = record.Name, Details = record.Details }
+                    : role),
+            ],
+            Events = events.Count == 0 ? setting.Events : events,
+        };
+    }
+
+    /// <summary>The authored beats whose prose a plan rewrites: those written by hand for one of the setting's roles.</summary>
+    private IReadOnlyList<PlannableEncounter> Plannable(SettingDefinition setting) =>
+    [
+        .. encounters.Authored(setting.Id)
+            .Where(e => !string.IsNullOrWhiteSpace(e.Text))
+            .Where(e => e.Place?.Id is { } id && setting.Places.Any(p => string.Equals(p.Id, id, StringComparison.Ordinal)))
+            .Select(e => new PlannableEncounter(e.Id, e.Place!.Id!, e.Text!)),
+    ];
 
     private async Task<IReadOnlyList<PlaceRecord>> ListKnownAsync(SaveId saveId, CancellationToken ct)
     {
