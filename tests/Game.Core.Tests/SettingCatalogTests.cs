@@ -38,7 +38,9 @@ public sealed class SettingCatalogTests : IDisposable
               "days": 28,
               "tone": "Quiet.",
               "routinePlace": "cafe-1",
+              "home": "home-1",
               "places": [
+                { "id": "home-1", "type": "flat", "name": "Your place" },
                 { "id": "cafe-1", "type": "cafe", "name": "Cafe", "details": ["window-seat"] },
                 { "id": "alley-1", "type": "bare", "name": "Alley", "known": false }
               ],
@@ -73,6 +75,9 @@ public sealed class SettingCatalogTests : IDisposable
     [InlineData("\"id\": \"o0\", \"name\": \"Opening 0\", \"meetingPlace\": \"cafe-1\"", "\"id\": \"o0\", \"name\": \"Opening 0\", \"meetingPlace\": \"alley-1\"", "meets at 'alley-1'")]
     [InlineData("\"day\": 10", "\"day\": 40", "day 40")]
     [InlineData("\"routinePlace\": \"cafe-1\"", "\"routinePlace\": \"alley-1\"", "routine place 'alley-1'")]
+    [InlineData("\"home\": \"home-1\"", "\"home\": \"nowhere\"", "home 'nowhere' must be one of its places")]
+    [InlineData("\"home\": \"home-1\"", "\"home\": \"cafe-1\"", "is a cafe, which is not somewhere anyone lives")]
+    [InlineData("\"home\": \"home-1\",", "", "has no home for the player")]
     public void A_broken_reference_is_refused_by_name(string from, string to, string expected)
     {
         var json = Setting();

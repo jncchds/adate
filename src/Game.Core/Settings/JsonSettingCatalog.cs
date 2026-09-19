@@ -217,9 +217,20 @@ public sealed class JsonSettingCatalog : ISettingCatalog
             }
         }
 
-        if (setting.Home is { } home && (!Exists(home) || !Known(home)))
+        // Every story needs somewhere the player goes at night (user request: there was nowhere the main
+        // character lived, so it was never clear where to go once the evening was over). It has to be
+        // somewhere people are at home, or the writing dresses a visitor and describes the room wrong.
+        if (setting.Home is not { } home)
+        {
+            Fail("has no home for the player. Name a place people live in, known from the start.");
+        }
+        else if (!Exists(home) || !Known(home))
         {
             Fail($"the player's home '{home}' must be one of its places, known from the start.");
+        }
+        else if (placeTypes.Get(setting.Place(home).Type).Dress != DressCode.Home)
+        {
+            Fail($"the player's home '{home}' is a {setting.Place(home).Type}, which is not somewhere anyone lives.");
         }
     }
 }

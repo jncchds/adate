@@ -401,9 +401,14 @@ public sealed partial class PlayViewModel : PageViewModel
             // Setting off somewhere together leaves only that place to go.
             foreach (var place in state.KnownPlaces.Where(p => state.Heading is null || p.Id == state.Heading.PlaceId))
             {
-                // During a shift, the workplace says so: going there works it.
+                // During a shift, the workplace says so: going there works it. Home says so always, so
+                // there is somewhere obvious to end a day.
                 var typeName = _placeTypes.Get(place.TypeId).DisplayName;
-                Places.Add(new PlaceCardViewModel(place, state.OnShift && state.Job?.Place == place.Id ? $"{typeName} · your shift" : typeName, GoCommand));
+                typeName = place.Id == state.Setting.Home ? $"{typeName} · home"
+                    : state.OnShift && state.Job?.Place == place.Id ? $"{typeName} · your shift"
+                    : typeName;
+
+                Places.Add(new PlaceCardViewModel(place, typeName, GoCommand));
             }
 
             // Everyone met so far stands on the backdrop, left to right, in one slot for each person the

@@ -1286,6 +1286,13 @@ public sealed class WorldService(
         var placeDress = place is null ? DressCode.Casual : placeTypes.Get(place.TypeId).Dress;
         var firstDate = encounterId is { } id && cast.Any(c => JsonEncounterCatalog.FirstDateIdFor(c.Key) == id);
 
+        // At the player's own home the home clothes are the player's. Someone who came over is a guest,
+        // and came dressed to be somewhere, so they wear what they would anywhere else.
+        if (placeDress is DressCode.Home && string.Equals(place?.Id, setting.Home, StringComparison.Ordinal))
+        {
+            placeDress = DressCode.Casual;
+        }
+
         // Brought here by agreeing to go together straight away, overnight too: no time to change since the scene they
         // set off from (user request: going now and meeting later are different). Seeing them again otherwise starts afresh.
         static int Order(ClockState c) => (c.Day * 10) + (int)c.Slot;

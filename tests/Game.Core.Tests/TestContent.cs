@@ -135,13 +135,22 @@ internal static class TestContent
             ["alley"],
             new Dictionary<string, IReadOnlyList<string>>());
 
+        /// <summary>Somewhere people live, so a setting can have a home for the player to go to.</summary>
+        private static readonly LocationDefinition Flat = new(
+            "flat",
+            "A small flat",
+            ["apartment interior"],
+            new Dictionary<string, IReadOnlyList<string>>(),
+            Dress: DressCode.Home);
+
         public LocationDefinition Get(string locationId) => locationId switch
         {
             "cafe" => Cafe,
             "bare" => Bare,
+            "flat" => Flat,
             _ => throw new KeyNotFoundException(locationId),
         };
 
-        public IReadOnlyList<LocationDefinition> All() => [Bare, Cafe];
+        public IReadOnlyList<LocationDefinition> All() => [Bare, Cafe, Flat];
     }
 }

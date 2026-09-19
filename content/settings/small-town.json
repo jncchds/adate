@@ -4,10 +4,11 @@
   "days": 28,
   "tone": "A slow summer in a small lakeside town where everyone knows everyone: front porches, long evenings, and gossip that travels faster than you do.",
   "routinePlace": "family-shop",
-  "home": "main-street",
+  "home": "player-home",
   "homeType": "house",
   "job": {"title":"a helper at {place}","place":"family-shop","slots":["Morning"],"weekdays":[0,1,2,3,4,5],"trait":"stability","scene":"work a morning shift behind the counter at {place}: deliveries, regulars and the town\u0027s news","habit":"helps out at {place}"},
   "places": [
+    { "id": "player-home", "type": "house", "name": "Your place", "details": ["porch-swing"], "types": ["house", "apartment"] },
     { "id": "family-shop", "type": "family-shop", "name": "Harlan's General Store", "details": ["bell"], "types": ["family-shop", "bookshop", "diner", "cafe"] },
     { "id": "rosies-diner", "type": "diner", "name": "Rosie's Diner", "details": ["pie-case"], "types": ["diner", "cafe", "family-shop", "bookshop"] },
     { "id": "main-street", "type": "main-street", "name": "Main Street", "details": ["clock-tower"], "types": ["main-street", "park"] },
