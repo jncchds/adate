@@ -272,8 +272,10 @@ public class ProviderTests
         services.AddLlm(config);
         using var built = services.BuildServiceProvider();
 
-        Assert.IsType(chat, built.GetRequiredService<ILlmClient>());
-        Assert.IsType(embeddings, built.GetRequiredService<IEmbeddingClient>());
+        Assert.IsType<CountingLlmClient>(built.GetRequiredService<ILlmClient>());
+        Assert.IsType<CountingEmbeddingClient>(built.GetRequiredService<IEmbeddingClient>());
+        Assert.IsType(chat, built.GetRequiredService(chat));
+        Assert.IsType(embeddings, built.GetRequiredService(embeddings));
     }
 
     [Fact]

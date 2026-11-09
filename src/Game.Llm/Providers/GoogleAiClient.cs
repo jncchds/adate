@@ -121,18 +121,53 @@ internal static class GoogleAiHttp
         return id.StartsWith("models/", StringComparison.Ordinal) ? id : "models/" + id;
     }
 
-    internal const int BusyRetries = 3;
+    internal const int BusyRetries = 2;
 
-    /// <summary>Gemini is overloaded or rate-limiting ("high demand" is common on the free tier): worth trying again shortly.</summary>
-    internal static bool IsBusy(System.Net.HttpStatusCode status) => status is System.Net.HttpStatusCode.TooManyRequests
-        or System.Net.HttpStatusCode.InternalServerError or System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout;
+    /// <summary>A rate-limit wait longer than this is not waited out in a turn: the player is told instead.</summary>
+    internal static readonly TimeSpan LongestWait = TimeSpan.FromSeconds(15);
 
-    /// <summary>Wait before try number <paramref name="attempt"/> (1-based): Google's Retry-After when it gives one (at most a minute), else 2, 4, 8 s.</summary>
-    internal static TimeSpan RetryDelay(int attempt, TimeSpan? retryAfter) =>
-        retryAfter is { } wait && wait > TimeSpan.Zero
-            ? (wait < TimeSpan.FromMinutes(1) ? wait : TimeSpan.FromMinutes(1))
-            : TimeSpan.FromSeconds(Math.Pow(2, attempt));
+    /// <summary>The model is overloaded ("high demand" is common on the free tier): worth trying again shortly.</summary>
+    internal static bool IsBusy(System.Net.HttpStatusCode status) => status is System.Net.HttpStatusCode.InternalServerError
+        or System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout;
 
+    /// <summary>Wait before try number <paramref name="attempt"/> (1-based): 2, 4, 8 s.</summary>
+    internal static TimeSpan RetryDelay(int attempt) => TimeSpan.FromSeconds(Math.Pow(2, attempt));
+
+    /// <summary>
+    /// Reads a 429. A limit "per day" cannot be waited out; Google's own <c>retryDelay</c> is the wait for a
+    /// per-minute one. Every request that gets through counts against the quota, so a daily 429 is never retried.
+    /// </summary>
+    internal static LlmQuotaException ReadQuota(string payload, TimeSpan? header, string model)
+    {
+        string? message = null;
+        var wait = header;
+        var daily = payload.Contains("PerDay", StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            var error = JsonNode.Parse(payload)?["error"];
+            message = error?["message"]?.GetValue<string>();
+            foreach (var detail in error?["details"]?.AsArray() ?? [])
+            {
+                var delay = detail?["retryDelay"]?.GetValue<string>();
+                if (delay is { Length: > 1 } && delay.EndsWith('s')
+                    && double.TryParse(delay[..^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+                {
+                    wait = TimeSpan.FromSeconds(seconds);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        {
+            // Not Google's usual error body: the raw text below says what there is.
+        }
+
+        var first = (message ?? payload).Split('\n')[0].Trim();
+        var text = daily
+            ? $"Google AI's daily limit for {model} is used up, so the writing is a placeholder until it resets (another model can be chosen in Settings). {first}"
+            : $"Google AI is rate-limiting {model}{(wait is { } w ? $" (try again in {Math.Ceiling(w.TotalSeconds)} s)" : "")}. {first}";
+        return new LlmQuotaException(text.Length > 400 ? text[..400] : text, wait, daily);
+    }
     public static async Task<string> PostAsync(HttpClient http, LlmOptions settings, string path, JsonObject body, CancellationToken ct)
     {
         var json = body.ToJsonString();
@@ -158,9 +193,22 @@ internal static class GoogleAiHttp
                 return payload;
             }
 
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                var quota = ReadQuota(payload, response.Headers.RetryAfter?.Delta, settings.Model);
+                if (!quota.Daily && busy < 1 && quota.RetryAfter is { } wait && wait <= LongestWait)
+                {
+                    busy++;
+                    await Task.Delay(wait + TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                throw quota;
+            }
+
             if (IsBusy(response.StatusCode) && busy < BusyRetries)
             {
-                await Task.Delay(RetryDelay(++busy, response.Headers.RetryAfter?.Delta), ct).ConfigureAwait(false);
+                await Task.Delay(RetryDelay(++busy), ct).ConfigureAwait(false);
                 continue;
             }
 

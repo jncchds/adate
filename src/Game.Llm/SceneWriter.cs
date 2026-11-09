@@ -167,6 +167,12 @@ public sealed class SceneWriter(
                     raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, request + feedback, "scene", schema, maxTokens), ct).ConfigureAwait(false);
                 }
             }
+            catch (LlmQuotaException quota)
+            {
+                // A spent quota is not the answer's fault and another try spends more of it.
+                rejections.Add($"attempt {attempts}: {quota.Message}");
+                return Fallback(fallbackText, attempts, rejections);
+            }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
             {

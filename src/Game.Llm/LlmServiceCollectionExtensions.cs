@@ -73,18 +73,23 @@ public static class LlmServiceCollectionExtensions
         where TChat : class, ILlmClient
         where TEmbedding : class, IEmbeddingClient
     {
-        services.AddHttpClient<ILlmClient, TChat>(static (sp, http) =>
+        services.AddSingleton<LlmUsage>();
+        services.AddHttpClient<TChat>(static (sp, http) =>
         {
             var options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
             http.BaseAddress = options.ChatAddress;
             http.Timeout = options.RequestTimeout;
         });
 
-        services.AddHttpClient<IEmbeddingClient, TEmbedding>(static (sp, http) =>
+        services.AddHttpClient<TEmbedding>(static (sp, http) =>
         {
             var options = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
             http.BaseAddress = options.EmbeddingAddress;
             http.Timeout = options.RequestTimeout;
         });
+
+        // Every call goes through a counter, so a turn's cost can be read, and a spent quota is not asked again.
+        services.AddTransient<ILlmClient>(static sp => new CountingLlmClient(sp.GetRequiredService<TChat>(), sp.GetRequiredService<LlmUsage>()));
+        services.AddTransient<IEmbeddingClient>(static sp => new CountingEmbeddingClient(sp.GetRequiredService<TEmbedding>(), sp.GetRequiredService<LlmUsage>()));
     }
 }

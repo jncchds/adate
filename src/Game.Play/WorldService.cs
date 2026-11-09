@@ -186,6 +186,7 @@ public sealed class WorldService(
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
     IEmbeddingClient embeddings,
+    LlmUsage llmUsage,
     CharacterStudio studio,
     IOptions<LlmOptions> llmOptions,
     IOptions<StudioOptions> options)
@@ -206,6 +207,9 @@ public sealed class WorldService(
     /// The places the player can choose between, after making sure the save has its setting's
     /// authored places. A save created before settings existed is given the default setting, once.
     /// </summary>
+    /// <summary>Why the model is not answering right now (a spent quota), for the player; null when nothing is wrong.</summary>
+    public string? LlmProblem => llmOptions.Value.Enabled ? llmUsage.Problem : null;
+
     public async Task<IReadOnlyList<PlaceRecord>> KnownPlacesAsync(SaveId saveId, CancellationToken ct = default)
     {
         await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
@@ -1369,6 +1373,7 @@ public sealed class WorldService(
             return unwritten;
         }
 
+        var callsBefore = llmUsage.Calls;
         var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct, progress).ConfigureAwait(false);
         var (known, packet, world, memoryLines) = (built.Known, built.Packet, built.World, built.MemoryLines);
         var presentIds = packet.Present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1428,6 +1433,7 @@ public sealed class WorldService(
             written.Resolved,
             written.Attempts,
             written.Rejections,
+            LlmCalls = llmUsage.Since(callsBefore),
         }, ct).ConfigureAwait(false);
 
         // A scene without authored choices waits for the player: a proposed reply or their own words, or Continue
@@ -1896,6 +1902,7 @@ public sealed class WorldService(
     {
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var duty = openScene is null ? null : TurnOutcomeJson.Deserialize(openScene.OutcomeJson).Duty;
+        var callsBefore = llmUsage.Calls;
         var shown = openScene?.Figures;
         var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct, shown).ConfigureAwait(false);
         var (setting, cast, flags, known, presentPeople, before, packet) =
@@ -1984,6 +1991,7 @@ public sealed class WorldService(
             reaction.Outfit,
             reaction.Attempts,
             reaction.Rejections,
+            LlmCalls = llmUsage.Since(callsBefore),
         }, ct).ConfigureAwait(false);
 
         var popup = choicePopup ?? (owner is not null && relationships.TryGetValue(owner.Id, out var changed)

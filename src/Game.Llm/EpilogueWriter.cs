@@ -88,6 +88,11 @@ public sealed class EpilogueWriter(ILlmClient llm, IOptions<LlmOptions> options)
                 rejections.Add($"attempt {attempts}: {lastReasons[0]}");
                 continue;
             }
+            catch (LlmQuotaException quota)
+            {
+                rejections.Add($"attempt {attempts}: {quota.Message}");
+                return new WrittenEpilogue(fallbackText, Fallback: true, attempts, rejections);
+            }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
             {

@@ -185,6 +185,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                 rejections.Add($"attempt {attempts}: {lastReasons[0]}");
                 continue;
             }
+            catch (LlmQuotaException quota)
+            {
+                rejections.Add($"attempt {attempts}: {quota.Message}");
+                return new WrittenReaction(fallbackText, null, chosenTags ?? [], Fallback: true, attempts, rejections);
+            }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
             {
