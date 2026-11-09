@@ -1816,3 +1816,29 @@ mention them and nobody left standing after they go.
   figures is two sprites composited into two slots; nothing in the Z-Image prompts changed, and they still
   say "only this one person". Each figure is drawn on its own, so one that fails is named in its own
   warning while the other still stands there.
+
+## A spent quota is said, not retried; the model can suggest happenings, C# decides
+
+Live play on Gemini's free tier (20 requests a day per model) gave a placeholder for every scene, and the
+retry added in the settings page spent the rest of the quota retrying 429s.
+
+* **A 429 is read, not retried blindly.** A per-day limit (`...PerDay...` in Google's quota id) is never
+  retried; a per-minute one is waited out once, and only when Google's `retryDelay` is 15 s or less. 5xx
+  "high demand" keeps its short backoff (two tries). `LlmQuotaException` carries Google's message.
+* **The writers stop at once on it** (scene, reaction, epilogue) rather than spending their retries, and
+  `LlmUsage` remembers the problem: calls are not made at all for ten minutes after a daily 429, then one is
+  tried to see whether it reset. The player sees the reason beside the placeholder (`WorldService.LlmProblem`,
+  both frontends). Embeddings count but never block chat; they are another model's quota.
+* **Calls are counted per kind** (`CountingLlmClient`, the schema name), and each scene and reaction turn log
+  has `llmCalls`. A first scene is bible 1, voices 1, scene 1, judge 1, embed 2; each reply afterwards is one
+  call. Use `gemini-3.5-flash-lite` for tests and live play on the free tier.
+* **The warning mark is its own line**, with the reason and a separate "Try again…" button, instead of a tiny
+  button at the end of the text.
+* **Model-proposed happenings.** The scene answer may carry up to two `happenings`; `HappeningIdeas.Accept`
+  keeps one only if it is a plain sentence of 15-140 characters with no name, digit, "you" or word that
+  settles feelings, and not a repeat. Kept ideas (migration 021) are used by a later scene at that kind of
+  place 60% of the time, once each and stable across a rewrite; the authored list is the fallback. No extra
+  call: the idea rides on the scene's own answer. The model never owns state.
+* **Not done:** characters with goals and moods, remembered promises beyond the existing threads, varied day
+  shapes and a company-seeking measure policy. Free-language reply scoring already exists (tags are read from
+  free words when none are chosen).
