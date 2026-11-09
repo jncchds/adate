@@ -165,6 +165,7 @@ public sealed class WorldService(
     StoryStateRepository story,
     SceneLogRepository sceneLog,
     ThreadRepository threads,
+    HappeningIdeaRepository happeningIdeas,
     PlanRepository plans,
     Game.Core.Content.ILocationCatalog placeTypes,
     ISettingCatalog settings,
@@ -1391,6 +1392,11 @@ public sealed class WorldService(
             await KeepThreadsAsync(saveId, Owner(built.Cast, outcome.With)?.Id, written.Threads, written.Resolved, day, ct).ConfigureAwait(false);
         }
 
+        if (!written.Fallback && known.FirstOrDefault(p => p.Id == outcome.PlaceId) is { } sceneSpot)
+        {
+            await KeepHappeningsAsync(saveId, sceneSpot.TypeId, written.Happenings, built.Cast.Select(li => li.Name).Append(packet.PlayerName), day, ct).ConfigureAwait(false);
+        }
+
         foreach (var fact in written.Facts)
         {
             await story.AddFactAsync(saveId, fact.Fact, storyContent.Predicate(fact.Fact.Predicate), fact.Knowers, fact.ExplainedBy, ct).ConfigureAwait(false);
@@ -1640,8 +1646,9 @@ public sealed class WorldService(
             LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, day, looseEndsOverride, ct).ConfigureAwait(false) : null,
             Happening: quality.Happenings && place is not null && outcome.EncounterId is JsonEncounterCatalog.QuietAloneId
                 or JsonEncounterCatalog.QuietCompanyId or JsonEncounterCatalog.ChanceMeetingId or JsonEncounterCatalog.PromisedMeetingId or JsonEncounterCatalog.InitiativeId
-                ? happenings.Pick(saveId.ToString(), place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt)
+                ? await HappeningForAsync(saveId, place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt, ct).ConfigureAwait(false)
                 : null,
+            ProposeHappenings: quality.Happenings,
             VariedChoices: quality.VariedChoices,
             Outfit: outfit,
             OtherOutfits: otherOutfits,
@@ -2168,6 +2175,38 @@ public sealed class WorldService(
             Drawn: dressed is null ? null : [dressed.Id.ToString(), .. presentPeople.Where(li => li.Id != dressed.Id).Select(li => li.Id.ToString())]);
 
         return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
+    }
+
+    /// <summary>
+    /// The small happening for a scene: sometimes one the model proposed for this kind of place in an earlier
+    /// scene (kept by <see cref="HappeningIdeas"/>), otherwise the authored list's. The same scene gets the same
+    /// one however often its packet is built.
+    /// </summary>
+    private async Task<string?> HappeningForAsync(SaveId saveId, string placeTypeId, string? weatherId, ClockState clock, CancellationToken ct)
+    {
+        if (Initiative.Unit($"{saveId}|{placeTypeId}|{clock.Day}|{clock.Slot}|idea") < HappeningIdeas.UseChance
+            && await happeningIdeas.TakeAsync(saveId, placeTypeId, $"{clock.Day}|{clock.Slot}", ct).ConfigureAwait(false) is { } idea)
+        {
+            return idea;
+        }
+
+        return happenings.Pick(saveId.ToString(), placeTypeId, weatherId, clock);
+    }
+
+    /// <summary>Keeps the happenings a written scene proposed for its kind of place, those C# accepts.</summary>
+    private async Task KeepHappeningsAsync(SaveId saveId, string placeTypeId, IReadOnlyList<string>? proposed, IEnumerable<string> names, int day, CancellationToken ct)
+    {
+        if (proposed is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var existing = (await happeningIdeas.TextsAsync(saveId, ct).ConfigureAwait(false)).Concat(happenings.AllTexts(placeTypeId));
+        var accepted = HappeningIdeas.Accept(proposed, names, existing);
+        if (accepted.Count > 0)
+        {
+            await happeningIdeas.AddAsync(saveId, placeTypeId, accepted, day, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>

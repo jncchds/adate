@@ -89,7 +89,8 @@ public sealed record ScenePacket(
     bool VariedChoices = false,
     PacketOutfit? Outfit = null,
     IReadOnlyList<PacketOutfit>? OtherOutfits = null,
-    IReadOnlyList<string>? Drawn = null);
+    IReadOnlyList<string>? Drawn = null,
+    bool ProposeHappenings = false);
 
 public static class ScenePacketBuilder
 {
@@ -480,6 +481,11 @@ public static class ScenePacketBuilder
         if (packet.LooseEnds is not null)
         {
             text.AppendLine(ThreadRules);
+        }
+
+        if (packet.ProposeHappenings)
+        {
+            text.AppendLine(HappeningIdeas.Rule);
         }
 
         return text.ToString();

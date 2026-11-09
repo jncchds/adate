@@ -37,7 +37,8 @@ public sealed record SceneResponse(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     SceneResponseOutfit? Outfit = null,
-    IReadOnlyList<SceneResponsePresence>? Present = null);
+    IReadOnlyList<SceneResponsePresence>? Present = null,
+    IReadOnlyList<string>? Happenings = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -64,7 +65,8 @@ public sealed record WrittenScene(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     Game.Core.Story.Outfit? Outfit = null,
-    IReadOnlyList<Presence>? Present = null);
+    IReadOnlyList<Presence>? Present = null,
+    IReadOnlyList<string>? Happenings = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -250,7 +252,8 @@ public sealed class SceneWriter(
                         Settled(packet, response.Resolved),
                         [.. (response.Routines ?? []).Where(r => r is not null)],
                         Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
-                        Present(packet, response.Present));
+                        Present(packet, response.Present),
+                        packet.ProposeHappenings ? [.. (response.Happenings ?? []).Where(h => h is not null)] : null);
                 }
 
                 lastReasons = reasons;
@@ -357,6 +360,12 @@ public sealed class SceneWriter(
         {
             properties["present"] = PresenceProperty(packet);
             required.Add("present");
+        }
+
+        if (packet.ProposeHappenings)
+        {
+            properties["happenings"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } };
+            required.Add("happenings");
         }
 
         if (packet.LooseEnds is not null)
