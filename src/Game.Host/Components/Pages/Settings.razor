@@ -1,0 +1,170 @@
+@page "/settings"
+@using Game.Host.Services
+@using Game.Llm
+@inject IConfiguration Configuration
+@inject IHostApplicationLifetime Lifetime
+@rendermode InteractiveServer
+
+<PageTitle>Settings</PageTitle>
+
+<a class="back-link" href="/">‹ Back</a>
+
+<h1>Settings</h1>
+
+<p class="lede">
+    Which language model writes the story and where the image service runs. Changes are saved to
+    <code>@HostSettings.FilePath</code> and take effect after the host restarts.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+<EditForm Model="@_form" OnSubmit="@Save" FormName="settings">
+    <h2>Language model</h2>
+    <div class="grid">
+        <label>
+            Provider
+            <InputSelect Value="@_form.Provider" ValueChanged="@((LlmProviderType p) => ProviderChanged(p))" ValueExpression="@(() => _form.Provider)">
+                @foreach (var provider in LlmProviders.All)
+                {
+                    <option value="@provider">@LlmProviders.Label(provider)</option>
+                }
+            </InputSelect>
+        </label>
+
+        <label>
+            Address
+            <InputText @bind-Value="_form.LlmAddress" placeholder="@LlmProviders.DefaultAddress(_form.Provider)" />
+            <small>Empty means @LlmProviders.DefaultAddress(_form.Provider).</small>
+        </label>
+
+        <label>
+            API key
+            <InputText @bind-Value="_form.LlmApiKey" type="password" autocomplete="off" />
+            <small>@(LlmProviders.NeedsApiKey(_form.Provider) ? "Required." : "Only if the server asks for one.")</small>
+        </label>
+
+        <label>
+            Scene model
+            <InputText @bind-Value="_form.LlmModel" />
+            <small>@(LlmProviders.NeedsModel(_form.Provider) ? "Required." : "Empty uses the model the server has loaded.")</small>
+        </label>
+
+        <label>
+            Embedding model
+            <InputText @bind-Value="_form.EmbeddingModel" />
+        </label>
+
+        <label>
+            Reasoning effort
+            <InputSelect @bind-Value="_form.ReasoningEffort">
+                <option value="">default</option>
+                <option value="none">none</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+            </InputSelect>
+        </label>
+    </div>
+
+    <h2>Image service</h2>
+    <div class="grid">
+        <label>
+            Z-Image address
+            <InputText @bind-Value="_form.ImageAddress" placeholder="http://192.168.2.33:8000" />
+        </label>
+    </div>
+
+    <button type="submit">Save</button>
+    <button type="button" @onclick="ResetAsync">Back to defaults</button>
+</EditForm>
+
+@if (_saved)
+{
+    <p class="lede">
+        Saved. The host reads these once, so it has to restart.
+        <button type="button" @onclick="Lifetime.StopApplication">Stop the host</button>
+        (start it again with the same command).
+    </p>
+}
+
+@code {
+    private Form _form = new();
+    private string? _error;
+    private bool _saved;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            Load();
+        }
+        catch (InvalidOperationException ex)
+        {
+            // An unknown provider in the file is exactly what this page is for fixing.
+            _error = ex.Message;
+        }
+    }
+
+    private void Load()
+    {
+        var current = HostSettings.From(Configuration);
+        _form = new()
+        {
+            Provider = current.LlmProvider,
+            LlmAddress = current.LlmAddress,
+            LlmApiKey = current.LlmApiKey,
+            LlmModel = current.LlmModel,
+            EmbeddingModel = current.EmbeddingModel,
+            ReasoningEffort = current.ReasoningEffort,
+            ImageAddress = current.ImageAddress,
+        };
+    }
+
+    // A hosted provider lives at one address, so an address typed for a server of your own would only be wrong there.
+    private void ProviderChanged(LlmProviderType provider)
+    {
+        _form.Provider = provider;
+        if (LlmProviders.NeedsApiKey(provider))
+        {
+            _form.LlmAddress = "";
+        }
+    }
+
+    private void Save()
+    {
+        _error = null;
+        _saved = false;
+
+        try
+        {
+            new HostSettings(_form.Provider, _form.LlmAddress ?? "", _form.LlmApiKey ?? "", _form.LlmModel ?? "",
+                _form.EmbeddingModel ?? "", _form.ReasoningEffort ?? "", _form.ImageAddress ?? "").Save();
+            _saved = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void ResetAsync()
+    {
+        HostSettings.Reset();
+        _error = null;
+        _saved = true;
+    }
+
+    private sealed class Form
+    {
+        public LlmProviderType Provider { get; set; }
+        public string? LlmAddress { get; set; }
+        public string? LlmApiKey { get; set; }
+        public string? LlmModel { get; set; }
+        public string? EmbeddingModel { get; set; }
+        public string? ReasoningEffort { get; set; }
+        public string? ImageAddress { get; set; }
+    }
+}

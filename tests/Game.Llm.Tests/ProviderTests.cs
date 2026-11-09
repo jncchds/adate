@@ -194,6 +194,43 @@ public class ProviderTests
         Assert.Equal("object", generation["responseJsonSchema"]!["type"]!.GetValue<string>());
     }
 
+    private sealed class BusyThenOkHandler(HttpStatusCode busy, int busyReplies, string body) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(Calls <= busyReplies
+                ? new HttpResponseMessage(busy) { Content = new StringContent("high demand") }
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
+    [Fact]
+    public async Task Google_tries_again_when_it_is_busy()
+    {
+        var options = new LlmOptions { Provider = LlmProviderType.GoogleAi, ApiKey = "k", Model = "gemini-2.5-flash" };
+        var handler = new BusyThenOkHandler(HttpStatusCode.ServiceUnavailable, 1, """{ "candidates": [ { "content": { "parts": [ { "text": "{\"text\":\"hi\"}" } ] } } ] }""");
+
+        var answer = await new GoogleAiClient(new HttpClient(handler) { BaseAddress = options.ChatAddress }, Options.Create(options)).CompleteJsonAsync(Request());
+
+        Assert.Equal("""{"text":"hi"}""", answer);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Google_does_not_retry_a_bad_request()
+    {
+        var options = new LlmOptions { Provider = LlmProviderType.GoogleAi, ApiKey = "k", Model = "gemini-2.5-flash" };
+        var handler = new BusyThenOkHandler(HttpStatusCode.BadRequest, 5, "{}");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            new GoogleAiClient(new HttpClient(handler) { BaseAddress = options.ChatAddress }, Options.Create(options)).CompleteJsonAsync(Request()));
+
+        Assert.Equal(1, handler.Calls);
+    }
+
     [Fact]
     public async Task A_blocked_prompt_from_Google_is_an_exception_with_its_reason()
     {

@@ -13,6 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 // independently addressable and are not assumed to share a machine.
 builder.Configuration.AddEnvironmentVariables("ADATE_");
 
+// The settings page writes the player's choices here; they sit over appsettings.
+builder.Configuration.AddJsonFile(Game.Host.Services.HostSettings.FilePath, optional: true, reloadOnChange: false);
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 

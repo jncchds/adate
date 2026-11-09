@@ -121,27 +121,53 @@ internal static class GoogleAiHttp
         return id.StartsWith("models/", StringComparison.Ordinal) ? id : "models/" + id;
     }
 
+    internal const int BusyRetries = 3;
+
+    /// <summary>Gemini is overloaded or rate-limiting ("high demand" is common on the free tier): worth trying again shortly.</summary>
+    internal static bool IsBusy(System.Net.HttpStatusCode status) => status is System.Net.HttpStatusCode.TooManyRequests
+        or System.Net.HttpStatusCode.InternalServerError or System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout;
+
+    /// <summary>Wait before try number <paramref name="attempt"/> (1-based): Google's Retry-After when it gives one (at most a minute), else 2, 4, 8 s.</summary>
+    internal static TimeSpan RetryDelay(int attempt, TimeSpan? retryAfter) =>
+        retryAfter is { } wait && wait > TimeSpan.Zero
+            ? (wait < TimeSpan.FromMinutes(1) ? wait : TimeSpan.FromMinutes(1))
+            : TimeSpan.FromSeconds(Math.Pow(2, attempt));
+
     public static async Task<string> PostAsync(HttpClient http, LlmOptions settings, string path, JsonObject body, CancellationToken ct)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, path)
-        {
-            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
-        };
+        var json = body.ToJsonString();
+        var busy = 0;
 
-        if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+        while (true)
         {
-            message.Headers.Add("x-goog-api-key", settings.ApiKey.Trim());
-        }
+            using var message = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
 
-        using var response = await http.SendAsync(message, ct).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+            {
+                message.Headers.Add("x-goog-api-key", settings.ApiKey.Trim());
+            }
 
-        if (!response.IsSuccessStatusCode)
-        {
+            using var response = await http.SendAsync(message, ct).ConfigureAwait(false);
+            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return payload;
+            }
+
+            if (IsBusy(response.StatusCode) && busy < BusyRetries)
+            {
+                await Task.Delay(RetryDelay(++busy, response.Headers.RetryAfter?.Delta), ct).ConfigureAwait(false);
+                continue;
+            }
+
             throw new HttpRequestException(
-                $"Google AI Studio answered {(int)response.StatusCode}: {payload[..Math.Min(300, payload.Length)]}");
+                $"Google AI Studio answered {(int)response.StatusCode}: {payload[..Math.Min(300, payload.Length)]}",
+                null,
+                response.StatusCode);
         }
-
-        return payload;
     }
 }
