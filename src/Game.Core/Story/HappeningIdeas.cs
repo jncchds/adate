@@ -27,7 +27,7 @@ public static partial class HappeningIdeas
     public const string Rule =
         "- happenings: up to two small ordinary things that could be going on at a place like this on another day " +
         "(a delivery, a noise, someone passing, an object out of place), each one plain sentence in English under 120 characters, " +
-        "with no names, no numbers, no clock times, no 'you' and nothing about love or how anyone feels; an empty list if none.";
+        "with no names, no numbers, no clock times, no 'you' and nothing about love or how anyone feels, and not the same as anything going on in this scene; an empty list if none.";
 
     // Words that would settle something between people or about the player, which only C# may do.
     [GeneratedRegex(@"\b(you|your|yours|yourself|love|loves|loved|kiss|kisses|kissed|date|dating|marry|married|wedding|breakup|boyfriend|girlfriend|lover|crush)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -44,7 +44,7 @@ public static partial class HappeningIdeas
         ArgumentNullException.ThrowIfNull(existing);
 
         var named = names.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()).ToList();
-        var seen = existing.Select(Normal).ToHashSet(StringComparer.Ordinal);
+        var known = existing.Select(Words).ToList();
         var kept = new List<string>();
 
         foreach (var raw in proposed ?? [])
@@ -56,11 +56,12 @@ public static partial class HappeningIdeas
                 || text.Any(char.IsDigit)
                 || Settles().IsMatch(text)
                 || named.Any(n => Mentions(text, n))
-                || !seen.Add(Normal(text)))
+                || known.Any(words => Alike(words, Words(text))))
             {
                 continue;
             }
 
+            known.Add(Words(text));
             kept.Add(text);
             if (kept.Count == PerAnswer)
             {
@@ -74,6 +75,24 @@ public static partial class HappeningIdeas
     private static bool Mentions(string text, string name) =>
         Regex.IsMatch(text, $@"(?<!\p{{L}}){Regex.Escape(name)}(?!\p{{L}})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    private static string Normal(string text) =>
-        string.Concat(text.Where(char.IsLetter)).ToLowerInvariant();
+    /// <summary>The longer words of a sentence, which carry what it is about ("delivery", "buzzes", "flat").</summary>
+    private static HashSet<string> Words(string text) =>
+        [.. Regex.Matches(text.ToLowerInvariant(), @"\p{L}{4,}").Select(m => m.Value)];
+
+    /// <summary>
+    /// Whether two sentences are about the same thing: a model told to suggest something different tends to
+    /// reword what it was just given ("A delivery driver buzzes the wrong flat" for "...is buzzing the wrong flat").
+    /// </summary>
+    private static bool Alike(HashSet<string> a, HashSet<string> b)
+    {
+        if (a.Count == 0 || b.Count == 0)
+        {
+            return a.SetEquals(b);
+        }
+
+        // Compared by stem (the first five letters), so "buzzes" and "buzzing" count as the same word.
+        var stems = a.Select(w => w[..Math.Min(5, w.Length)]).ToHashSet(StringComparer.Ordinal);
+        var other = b.Select(w => w[..Math.Min(5, w.Length)]).ToHashSet(StringComparer.Ordinal);
+        return stems.Intersect(other).Count() >= Math.Max(2, Math.Min(stems.Count, other.Count) / 2);
+    }
 }

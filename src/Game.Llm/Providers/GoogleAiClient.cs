@@ -21,9 +21,13 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
         var settings = options.Value;
         var generation = new JsonObject { ["temperature"] = settings.Temperature };
 
+        var thinking = !LlmProviders.IsGemma(settings.Model) ? ThinkingBudget(settings.ReasoningEffort) : null;
+
+        // Thinking tokens are spent from the same output cap: an 8k budget under a 2-3k cap cut the JSON off
+        // mid-string and cost a retry on most turns (seen in live play), so the cap is raised by the budget.
         if (request.MaxTokens is { } maxTokens)
         {
-            generation["maxOutputTokens"] = maxTokens;
+            generation["maxOutputTokens"] = maxTokens + (thinking ?? 0);
         }
 
         if (json)
@@ -32,7 +36,7 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
             generation["responseJsonSchema"] = request.Schema.DeepClone();
         }
 
-        if (!LlmProviders.IsGemma(settings.Model) && ThinkingBudget(settings.ReasoningEffort) is { } budget)
+        if (thinking is { } budget)
         {
             generation["thinkingConfig"] = new JsonObject { ["thinkingBudget"] = budget };
         }

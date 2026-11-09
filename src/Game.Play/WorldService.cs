@@ -1424,7 +1424,7 @@ public sealed class WorldService(
 
         if (!written.Fallback && known.FirstOrDefault(p => p.Id == outcome.PlaceId) is { } sceneSpot)
         {
-            await KeepHappeningsAsync(saveId, sceneSpot.TypeId, written.Happenings, built.Cast.Select(li => li.Name).Append(packet.PlayerName), day, ct).ConfigureAwait(false);
+            await KeepHappeningsAsync(saveId, sceneSpot.TypeId, written.Happenings, built.Cast.Select(li => li.Name).Append(packet.PlayerName), packet.Happening, day, ct).ConfigureAwait(false);
         }
 
         foreach (var fact in written.Facts)
@@ -2242,14 +2242,14 @@ public sealed class WorldService(
     }
 
     /// <summary>Keeps the happenings a written scene proposed for its kind of place, those C# accepts.</summary>
-    private async Task KeepHappeningsAsync(SaveId saveId, string placeTypeId, IReadOnlyList<string>? proposed, IEnumerable<string> names, int day, CancellationToken ct)
+    private async Task KeepHappeningsAsync(SaveId saveId, string placeTypeId, IReadOnlyList<string>? proposed, IEnumerable<string> names, string? current, int day, CancellationToken ct)
     {
         if (proposed is not { Count: > 0 })
         {
             return;
         }
 
-        var existing = (await happeningIdeas.TextsAsync(saveId, ct).ConfigureAwait(false)).Concat(happenings.AllTexts(placeTypeId));
+        var existing = (await happeningIdeas.TextsAsync(saveId, ct).ConfigureAwait(false)).Concat(happenings.AllTexts(placeTypeId)).Concat(current is null ? [] : [current]);
         var accepted = HappeningIdeas.Accept(proposed, names, existing);
         if (accepted.Count > 0)
         {

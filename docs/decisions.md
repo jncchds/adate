@@ -1863,3 +1863,21 @@ reload); the model only colours scenes with it, and no extra call is made.
 * **Still open:** the model does not yet propose goals or moods itself (they are rolled, not generated), and
   promises are acted on through the seek-out chance and the packet's loose ends, not through new scenes of
   their own.
+
+## What a play-through showed (flash-lite, 15 scenes over 3 days, 97 model turns, no fallback)
+
+* **Thinking tokens were eating the output cap.** With reasoning effort "medium" the budget is 8192 tokens
+  inside a 2-3k `maxOutputTokens`, so the JSON was cut off mid-string and the first scene needed a retry. The
+  Google client now adds the thinking budget to the cap. After that every remaining retry (13% of turns) was
+  a real check: first person in narration, narration deciding for the player, an unfinished quote.
+* **The model reworded the happening it had just been given** and offered it back as a "new" idea (a delivery
+  driver buzzing the wrong flat, twice in a row). Ideas are now compared by the stems of their longer words
+  against the authored list, the kept ideas and the scene's own happening, and the prompt says not to repeat
+  what is going on.
+* **Moods show.** A person with the goal "show or share something" held out a paper parcel; a restless one
+  tapped a boot. Day shapes read as a line in the weather and change who is about.
+* **Replies are the cost.** 93 of 155 calls were reactions, because a scene runs six or seven exchanges. The
+  next lever for a small quota is a lower reply ceiling per scene (`SceneConversation.CeilingFor`), or the
+  judge off (`UseJudge`), which is one call per scene.
+* **The measure runner** now puts a closed scene away and goes to the agreed place when heading somewhere
+  together (it stopped on both), and takes `--max-turns`.

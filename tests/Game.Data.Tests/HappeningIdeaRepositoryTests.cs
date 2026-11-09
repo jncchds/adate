@@ -60,6 +60,17 @@ public class HappeningIdeasTests
         Assert.Empty(HappeningIdeas.Accept([idea], Names, []));
 
     [Fact]
+    public void A_rewording_of_what_is_already_going_on_is_refused()
+    {
+        var kept = HappeningIdeas.Accept(
+            ["A delivery driver buzzes the wrong flat repeatedly.", "A neighbour's radio plays an old song through the wall."],
+            Names,
+            ["A delivery driver is buzzing the wrong flat, over and over."]);
+
+        Assert.Equal(["A neighbour's radio plays an old song through the wall."], kept);
+    }
+
+    [Fact]
     public void A_repeat_of_what_is_already_in_hand_is_refused_and_only_two_are_kept()
     {
         var kept = HappeningIdeas.Accept(
