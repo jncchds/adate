@@ -9,6 +9,7 @@ namespace Game.Core.Story;
 /// <param name="RevealedWant">Their want, once the player has learned it; never before.</param>
 /// <param name="Voice">How they talk, written once for them; null when voices are off or not yet written.</param>
 /// <param name="Routine">Their usual week, so they can mention it: "weekday mornings at the dock; nights at home".</param>
+/// <param name="Today">How they are today (their mood and what they want of the day), as one line for the writer.</param>
 /// <param name="Away">Why they are not here now although the scene is with them: they come in later, or they left.</param>
 public sealed record PacketPerson(
     string Id,
@@ -18,7 +19,8 @@ public sealed record PacketPerson(
     string? RevealedWant,
     string? Voice = null,
     string? Routine = null,
-    PersonAway? Away = null);
+    PersonAway? Away = null,
+    string? Today = null);
 
 /// <summary>Why someone the scene is with is not here now.</summary>
 public enum PersonAway
@@ -312,6 +314,11 @@ public static class ScenePacketBuilder
             if (person.Voice is { } voice)
             {
                 text.AppendLine($"  How {person.Name} talks: {voice}");
+            }
+
+            if (person.Today is { } today)
+            {
+                text.AppendLine($"  {today}");
             }
 
             if (person.Routine is { } routine)

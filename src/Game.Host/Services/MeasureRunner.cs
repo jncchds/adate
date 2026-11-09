@@ -99,6 +99,9 @@ public static class MeasureRunner
         var opening = setting.Openings.FirstOrDefault(o => o.Id == Arg(args, "--opening")) ?? setting.Openings[0];
         var varied = Arg(args, "--policy") == "varied";
 
+        // --policy company: go where someone met is now, and otherwise spread visits out as usual.
+        var company = Arg(args, "--policy") == "company";
+
         // A new game the way the form makes one, with the first option of every feature.
         // --save <id> carries on an existing save instead of starting one; --stop-at-ending leaves the
         // ending offer on screen for a person to pick, rather than taking the first route.
@@ -184,6 +187,11 @@ public static class MeasureRunner
             // Follow the story's hints, bring someone along whenever an encounter would honour it,
             // and otherwise spread visits over the places the player knows.
             var place = PlaceFor(play, opening, visits);
+            if (company && play.Clock.Slot is not Game.Core.Scenes.TimeOfDay.Night
+                && (await world.WhereAreTheyAsync(save.Id)).Values.FirstOrDefault() is { } where)
+            {
+                place = where;
+            }
             var invite = play.Invitees.FirstOrDefault()?.Key;
 
             Game.Core.Encounters.TurnOutcome outcome;

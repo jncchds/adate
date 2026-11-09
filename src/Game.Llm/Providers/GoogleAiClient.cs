@@ -112,12 +112,7 @@ internal static class GoogleAiHttp
     /// <summary>Model ids are accepted with or without the <c>models/</c> prefix Google lists them with.</summary>
     public static string ModelPath(string model)
     {
-        if (string.IsNullOrWhiteSpace(model))
-        {
-            throw new InvalidOperationException("Google AI Studio needs a model id, such as gemini-3.6-flash.");
-        }
-
-        var id = model.Trim();
+        var id = string.IsNullOrWhiteSpace(model) ? LlmProviders.DefaultGoogleModel : model.Trim();
         return id.StartsWith("models/", StringComparison.Ordinal) ? id : "models/" + id;
     }
 

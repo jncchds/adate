@@ -49,7 +49,7 @@
         <label>
             Scene model
             <InputText @bind-Value="_form.LlmModel" />
-            <small>@(LlmProviders.NeedsModel(_form.Provider) ? "Required." : "Empty uses the model the server has loaded.")</small>
+            <small>@(LlmProviders.NeedsModel(_form.Provider) ? "Required." : _form.Provider == LlmProviderType.GoogleAi ? $"Empty uses {LlmProviders.DefaultGoogleModel}." : "Empty uses the model the server has loaded.")</small>
         </label>
 
         <label>
