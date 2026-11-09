@@ -1839,6 +1839,27 @@ retry added in the settings page spent the rest of the quota retrying 429s.
   settles feelings, and not a repeat. Kept ideas (migration 021) are used by a later scene at that kind of
   place 60% of the time, once each and stable across a rewrite; the authored list is the fallback. No extra
   call: the idea rides on the scene's own answer. The model never owns state.
-* **Not done:** characters with goals and moods, remembered promises beyond the existing threads, varied day
-  shapes and a company-seeking measure policy. Free-language reply scoring already exists (tags are read from
-  free words when none are chosen).
+
+## Days have a shape, people have a mood and a goal, and both move who turns up
+
+Follow-up to the above, for "make it less scripted". All of it is C#, rolled per save and day (the same on a
+reload); the model only colours scenes with it, and no extra call is made.
+
+* **Day shape** (`DayShapes`): ordinary 50%, quiet 20%, busy 15%, lively 15%. It scales how often people are
+  off their routine (`WorldMoves.Where`), how often a stranger is met by chance, and how often someone seeks
+  the player out; a non-ordinary day also adds one line to the packet's weather ("The town is lively today").
+* **Mood and goal** (`Disposition`): per person and day. Four days or more unseen makes them wistful; the
+  goal (company, alone, errand, show something) follows the mood. Their `InitiativeScale` multiplies the
+  seek-out chance (company x1.6, alone x0.3), and the packet gets one line for each present person, to be
+  shown in small ways and never stated. The debug screen lists both.
+* **Something left open** (an open thread with that person: a promise, a question) makes them x1.3 likelier
+  to seek the player out. The cap `Initiative.MaxChance` still holds.
+* **Measure policy** `--policy company` goes to where a met person is now (`WorldService.WhereAreTheyAsync`)
+  instead of the least visited place.
+* **Fewer calls:** the retrieval embedding is skipped while there are hardly more memories than a packet takes
+  (recency picks the same ones). A first scene is now bible 1, voices 1, scene 1, judge 1, embed 1.
+* **`gemini-3.5-flash-lite` is the default Google AI model** when none is set, and no longer needs to be
+  entered in Settings; it is also what tests and live runs use.
+* **Still open:** the model does not yet propose goals or moods itself (they are rolled, not generated), and
+  promises are acted on through the seek-out chance and the packet's loose ends, not through new scenes of
+  their own.
