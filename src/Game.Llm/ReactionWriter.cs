@@ -19,7 +19,8 @@ public sealed record ReactionResponse(
     IReadOnlyList<SceneResponsePlace>? Places = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     SceneResponseOutfit? Outfit = null,
-    IReadOnlyList<SceneResponsePresence>? Present = null);
+    IReadOnlyList<SceneResponsePresence>? Present = null,
+    string? Moment = null);
 
 /// <param name="Present">Who the answer says is here at the end and how they look; null when it said nothing or nobody is drawn.</param>
 /// <param name="Tags">What the reply shows about the player: the proposed choice's tags, or the ones read from free text.</param>
@@ -29,6 +30,7 @@ public sealed record ReactionResponse(
 /// <param name="Places">Places the reaction named, unchecked: C# checks them against the place types and stores the good ones.</param>
 /// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
 /// <param name="Outfit">What the main person changed into or put on in the reaction, such as a jacket the player offered; null for no change.</param>
+/// <param name="Moment">The shot of a moment worth seeing at its end, uncleaned: the same words keep the one on screen; null for none.</param>
 public sealed record WrittenReaction(
     string Text,
     string? Expression,
@@ -45,7 +47,8 @@ public sealed record WrittenReaction(
     IReadOnlyList<Game.Core.Places.PlaceProposal>? Places = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     Outfit? Outfit = null,
-    IReadOnlyList<Presence>? Present = null);
+    IReadOnlyList<Presence>? Present = null,
+    string? Moment = null);
 
 /// <summary>
 /// Writes how the people present react to the player's reply (phase-3 plan: choices). For free text,
@@ -169,6 +172,7 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                         + string.Concat(NarrationLanguage.DataRules(packet.Language, packet.PlayerGender).Select(rule => $"- {rule}\n"))
                         + $"- {ScenePacketBuilder.ExpressionRule(packet)}\n"
                         + (ScenePacketBuilder.PresenceRule(packet) is { } presence ? $"- {presence}\n" : "")
+                        + (ScenePacketBuilder.MomentRule(packet) is { } moment ? $"- {moment}\n" : "")
                         + fieldRules;
                     var raw = await llm.CompleteJsonAsync(new LlmRequest(ExtractSystemPrompt, extract, "reaction", schema, maxTokens), ct).ConfigureAwait(false);
                     response = JsonSerializer.Deserialize<ReactionResponse>(raw, Json) is { } read ? read with { Text = prose } : null;
@@ -236,7 +240,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
                     ],
                     Routines: [.. (response.Routines ?? []).Where(r => r is not null)],
                     Outfit: alone ? null : Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
-                    Present: SceneWriter.Present(packet, response.Present));
+                    Present: SceneWriter.Present(packet, response.Present),
+                    Moment: SceneWriter.Moment(packet, response.Moment));
             }
 
             lastReasons = reasons;
@@ -320,7 +325,8 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         if (packet.Drawn is { Count: > 0 })
         {
             properties["present"] = SceneWriter.PresenceProperty(packet);
-            required.Add("present");
+            properties["moment"] = SceneWriter.MomentProperty();
+            required.AddRange(["present", "moment"]);
         }
 
         if (packet.LooseEnds is not null)
@@ -387,6 +393,11 @@ public sealed class ReactionWriter(ILlmClient llm, StoryContent story, CastConte
         if (response.Text.Length > MaxLength)
         {
             reasons.Add($"The reaction is {response.Text.Length} characters; keep it under {MaxLength}.");
+        }
+
+        if (packet.Drawn is { Count: > 0 })
+        {
+            SceneWriter.CheckMoment(response.Moment, reasons);
         }
 
         // The first-person and player-action checks read English words; other languages go without.

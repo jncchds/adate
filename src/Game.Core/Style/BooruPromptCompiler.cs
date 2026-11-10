@@ -112,6 +112,50 @@ public sealed class BooruPromptCompiler(ILocationCatalog locations) : IPromptCom
         return Join(tags);
     }
 
+    /// <remarks>
+    /// Tags have no way to say which look belongs to whom, so with two people their identities are listed one after the
+    /// other and may blend. The pack in daily use speaks the natural dialect, which can say it.
+    /// </remarks>
+    public string CompileMoment(IReadOnlyList<MomentSubject> people, ApprovedIntent scene, StylePack pack)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(pack);
+
+        if (people.Count == 0)
+        {
+            throw new ArgumentException("A moment is a picture of someone; it needs at least one person.", nameof(people));
+        }
+
+        var tags = new List<string>(48);
+        tags.AddRange(pack.PositivePrefix);
+
+        foreach (var person in people)
+        {
+            person.Appearance.Validate();
+            var subject = pack.SubjectFor(person.Appearance.Subject);
+
+            // The age anchor before any body descriptor, per person, as in a sprite.
+            tags.AddRange(subject.Positive);
+            tags.AddRange(subject.BandFor(person.Appearance.Age).Tags);
+            Add(tags, person.Appearance.HairColor);
+            Add(tags, person.Appearance.HairStyle);
+            Add(tags, person.Appearance.EyeColor);
+            Add(tags, person.Appearance.SkinTone);
+            Add(tags, person.Appearance.Build);
+            Add(tags, person.Appearance.Height);
+            Add(tags, person.Appearance.DistinguishingFeature);
+            Add(tags, person.Approved.Intent.Expression);
+            Add(tags, person.Approved.Intent.Outfit);
+        }
+
+        Add(tags, scene.Intent.Pose);
+        tags.Add("pov");
+        AppendLocation(tags, scene.Intent);
+
+        return Join(tags);
+    }
+
     public string CompileNegative(
         StylePack pack,
         Ceiling ceiling,

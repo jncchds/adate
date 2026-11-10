@@ -40,46 +40,14 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
         // 1. Pack style sentence.
         Add(sentences, pack.PositivePrefix);
 
+        if (target is RenderTarget.Moment)
+        {
+            throw new ArgumentException("A moment has people and a place; compile it with CompileMoment.", nameof(target));
+        }
+
         if (target is RenderTarget.Background)
         {
-            var location = locations.Get(intent.LocationId);
-
-            if (string.IsNullOrWhiteSpace(location.Description))
-            {
-                throw new InvalidOperationException(
-                    $"Location '{location.Id}' has no description, so it cannot be described to a " +
-                    "natural-language checkpoint. Its tags are booru vocabulary and would be read as prose.");
-            }
-
-            Add(sentences, location.Description);
-
-            // A story place's own look, after the type's description so the place is still of its type.
-            if (intent.LocationLook is { Length: > 0 } look)
-            {
-                Add(sentences, char.ToUpperInvariant(look[0]) + look[1..]);
-            }
-
-            var details = (intent.LocationDetails ?? []).Select(id => location.Detail(id).Phrase).ToList();
-            if (details.Count > 0)
-            {
-                Add(sentences, $"With {string.Join(", ", details)}");
-            }
-
-            // Weather other than clear takes the sky: the lighting line must not also describe one.
-            var weathered = intent.Weather is { } w && w != "clear" && location.NeutralTimeDescriptions is not null;
-            var lighting = weathered ? location.NeutralTimeDescriptions : location.TimeDescriptions;
-
-            if (lighting is not null && lighting.TryGetValue(intent.Time.ToString(), out var time))
-            {
-                Add(sentences, time);
-            }
-
-            if (intent.Weather is { } weather
-                && location.WeatherDescriptions?.TryGetValue(weather, out var looks) is true
-                && !string.IsNullOrWhiteSpace(looks))
-            {
-                Add(sentences, looks);
-            }
+            Place(sentences, intent);
 
             // A stray figure in a cached background is permanent. Kept short on purpose. Measured:
             // spelling it out ("no pedestrians, no figures in the distance") added figures in 4 of
@@ -101,6 +69,87 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
 
         var subject = pack.SubjectFor(appearance.Subject);
 
+        Person(sentences, appearance, subject, intent);
+        Add(sentences, [intent.Pose, FramingPhrase(intent.Framing)]);
+
+        // 5. Restate what the prior drops, last before the background. Measured: a declared beard
+        //    was on every portrait and gone from every sprite, where the expression and outfit
+        //    sentences sit between it and the end of the prompt.
+        Add(sentences, Restatement(appearance, subject));
+
+        // 6. Background handling.
+        Add(sentences, target is RenderTarget.Sprite
+            ? "Only this one person, isolated on a plain flat light grey background with no scenery and no other people"
+            : "A plain light grey studio background with no other people");
+
+        return Join(sentences);
+    }
+
+    /// <remarks>
+    /// <para>
+    /// Each person is described in their own sentences, the first "on the left", so two people keep their own looks.
+    /// The place follows in the background's own words, without its "no people" sentence.
+    /// </para>
+    /// <para>
+    /// The people are placed on the left and the right is left open, because that is where the words sit over the
+    /// picture in landscape, and what an upright screen's crop keeps (user request: the game's UI must not cover what
+    /// matters). The player is never drawn: the shot says "the viewer" for them, and the picture is from their eyes.
+    /// </para>
+    /// </remarks>
+    public string CompileMoment(IReadOnlyList<MomentSubject> people, ApprovedIntent scene, StylePack pack)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(pack);
+
+        if (people.Count == 0)
+        {
+            throw new ArgumentException("A moment is a picture of someone; it needs at least one person.", nameof(people));
+        }
+
+        var sentences = new List<string>(16);
+        Add(sentences, pack.PositivePrefix);
+
+        for (var i = 0; i < people.Count; i++)
+        {
+            var person = people[i];
+            person.Appearance.Validate();
+            var subject = pack.SubjectFor(person.Appearance.Subject);
+
+            var first = sentences.Count;
+            Person(sentences, person.Appearance, subject, person.Approved.Intent);
+
+            if (people.Count > 1)
+            {
+                var lead = sentences[first];
+                sentences[first] = $"{(i == 0 ? "On the left" : "Beside them")}, {char.ToLowerInvariant(lead[0])}{lead[1..]}";
+            }
+
+            Add(sentences, Restatement(person.Appearance, subject));
+        }
+
+        // What they are doing: the writer's shot, through the gate at the strictest ceiling of anyone in it.
+        if (!string.IsNullOrWhiteSpace(scene.Intent.Pose))
+        {
+            var shot = scene.Intent.Pose.Trim();
+            Add(sentences, char.ToUpperInvariant(shot[0]) + shot[1..]);
+        }
+
+        Add(sentences, "Seen from the viewer's point of view");
+        Place(sentences, scene.Intent);
+
+        var who = people.Count == 1 ? "This one person is" : $"These {Count(people.Count)} people are";
+        Add(sentences, $"{who} on the left side of the picture, and the right side is open, quiet background");
+        Add(sentences, people.Count == 1 ? "Only this one person in the scene" : $"Only these {Count(people.Count)} people in the scene");
+
+        return Join(sentences);
+    }
+
+    private static string Count(int n) => n switch { 2 => "two", 3 => "three", _ => n.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+
+    /// <summary>Who someone is and how they look here: subject, age, build, identity, clothes and expression.</summary>
+    private static void Person(List<string> sentences, CharacterAppearance appearance, SubjectProfile subject, SceneIntent intent)
+    {
         // 2. Subject, skin tone, age band, build. Measured: in the identity list declared brown skin
         //    rendered fair; placed next to the subject with pack wording it renders brown. Skin tone
         //    is not the kind of descriptor HANDOFF 1.9 orders the age band against -- that is build
@@ -130,19 +179,49 @@ public sealed class NaturalPromptCompiler(ILocationCatalog locations) : IPromptC
         }
 
         Add(sentences, intent.Expression);
-        Add(sentences, [intent.Pose, FramingPhrase(intent.Framing)]);
+    }
 
-        // 5. Restate what the prior drops, last before the background. Measured: a declared beard
-        //    was on every portrait and gone from every sprite, where the expression and outfit
-        //    sentences sit between it and the end of the prompt.
-        Add(sentences, Restatement(appearance, subject));
+    /// <summary>The place: its type's description, a story place's look, details, the light at this time and the weather.</summary>
+    private void Place(List<string> sentences, SceneIntent intent)
+    {
+        var location = locations.Get(intent.LocationId);
 
-        // 6. Background handling.
-        Add(sentences, target is RenderTarget.Sprite
-            ? "Only this one person, isolated on a plain flat light grey background with no scenery and no other people"
-            : "A plain light grey studio background with no other people");
+        if (string.IsNullOrWhiteSpace(location.Description))
+        {
+            throw new InvalidOperationException(
+                $"Location '{location.Id}' has no description, so it cannot be described to a " +
+                "natural-language checkpoint. Its tags are booru vocabulary and would be read as prose.");
+        }
 
-        return Join(sentences);
+        Add(sentences, location.Description);
+
+        // A story place's own look, after the type's description so the place is still of its type.
+        if (intent.LocationLook is { Length: > 0 } look)
+        {
+            Add(sentences, char.ToUpperInvariant(look[0]) + look[1..]);
+        }
+
+        var details = (intent.LocationDetails ?? []).Select(id => location.Detail(id).Phrase).ToList();
+        if (details.Count > 0)
+        {
+            Add(sentences, $"With {string.Join(", ", details)}");
+        }
+
+        // Weather other than clear takes the sky: the lighting line must not also describe one.
+        var weathered = intent.Weather is { } w && w != "clear" && location.NeutralTimeDescriptions is not null;
+        var lighting = weathered ? location.NeutralTimeDescriptions : location.TimeDescriptions;
+
+        if (lighting is not null && lighting.TryGetValue(intent.Time.ToString(), out var time))
+        {
+            Add(sentences, time);
+        }
+
+        if (intent.Weather is { } weather
+            && location.WeatherDescriptions?.TryGetValue(weather, out var looks) is true
+            && !string.IsNullOrWhiteSpace(looks))
+        {
+            Add(sentences, looks);
+        }
     }
 
     public string CompileNegative(

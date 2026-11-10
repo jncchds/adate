@@ -16,4 +16,10 @@ public enum RenderTarget
 
     /// <summary>Empty location background, no characters.</summary>
     Background = 2,
+
+    /// <summary>
+    /// A moment worth seeing: the place with the people in it, doing what the words say, as one picture that stands
+    /// in for the background and the sprites together. Compiled by <see cref="IPromptCompiler.CompileMoment"/>.
+    /// </summary>
+    Moment = 3,
 }

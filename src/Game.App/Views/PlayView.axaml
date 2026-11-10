@@ -54,11 +54,19 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsPhone}" Pair="{Binding IsPair}">
+    <ctl:StageLayout Tall="{Binding !IsScene}" FullStage="{Binding IsFullStage}" Pair="{Binding IsPair}" Moment="{Binding IsMoment}">
         <!-- The stage: always a picture, never scrolled away. -->
         <Panel Classes="stage" ClipToBounds="True">
             <Image Source="{Binding StageBackground}" Stretch="UniformToFill" Classes.blurred="{Binding IsPhone}" />
             <Border Classes="dim" IsVisible="{Binding IsPhone}" />
+
+            <!-- A moment worth seeing: one picture with the people drawn into it, over the place. It keeps its left side,
+                 where the people are, when an upright screen crops it. -->
+            <Border IsVisible="{Binding IsMoment}">
+                <Border.Background>
+                    <ImageBrush Source="{Binding MomentPicture}" Stretch="UniformToFill" AlignmentX="Left" AlignmentY="Center" />
+                </Border.Background>
+            </Border>
 
             <!-- On the map: everyone met so far, standing left to right on the backdrop, one slot per person. -->
             <ItemsControl ItemsSource="{Binding Lineup}" IsVisible="{Binding IsMap}">
@@ -86,7 +94,7 @@
         <!-- Whoever stands on the stage first, at the left in landscape and over the picture in portrait; and
              while the picture is on its way, a spinner saying what is being drawn, where no text box covers it. -->
         <Panel>
-            <ctl:SpriteFrame IsVisible="{Binding !IsPhone}">
+            <ctl:SpriteFrame IsVisible="{Binding ShowFigures}">
                 <Image Source="{Binding StageSprite}" />
             </ctl:SpriteFrame>
             <Border Classes="loading" IsVisible="{Binding IsStageLoading}">
@@ -100,26 +108,36 @@
 
             <!-- Nobody stands there because the drawing failed: the warning offers to draw them again. -->
             <ContentControl Content="{Binding SpriteWarning}" ContentTemplate="{StaticResource Warning}"
-                            IsVisible="{Binding !IsPhone}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
+                            IsVisible="{Binding ShowFigures}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" />
         </Panel>
 
         <!-- The second of two people, at the right in landscape and from the right in portrait; no room with one. -->
         <Panel>
-            <ctl:SpriteFrame IsVisible="{Binding IsPair}">
+            <ctl:SpriteFrame IsVisible="{Binding ShowCompanion}">
                 <Image Source="{Binding CompanionSprite}" />
             </ctl:SpriteFrame>
         </Panel>
 
         <!-- The words: a header with the title and the name tag, and everything else scrolling below. -->
-        <Border Classes="textbox" IsVisible="{Binding !IsPhone}">
+        <Border Classes="textbox">
+            <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="!IsPhone" />
+                    <Binding Path="!WordsHidden" />
+                </MultiBinding>
+            </Border.IsVisible>
             <Grid RowDefinitions="Auto,*">
-                <Grid ColumnDefinitions="*,Auto" Margin="16,12,16,6">
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="16,12,16,6">
                     <!-- Ten quick taps on the title open the debug screen. -->
                     <TextBlock x:Name="Title" Classes="title" Background="Transparent" Text="{Binding Heading}" />
                     <Border Grid.Column="1" Classes="nametag"
                             IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock Text="{Binding Speaker}" />
                     </Border>
+                    <!-- With a moment on screen, the words can be put away to see it whole. -->
+                    <Button Grid.Column="2" Classes="hide" Content="Hide" Command="{Binding HideWordsCommand}"
+                            IsVisible="{Binding IsMoment}"
+                            ToolTip.Tip="Hide the words to see the picture" AutomationProperties.Name="Hide the words" />
                 </Grid>
 
                 <ScrollViewer Grid.Row="1" x:Name="Side">
@@ -387,10 +405,31 @@
                 </Grid>
             </Border>
 
+            <!-- The words put away: the moment fills the screen, and a tap anywhere on it brings them back. -->
+            <Button Classes="reveal" IsVisible="{Binding WordsHidden}" Command="{Binding ShowWordsCommand}"
+                    AutomationProperties.Name="Show the words" />
+
             <Button Classes="back" Content="‹" Command="{Binding HomeCommand}"
                     ToolTip.Tip="Saves" AutomationProperties.Name="Saves" />
-            <Border Classes="caption" IsVisible="{Binding StageCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Border Classes="caption">
+                <Border.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="StageCaption" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                        <Binding Path="!WordsHidden" />
+                    </MultiBinding>
+                </Border.IsVisible>
                 <TextBlock Text="{Binding StageCaption}" />
+            </Border>
+
+            <!-- A moment on its way, or one that could not be drawn, said in the corner the words leave free. -->
+            <Border Classes="moment-note" IsVisible="{Binding IsMomentLoading}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ctl:Spinner Classes="spinner small" />
+                    <TextBlock Text="Drawing the moment…" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <Border Classes="moment-note" IsVisible="{Binding MomentWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ContentControl Content="{Binding MomentWarning}" ContentTemplate="{StaticResource Warning}" />
             </Border>
             <ProgressBar Classes="busy" IsIndeterminate="True" IsVisible="{Binding Working}" />
 

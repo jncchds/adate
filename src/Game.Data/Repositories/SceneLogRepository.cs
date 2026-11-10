@@ -20,7 +20,7 @@ public sealed class SceneLogRepository(Database database)
     private const string Columns = """
         id, day, slot, place_id, encounter_id, outcome_json, written, text, background_path, character_id,
         speaker, expression, sprite_path, exchanges_json, closed, dress, dress_over, fallback, figures_json,
-        dress_garments
+        dress_garments, moment_json
         """;
 
     /// <summary>Records a new scene, closing whichever one was still open. Returns its id.</summary>
@@ -137,6 +137,27 @@ public sealed class SceneLogRepository(Database database)
         return UpdateAsync(sceneId, "figures_json = $figures", ct, ("$figures", JsonSerializer.Serialize(figures, Json)));
     }
 
+    /// <summary>The moment drawn on screen now, or null when the people stand on the place.</summary>
+    public Task SetMomentAsync(long sceneId, SceneMoment? moment, CancellationToken ct = default) =>
+        UpdateAsync(sceneId, "moment_json = $moment", ct, ("$moment", moment is null ? null : JsonSerializer.Serialize(moment, Json)));
+
+    /// <summary>
+    /// The moment's picture, once drawn, only while the scene still shows that moment: the words may have moved on to
+    /// another, or ended it, while it was being drawn.
+    /// </summary>
+    public Task SetMomentPictureAsync(long sceneId, SceneMoment drawn, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(drawn);
+        return UpdateAsync(
+            sceneId,
+            "moment_json = CASE WHEN json_extract(moment_json, '$.shot') = $shot AND json_extract(moment_json, '$.people') = json($people) " +
+            "THEN json_set(moment_json, '$.picturePath', $path) ELSE moment_json END",
+            ct,
+            ("$shot", drawn.Shot),
+            ("$people", JsonSerializer.Serialize(drawn.People, Json)),
+            ("$path", drawn.PicturePath));
+    }
+
     /// <summary>The finished words, and the expression they end on when they say one.</summary>
     /// <param name="fallback">Whether the words are the authored placeholder, because the writer failed.</param>
     public Task SetWrittenAsync(long sceneId, string text, string? expression, bool fallback = false, CancellationToken ct = default) =>
@@ -243,6 +264,7 @@ public sealed class SceneLogRepository(Database database)
             reader.GetInt64(14) == 1,
             outfit,
             reader.GetInt64(17) == 1,
-            figures);
+            figures,
+            Text(20) is { } moment ? JsonSerializer.Deserialize<SceneMoment>(moment, Json) : null);
     }
 }

@@ -115,6 +115,40 @@
         <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
+    <!-- With a moment on screen: put the words away. Quiet, beside the name tag. -->
+    <Style Selector="Button.hide">
+        <Setter Property="Margin" Value="8,0,0,0" />
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Background" Value="#30FFFFFF" />
+    </Style>
+
+    <!-- The words put away: the whole screen is one invisible button that brings them back. -->
+    <Style Selector="Button.reveal">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.reveal:pointerover /template/ ContentPresenter, Button.reveal:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- A moment on its way or that failed: a small note in the top left, under the back button. -->
+    <Style Selector="Border.moment-note">
+        <Setter Property="Background" Value="#B0101012" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Margin" Value="10,56,0,0" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
     <!-- A small round back button in the screen's top left corner. -->
     <Style Selector="Button.back">
         <Setter Property="Width" Value="36" />

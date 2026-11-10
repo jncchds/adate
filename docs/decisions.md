@@ -1816,3 +1816,46 @@ mention them and nobody left standing after they go.
   figures is two sprites composited into two slots; nothing in the Z-Image prompts changed, and they still
   say "only this one person". Each figure is drawn on its own, so one that fails is named in its own
   warning while the other still stands there.
+
+## Moments worth seeing: one picture with the people drawn in
+
+User request: on special occasions the game draws a picture of the place with the love interest (or both, when two are
+there) in it, doing what the words say, instead of a sprite standing on a generic background. The game's UI is placed so
+it doesn't cover anything that matters. It is for moments where seeing them in action means something to the player.
+The user chose: the writer decides, with no budget, since the game is local-first; it can happen in the scene's words
+or in any answer; the picture is composed around the UI, with a button to hide the words.
+
+* **The writer calls for it.** Scenes and answers with someone drawn get `moment`: null for an ordinary moment, or a
+  short English description of the shot (pose, action, gesture, where they look), under `Moments.MaxShotLength` (120)
+  characters, with no names, clothes, place, time or weather, since those are drawn already. The player is never drawn.
+  Anything they share in is "the viewer", and the picture is from their eyes. A shot in another alphabet is sent back,
+  like a place's look; an over-long one is cut. There are no fixed milestones.
+* **How long it stands.** An answer is told which moment is on screen (`ScenePacket.Showing`). Repeating the same
+  words keeps the picture, new words draw a new one, and null ends it. C# ends it too when the people on the stage change
+  or someone changes clothes, because the picture would show the wrong people. A failed writer said nothing, so the
+  picture stays while it still can (`Moments.Unsaid`). Texting never has one.
+* **Kept with the scene.** Migration 020's `scene_log.moment_json` holds the shot, who is in it, and the picture once
+  drawn, so reopening a save shows it again. `SetMomentPictureAsync` lands a finished picture only while the scene
+  still shows that moment, since the words may have moved on while it was drawn.
+* **HANDOFF 1.1 is bent on purpose, for these pictures only.** Every ordinary scene still composites a matted sprite
+  over a people-free background. A moment is `RenderTarget.Moment`, compiled by `IPromptCompiler.CompileMoment`: each
+  person in their scene clothes and expression (the first "on the left", the second "beside them"), then the shot,
+  "seen from the viewer's point of view", then the place in the background's own words without its "no people"
+  sentence. It is drawn with the background workflow at background size, unmatted. The cost is what the composite was
+  protecting. With prompt and seed only, the person is held together by their description, so they look like
+  themselves rather than exactly like their sprite. The booru compiler lists two people's tags one after the other, and
+  their looks may blend.
+* **HANDOFF 1.3 bent as for looks and garments.** The shot is the story-written text in this prompt. `Moments.CleanShot`
+  keeps plain words, and the content gate filters it phrase by phrase at the **strictest** ceiling of anyone in the
+  picture, so anyone under 18 keeps the whole picture at PG-13. Each person's clothes pass at their own ceiling, and
+  every subject's negatives apply.
+* **Composed around the UI.** The prompt puts the people on the left and asks for open, quiet background on the right.
+  In landscape the text box moves to the right while a moment shows (`StageLayout.MomentBoxShare`, 40% of the width,
+  at least 320 px), and no figures stand on the stage. Upright, the words already sit below the picture, and the crop
+  keeps the picture's left side (an `ImageBrush` aligned left; `object-position: left` on the web). "Hide" in the text
+  box header puts the words and the place's name away, upright too, where the picture then fills the screen; a tap
+  anywhere brings them back. While a moment is drawn, whatever was on the stage stays, with a note in the top left; a
+  moment that fails leaves the people standing on the place, and a warning offers to draw it again. Desktop, phone and
+  web alike.
+* **Not yet measured.** Whether Gemma calls for moments at sensible times, and how well Z-Image keeps two people apart
+  and the right side clear, are to be seen in play.

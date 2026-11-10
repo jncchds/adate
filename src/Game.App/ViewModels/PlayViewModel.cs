@@ -99,6 +99,7 @@ public sealed partial class PlayViewModel : PageViewModel
 
     /// <summary>Whether two people stand on the stage.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCompanion))]
     private bool _isPair;
 
     /// <summary>Who the stage's pictures stand for, left to right, as the words last left it.</summary>
@@ -142,7 +143,32 @@ public sealed partial class PlayViewModel : PageViewModel
 
     /// <summary>A conversation by text: a phone over the place, blurred, instead of the person and the text box.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowFigures), nameof(ShowCompanion), nameof(IsFullStage))]
     private bool _isPhone;
+
+    /// <summary>
+    /// A moment worth seeing, drawn as one picture with the people in it (user request): it stands in for the place and
+    /// the figures, and the words move aside to the right, where the picture leaves room for them.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMoment), nameof(ShowFigures), nameof(ShowCompanion), nameof(IsFullStage))]
+    private Bitmap? _momentPicture;
+
+    /// <summary>Set while a moment the words called for is being drawn; whatever was on the stage stays until it arrives.</summary>
+    [ObservableProperty]
+    private bool _isMomentLoading;
+
+    /// <summary>The warning when the moment could not be drawn: the people stand on the place instead, and it can be drawn again.</summary>
+    [ObservableProperty]
+    private WarningItem? _momentWarning;
+
+    /// <summary>Whether the player has put the words away to look at the moment; a tap on the picture brings them back.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFullStage))]
+    private bool _wordsHidden;
+
+    /// <summary>The moment the picture on screen, or on its way, stands for.</summary>
+    private SceneMoment? _moment;
 
     /// <summary>The small round picture of whoever the player is texting.</summary>
     [ObservableProperty]
@@ -228,6 +254,16 @@ public sealed partial class PlayViewModel : PageViewModel
 
     public bool IsStageLoading => StageBackground is null && Mode != PlayMode.Error;
 
+    public bool IsMoment => MomentPicture is not null;
+
+    /// <summary>Whether the people stand on the stage as figures: not while texting, and not while a moment shows them.</summary>
+    public bool ShowFigures => !IsPhone && !IsMoment;
+
+    public bool ShowCompanion => IsPair && ShowFigures;
+
+    /// <summary>Whether the picture fills the whole screen upright too: behind the phone, or a moment with the words put away.</summary>
+    public bool IsFullStage => IsPhone || (IsMoment && WordsHidden);
+
     public bool HasNotes => Notes.Count > 0;
 
     public bool HasContacts => Contacts.Count > 0;
@@ -304,6 +340,7 @@ public sealed partial class PlayViewModel : PageViewModel
         SceneWarning = null;
         BackgroundWarning = null;
         SpriteWarning = null;
+        ClearMoment();
 
         if (state.Scene is { } scene)
         {
@@ -444,6 +481,7 @@ public sealed partial class PlayViewModel : PageViewModel
         {
             Open = state.PendingScene is not null,
             Figures = scene.Figures,
+            Moment = scene.Moment,
         };
 
         Heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
@@ -527,7 +565,9 @@ public sealed partial class PlayViewModel : PageViewModel
             if (token == _scene)
             {
                 Restage(shown.Figures);
+                var drawing = ShowMomentAsync(shown, token);
                 await ShowFiguresAsync(shown, token);
+                await drawing;
             }
         }
 
@@ -1008,6 +1048,7 @@ public sealed partial class PlayViewModel : PageViewModel
             }
 
             Restage([]);
+            ClearMoment();
             Speaker = null;
             Exchanges.Clear();
             WithLine = null;
@@ -1222,10 +1263,13 @@ public sealed partial class PlayViewModel : PageViewModel
         IsWriting = false;
         RefreshSceneControls();
 
+        var drawing = ShowMomentAsync(written, token);
         if (restaged)
         {
             await ShowFiguresAsync(written, token);
         }
+
+        await drawing;
     }
 
     /// <summary>Whose name the scene shows: the person it is about while they are there, otherwise whoever is.</summary>
@@ -1326,6 +1370,7 @@ public sealed partial class PlayViewModel : PageViewModel
     {
         if (IsPhone || result.View.CharacterId is null || _view is null)
         {
+            ClearMoment();
             return;
         }
 
@@ -1336,17 +1381,111 @@ public sealed partial class PlayViewModel : PageViewModel
             Aesthetic = result.View.Aesthetic ?? _view.Aesthetic,
             Expression = result.View.Expression,
             Figures = result.View.Figures,
+            Moment = result.View.Moment,
         };
 
+        // A moment the answer calls for, keeps or ends, alongside the figures it leaves standing there.
+        var drawing = ShowMomentAsync(_view, token);
         if (SameStage(_onStage, result.View.Figures) && !result.Redressed)
         {
+            await drawing;
             return;
         }
 
         Restage(result.View.Figures);
         Speaker = SpeakerOf(_view) ?? Speaker;
         await ShowFiguresAsync(_view, token);
+        await drawing;
     }
+
+    /// <summary>
+    /// Shows the moment the words call for: the picture already drawn, or drawn now while the stage stays as it was. The
+    /// same moment again keeps its picture; none puts the people back on the place at once.
+    /// </summary>
+    private async Task ShowMomentAsync(SceneView view, int token)
+    {
+        if (IsPhone || view.Moment is not { } moment)
+        {
+            ClearMoment();
+            return;
+        }
+
+        if (_moment is { } shown && SameMoment(shown, moment) && (IsMoment || IsMomentLoading))
+        {
+            return;
+        }
+
+        _moment = moment;
+        MomentWarning = null;
+        IsMomentLoading = true;
+
+        bool Current() => token == _scene && _moment is { } now && SameMoment(now, moment);
+
+        try
+        {
+            var picture = await PictureAsync(moment.PicturePath ?? await Task.Run(() => _world.SceneMomentAsync(_saveId, view)))
+                ?? throw new InvalidOperationException("The moment came back without a picture.");
+            if (Current())
+            {
+                MomentPicture = picture;
+            }
+        }
+        catch (Exception)
+        {
+            // The scene works without it: the people stand on the place, and the moment can be drawn again.
+            if (Current())
+            {
+                MomentPicture = null;
+                WordsHidden = false;
+                MomentWarning = MomentFailedWarning();
+            }
+        }
+        finally
+        {
+            if (Current())
+            {
+                IsMomentLoading = false;
+            }
+        }
+    }
+
+    /// <summary>The people stand on the place again, and the words come back.</summary>
+    private void ClearMoment()
+    {
+        _moment = null;
+        MomentPicture = null;
+        IsMomentLoading = false;
+        MomentWarning = null;
+        WordsHidden = false;
+    }
+
+    private static bool SameMoment(SceneMoment a, SceneMoment b) =>
+        string.Equals(a.Shot, b.Shot, StringComparison.OrdinalIgnoreCase) && a.People.SequenceEqual(b.People);
+
+    private WarningItem MomentFailedWarning() =>
+        new(
+            "This moment could not be drawn.",
+            "This moment could not be drawn, so the people stand on the place instead. Draw it again?",
+            RedrawMomentAsync);
+
+    /// <summary>Draws the moment again, and only the moment.</summary>
+    private async Task RedrawMomentAsync()
+    {
+        MomentWarning = null;
+        _moment = null;
+        if (_view is { } view)
+        {
+            await ShowMomentAsync(view, _scene);
+        }
+    }
+
+    /// <summary>Puts the words away, to look at the moment whole.</summary>
+    [RelayCommand]
+    private void HideWords() => WordsHidden = IsMoment;
+
+    /// <summary>Brings the words back after looking at the moment.</summary>
+    [RelayCommand]
+    private void ShowWords() => WordsHidden = false;
 
     /// <summary>A proposed reply, by its index in the offered replies.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -1480,6 +1619,7 @@ public sealed partial class PlayViewModel : PageViewModel
         Speaker = null;
         IsWriting = false;
         IsPhone = false;
+        ClearMoment();
         Mode = PlayMode.Error;
     }
 

@@ -21,11 +21,17 @@
 <PageTitle>@_heading</PageTitle>
 
 <div class="play">
-    <div class="play-area @(_mode == Mode.Scene ? null : "tall") @(_isPhone ? "phone" : null) @(IsPair ? "pair" : null)">
+    <div class="play-area @(_mode == Mode.Scene ? null : "tall") @(_isPhone ? "phone" : null) @(IsPair ? "pair" : null) @(IsMoment ? "moment" : null) @(IsMoment && _wordsHidden ? "words-hidden" : null)">
         <div class="play-stage">
             @if (_stageBackground is not null)
             {
                 <img class="play-background" src="@_stageBackground" alt="" />
+            }
+
+            @* A moment worth seeing: one picture with the people drawn into it, over the place. *@
+            @if (IsMoment)
+            {
+                <img class="play-moment" src="@_momentPicture" alt="@_moment?.Shot" />
             }
 
             @* On the map: everyone met so far, standing left to right on the backdrop, one slot per person. *@
@@ -107,6 +113,11 @@
                 @if (!string.IsNullOrEmpty(_speaker))
                 {
                     <span class="nametag">@_speaker</span>
+                }
+                @* With a moment on screen, the words can be put away to see it whole. *@
+                @if (IsMoment)
+                {
+                    <button type="button" class="hide-words" title="Hide the words to see the picture" @onclick="() => _wordsHidden = true">Hide</button>
                 }
             </header>
 
@@ -364,8 +375,29 @@
             </section>
         }
 
+        @* The words put away: the moment fills the screen, and a tap anywhere on it brings them back. *@
+        @if (IsMoment && _wordsHidden)
+        {
+            <button type="button" class="reveal" aria-label="Show the words" @onclick="() => _wordsHidden = false"></button>
+        }
+
         @* Overlays, above the person: back to the saves, the place's name, and the busy line. *@
         <a class="back" href="/" title="Saves" aria-label="Saves">‹</a>
+        @if (_mode == Mode.Scene && !_isPhone && (_momentLoading || _momentFailed))
+        {
+            @* A moment on its way, or one that could not be drawn, in the corner the words leave free. *@
+            <div class="moment-note" role="status">
+                @if (_momentFailed)
+                {
+                    @Mark(Warned.Moment)
+                    @Asked(Warned.Moment)
+                }
+                else
+                {
+                    <span class="spinner small" aria-hidden="true"></span><span>Drawing the moment…</span>
+                }
+            </div>
+        }
         @if (!string.IsNullOrEmpty(_caption))
         {
             <div class="caption">@_caption</div>
@@ -448,7 +480,15 @@
 
     // Who the stage's pictures stand for, left to right, as the words last left it.
     private IReadOnlyList<SceneFigure> _onStage = [];
-    private bool IsPair => !_isPhone && _mode == Mode.Scene && _onStage.Count > 1;
+    private bool IsPair => !_isPhone && _mode == Mode.Scene && _onStage.Count > 1 && !IsMoment;
+
+    // A moment worth seeing (user request): one picture with the people in it, standing in for the place and the figures.
+    private SceneMoment? _moment;
+    private string? _momentPicture;
+    private bool _momentLoading;
+    private bool _momentFailed;
+    private bool _wordsHidden;
+    private bool IsMoment => !_isPhone && _mode == Mode.Scene && _momentPicture is not null;
     private string? _sceneText;
     private string? _speaker;
 
@@ -517,6 +557,7 @@
         Reaction,
         Background,
         Sprite,
+        Moment,
     }
 
     private static string Label(Warned what) => what switch
@@ -524,6 +565,7 @@
         Warned.Scene => "These are placeholder words: the scene could not be written.",
         Warned.Reaction => "This is a placeholder answer: the reply could not be answered.",
         Warned.Background => "The place could not be drawn.",
+        Warned.Moment => "This moment could not be drawn.",
         _ => "This person could not be drawn.",
     };
 
@@ -532,6 +574,7 @@
         Warned.Scene => "The scene could not be written, so these words stand in for it. Write it again?",
         Warned.Reaction => "Your reply could not be answered, so these words stand in for it. Answer it again?",
         Warned.Background => $"{_caption ?? "The place"} could not be drawn. Draw it again?",
+        Warned.Moment => "This moment could not be drawn, so the people stand on the place instead. Draw it again?",
         _ => $"{_spriteMissing ?? _speaker ?? "This person"} could not be drawn. Draw them again?",
     };
 
@@ -705,6 +748,7 @@
         _backgroundFailed = false;
         _spriteFailed = false;
         _asking = null;
+        ClearMoment();
 
         if (state.Scene is { } scene)
         {
@@ -832,6 +876,7 @@
         {
             Open = state.PendingScene is not null,
             Figures = scene.Figures,
+            Moment = scene.Moment,
         };
 
         _heading = $"Day {outcome.VisitedAt.Day}, {outcome.VisitedAt.Slot}";
@@ -919,7 +964,9 @@
             if (token == _scene)
             {
                 Restage(shown.Figures);
+                var drawing = ShowMomentAsync(shown, token);
                 await ShowFiguresAsync(shown, token);
+                await drawing;
             }
         }
 
@@ -1229,6 +1276,7 @@
             }
 
             Restage([]);
+            ClearMoment();
             _speaker = null;
             _exchanges.Clear();
             _sceneFallback = false;
@@ -1377,6 +1425,16 @@
                 if (_view is { } view)
                 {
                     await (_isPhone ? ShowPortraitAsync(view, _scene) : ShowFiguresAsync(view, _scene));
+                }
+
+                break;
+
+            case Warned.Moment:
+                _momentFailed = false;
+                _moment = null;
+                if (_view is { } again)
+                {
+                    await ShowMomentAsync(again, _scene);
                 }
 
                 break;
@@ -1569,10 +1627,13 @@
         RefreshSceneControls();
         await RefreshAsync();
 
+        var drawing = ShowMomentAsync(written, token);
         if (restaged)
         {
             await ShowFiguresAsync(written, token);
         }
+
+        await drawing;
     }
 
     private Task PickChoiceAsync(ChoiceButton choice) =>
@@ -1654,6 +1715,7 @@
     {
         if (_isPhone || result.View.CharacterId is null || _view is null)
         {
+            ClearMoment();
             return;
         }
 
@@ -1664,10 +1726,14 @@
             Aesthetic = result.View.Aesthetic ?? _view.Aesthetic,
             Expression = result.View.Expression,
             Figures = result.View.Figures,
+            Moment = result.View.Moment,
         };
 
+        // A moment the answer calls for, keeps or ends, alongside the figures it leaves standing there.
+        var drawing = ShowMomentAsync(_view, token);
         if (SameStage(_onStage, result.View.Figures) && !result.Redressed)
         {
+            await drawing;
             return;
         }
 
@@ -1675,7 +1741,75 @@
         _speaker = SpeakerOf(_view) ?? _speaker;
         StateHasChanged();
         await ShowFiguresAsync(_view, token);
+        await drawing;
     }
+
+    /// <summary>
+    /// Shows the moment the words call for: the picture already drawn, or drawn now while the stage stays as it was. The
+    /// same moment again keeps its picture; none puts the people back on the place at once.
+    /// </summary>
+    private async Task ShowMomentAsync(SceneView view, int token)
+    {
+        if (_isPhone || view.Moment is not { } moment)
+        {
+            ClearMoment();
+            return;
+        }
+
+        if (_moment is { } shown && SameMoment(shown, moment) && (_momentPicture is not null || _momentLoading))
+        {
+            return;
+        }
+
+        _moment = moment;
+        _momentFailed = false;
+        _momentLoading = true;
+        await RefreshAsync();
+
+        bool Current() => token == _scene && _moment is { } now && SameMoment(now, moment);
+
+        try
+        {
+            var picture = moment.PicturePath ?? await World.SceneMomentAsync(SaveId, view)
+                ?? throw new InvalidOperationException("The moment came back without a picture.");
+            if (Current())
+            {
+                _momentPicture = picture;
+            }
+        }
+        catch (Exception)
+        {
+            // The scene works without it: the people stand on the place, and the moment can be drawn again.
+            if (Current())
+            {
+                _momentPicture = null;
+                _wordsHidden = false;
+                _momentFailed = true;
+            }
+        }
+        finally
+        {
+            if (Current())
+            {
+                _momentLoading = false;
+            }
+
+            await RefreshAsync();
+        }
+    }
+
+    /// <summary>The people stand on the place again, and the words come back.</summary>
+    private void ClearMoment()
+    {
+        _moment = null;
+        _momentPicture = null;
+        _momentLoading = false;
+        _momentFailed = false;
+        _wordsHidden = false;
+    }
+
+    private static bool SameMoment(SceneMoment a, SceneMoment b) =>
+        string.Equals(a.Shot, b.Shot, StringComparison.OrdinalIgnoreCase) && a.People.SequenceEqual(b.People);
 
     /// <summary>The player's own words.</summary>
     private Task ReplyAsync() => string.IsNullOrWhiteSpace(_reply) || _working ? Task.CompletedTask : AnswerAsync(null);
@@ -1780,6 +1914,7 @@
         _speaker = null;
         _isWriting = false;
         _isPhone = false;
+        ClearMoment();
         _mode = Mode.Error;
     }
 

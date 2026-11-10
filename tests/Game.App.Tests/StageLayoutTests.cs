@@ -213,4 +213,38 @@ public class StageLayoutTests
         Assert.Equal(60 * SpriteFrame.WidthAllowance, frame.Width, 3);
         Assert.Equal(frame.Width / SpriteFrame.SpriteAspect, frame.Height, 3);
     }
+
+    /// <summary>A moment draws its people on the left and keeps the right open, so the box keeps to the right.</summary>
+    [Fact]
+    public void A_moment_moves_the_box_to_the_right_and_narrows_it()
+    {
+        var regions = StageLayout.Split(new Size(1280, 720), tall: false, moment: true);
+
+        Assert.False(regions.Stacked);
+        Assert.Equal(new Rect(0, 0, 1280, 720), regions.Stage);
+        Assert.Equal(1280 * StageLayout.MomentBoxShare, regions.Side.Width, 3);
+        Assert.Equal(1280 - StageLayout.Inset, regions.Side.Right, 3);
+        Assert.Equal(720 - StageLayout.Inset, regions.Side.Bottom, 3);
+        Assert.True(regions.Side.Left > 1280 / 2.0, "the box covers the left half, where the people are drawn");
+    }
+
+    [Fact]
+    public void A_moment_on_a_phone_on_its_side_keeps_a_readable_box()
+    {
+        var regions = StageLayout.Split(new Size(700, 390), tall: false, moment: true);
+
+        Assert.Equal(StageLayout.MinMomentBoxWidth, regions.Side.Width, 3);
+        Assert.Equal(700 - StageLayout.Inset, regions.Side.Right, 3);
+    }
+
+    [Fact]
+    public void A_moment_upright_stacks_as_any_scene_and_fills_the_screen_with_the_words_put_away()
+    {
+        var shown = StageLayout.Split(new Size(390, 844), tall: false, moment: true);
+        Assert.True(shown.Stacked);
+        Assert.Equal(844 * StageLayout.StackedStageShare, shown.Stage.Height, 3);
+
+        var hidden = StageLayout.Split(new Size(390, 844), tall: false, fullStage: true, moment: true);
+        Assert.Equal(new Rect(0, 0, 390, 844), hidden.Stage);
+    }
 }

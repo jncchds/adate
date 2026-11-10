@@ -47,6 +47,12 @@ public sealed record SceneView(
     /// was configured. The player is shown a warning, and can ask for the words again.
     /// </summary>
     public bool Fallback { get; init; }
+
+    /// <summary>
+    /// A moment worth seeing that the words call for: drawn as one picture with the people in it, which stands in for the
+    /// place and the figures until the words end it. Null for an ordinary moment.
+    /// </summary>
+    public SceneMoment? Moment { get; init; }
 }
 
 /// <summary>The other people's reaction to a reply, and a popup when the reaction was considerable.</summary>
@@ -110,6 +116,9 @@ public sealed record CurrentScene(
 {
     /// <summary>Who stands on the stage, left to right, as the words last left it.</summary>
     public IReadOnlyList<SceneFigure> Figures { get; init; } = [];
+
+    /// <summary>The moment drawn on screen as the words last left it, instead of the figures on the place; null for none.</summary>
+    public SceneMoment? Moment { get; init; }
 }
 
 /// <param name="Today">Setting events held today, whose places are known for the day.</param>
@@ -348,7 +357,7 @@ public sealed class WorldService(
                 open.Expression,
                 open.SpritePath,
                 open.Exchanges,
-                open.Fallback) { Figures = open.Figures ?? [] };
+                open.Fallback) { Figures = open.Figures ?? [], Moment = open.Moment };
         var lastPlaceId = open?.PlaceId ?? await sceneLog.GetLastPlaceIdAsync(saveId, ct).ConfigureAwait(false);
 
         return new PlayState(
@@ -794,6 +803,7 @@ public sealed class WorldService(
                 $"#{s.Id} day {s.Clock.Day} {s.Clock.Slot} at {s.PlaceId}: {s.EncounterId ?? "-"} with {s.Speaker ?? "-"} ({(s.Written ? "written" : "fallback")}), {s.Exchanges.Count} replies",
                 $"  background: {s.BackgroundPath ?? "-"}",
                 $"  sprite: {s.SpritePath ?? "-"} ({s.Expression ?? "-"})",
+                .. s.Moment is { } moment ? [$"  moment: {moment.Shot} -> {moment.PicturePath ?? "-"}"] : Array.Empty<string>(),
                 $"  {s.Text}",
                 .. s.Exchanges.Select(e => $"  > {e.Reply}{(e.Agreed is null ? "" : $" [agreed: {e.Agreed}]")}\n    {e.Reaction}"),
             ]),
@@ -1224,6 +1234,56 @@ public sealed class WorldService(
     }
 
     /// <summary>
+    /// The moment the words call for, drawn at the scene's place, time and weather with the people in what they wear
+    /// there, and saved with the open scene while it still shows that moment. Null when the view calls for none.
+    /// </summary>
+    public async Task<string?> SceneMomentAsync(SaveId saveId, SceneView view, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        if (view.Moment is not { } moment)
+        {
+            return null;
+        }
+
+        if (moment.PicturePath is { } drawn)
+        {
+            return drawn;
+        }
+
+        var scene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("There is no open scene to draw a moment in.");
+        var setting = await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
+        var place = await places.GetAsync(saveId, scene.PlaceId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"The scene's place '{scene.PlaceId}' is not in this save.");
+
+        // Dressed as their figures would be drawn, in the order they stood when the moment was called for.
+        var people = new List<MomentFigure>();
+        foreach (var id in moment.People)
+        {
+            if (view.Figures.FirstOrDefault(f => f.CharacterId == id) is not { } figure)
+            {
+                continue;
+            }
+
+            var (dress, layer, garments) = await WardrobeForAsync(saveId, scene, figure, ct).ConfigureAwait(false);
+            people.Add(new MomentFigure(id, figure.Aesthetic ?? "", figure.Expression, dress, layer, garments));
+        }
+
+        if (people.Count == 0)
+        {
+            return null;
+        }
+
+        var path = await studio.GenerateMomentAsync(
+            saveId, place, scene.Clock.Slot, WeatherOn(saveId, setting, scene.Clock.Day).Id, moment.Shot, people).ConfigureAwait(false);
+
+        // Lands only while the open scene still shows this moment: the words may have moved on while it was drawn.
+        await sceneLog.SetMomentPictureAsync(scene.Id, moment with { PicturePath = path }, ct).ConfigureAwait(false);
+        return path;
+    }
+
+    /// <summary>
     /// Finishes writing the open scene when leaving the game interrupted it. Null when no scene is open
     /// or it is already written.
     /// </summary>
@@ -1363,6 +1423,7 @@ public sealed class WorldService(
             if (sceneId is { } unwrittenId)
             {
                 await sceneLog.SetFiguresAsync(unwrittenId, unwritten.Figures, ct).ConfigureAwait(false);
+                await sceneLog.SetMomentAsync(unwrittenId, null, ct).ConfigureAwait(false);
                 await sceneLog.SetWrittenAsync(unwrittenId, unwritten.Text, unwritten.Expression, false, ct).ConfigureAwait(false);
             }
 
@@ -1419,6 +1480,7 @@ public sealed class WorldService(
             written.Text,
             written.Expression,
             written.Outfit,
+            written.Moment,
             written.Summary,
             written.Tags,
             Memories = memoryLines,
@@ -1463,10 +1525,14 @@ public sealed class WorldService(
                 : await StageAfterAsync(built.Cast, outcome.With, presented.Figures, written.Present, owner, written.Expression, true, wearing, ct).ConfigureAwait(false),
         };
 
+        // A moment the words call for is drawn with whoever they leave standing there (user request).
+        result = result with { Moment = written.Fallback ? null : Moments.After(null, written.Moment, result.Figures, redressed: false) };
+
         // Marked written last, so an interrupted scene is written again rather than left half-done.
         if (sceneId is { } writtenId)
         {
             await sceneLog.SetFiguresAsync(writtenId, result.Figures, ct).ConfigureAwait(false);
+            await sceneLog.SetMomentAsync(writtenId, result.Moment, ct).ConfigureAwait(false);
             await sceneLog.SetWrittenAsync(writtenId, result.Text, result.Expression, written.Fallback, ct).ConfigureAwait(false);
         }
 
@@ -1897,7 +1963,7 @@ public sealed class WorldService(
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var duty = openScene is null ? null : TurnOutcomeJson.Deserialize(openScene.OutcomeJson).Duty;
         var shown = openScene?.Figures;
-        var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct, shown).ConfigureAwait(false);
+        var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct, shown, openScene?.Moment?.Shot).ConfigureAwait(false);
         var (setting, cast, flags, known, presentPeople, before, packet) =
             (built.Setting, built.Cast, built.Flags, built.Known, built.PresentPeople, built.Before, built.Packet);
         var pack = await studio.GetPackAsync(ct).ConfigureAwait(false);
@@ -1982,6 +2048,7 @@ public sealed class WorldService(
             reaction.Text,
             reaction.Expression,
             reaction.Outfit,
+            reaction.Moment,
             reaction.Attempts,
             reaction.Rejections,
         }, ct).ConfigureAwait(false);
@@ -2055,8 +2122,20 @@ public sealed class WorldService(
             }
         }
 
+        // The moment on screen goes on while the words keep it and the same people stand there in the same clothes; a new
+        // one is drawn when they call for it. A failed writer said nothing either way, so the picture stays if it still can.
+        var moment = scene.EncounterId == JsonEncounterCatalog.PhoneId
+            ? null
+            : reaction.Fallback
+                ? Moments.Unsaid(openScene?.Moment, figures, redressed)
+                : Moments.After(openScene?.Moment, reaction.Moment, figures, redressed);
+        if (openScene is not null)
+        {
+            await sceneLog.SetMomentAsync(openScene.Id, moment, ct).ConfigureAwait(false);
+        }
+
         return new ReactionResult(
-            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression) { Fallback = warn, Figures = figures },
+            new SceneView(reaction.Text, owner?.Id, owner?.Name, owner?.Member.Aesthetic, expression) { Fallback = warn, Figures = figures, Moment = moment },
             popup,
             agreed,
             transcript,
@@ -2079,9 +2158,10 @@ public sealed class WorldService(
     /// <summary>Everything the writer is given to answer a reply in a waiting scene, with the quality material that is switched on.</summary>
     /// <param name="looseEndsOverride">Loose ends to use instead of the save's own, for replaying a past scene.</param>
     /// <param name="shown">Who stands on the stage now; anyone the scene is with but not among them is not here. Null when unknown.</param>
+    /// <param name="showing">The shot of the moment drawn on screen now, for the answer to keep, change or end; null for none.</param>
     private async Task<BuiltReaction> BuildReactionPacketAsync(
         SaveId saveId, PendingScene scene, string? duty, IReadOnlyList<StoryThread>? looseEndsOverride, CancellationToken ct,
-        IReadOnlyList<SceneFigure>? shown = null)
+        IReadOnlyList<SceneFigure>? shown = null, string? showing = null)
     {
         var byText = scene.EncounterId == JsonEncounterCatalog.PhoneId;
         var quality = llmOptions.Value;
@@ -2157,7 +2237,8 @@ public sealed class WorldService(
                 .. (shown ?? []).Where(f => f.CharacterId != dressed?.Id && f.Outfit is not null)
                     .Select(f => new PacketOutfit(f.Name, f.Outfit!, [f.Outfit!.Dress], Settled: true)),
             ],
-            Drawn: dressed is null ? null : [dressed.Id.ToString(), .. presentPeople.Where(li => li.Id != dressed.Id).Select(li => li.Id.ToString())]);
+            Drawn: dressed is null ? null : [dressed.Id.ToString(), .. presentPeople.Where(li => li.Id != dressed.Id).Select(li => li.Id.ToString())],
+            Showing: dressed is null ? null : showing);
 
         return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
     }

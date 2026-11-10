@@ -17,6 +17,7 @@ namespace Game.Core.Story;
 /// Who stands on the stage, left to right, as the words last left it; the one person in the older columns for a scene from
 /// before, and null when that is not known either.
 /// </param>
+/// <param name="Moment">The moment drawn on screen, with the people in it, instead of them standing on the place; null for none.</param>
 public sealed record StoredScene(
     long Id,
     ClockState Clock,
@@ -34,4 +35,5 @@ public sealed record StoredScene(
     bool Closed,
     Outfit? Outfit = null,
     bool Fallback = false,
-    IReadOnlyList<SceneFigure>? Figures = null);
+    IReadOnlyList<SceneFigure>? Figures = null,
+    SceneMoment? Moment = null);

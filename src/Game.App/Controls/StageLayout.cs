@@ -23,7 +23,8 @@ public readonly record struct StageRegions(Rect Stage, Rect Figure, Rect Side, b
 /// words sit in a translucent box over the lower part of the rest. The box grows to nearly the full
 /// height when <see cref="Tall"/> is set, for screens with no one standing there (the map, endings).
 /// With <see cref="Pair"/>, two people stand at the left and right edges, a little narrower, and the
-/// box sits between them.
+/// box sits between them. With <see cref="Moment"/>, a picture with the people drawn into it fills the screen, and
+/// the box moves to the right, narrower, where the picture keeps open background for it.
 /// </para>
 /// <para>
 /// Portrait (phones at about 9:20, tablets upright) stacks them: the picture and the person take the
@@ -63,6 +64,15 @@ public sealed class StageLayout : Panel
     /// <summary>The picture's share of a portrait height.</summary>
     public const double StackedStageShare = 0.45;
 
+    /// <summary>
+    /// The box's share of a landscape width while a moment shows: the picture draws its people on the left and keeps the
+    /// right for the words, so the box stays out of that part.
+    /// </summary>
+    public const double MomentBoxShare = 0.4;
+
+    /// <summary>Narrower than this and the words wrap every few words; a short phone on its side gives the box more.</summary>
+    public const double MinMomentBoxWidth = 320;
+
     public static readonly StyledProperty<bool> TallProperty =
         AvaloniaProperty.Register<StageLayout, bool>(nameof(Tall));
 
@@ -72,7 +82,10 @@ public sealed class StageLayout : Panel
     public static readonly StyledProperty<bool> PairProperty =
         AvaloniaProperty.Register<StageLayout, bool>(nameof(Pair));
 
-    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty, FullStageProperty, PairProperty);
+    public static readonly StyledProperty<bool> MomentProperty =
+        AvaloniaProperty.Register<StageLayout, bool>(nameof(Moment));
+
+    static StageLayout() => AffectsMeasure<StageLayout>(TallProperty, FullStageProperty, PairProperty, MomentProperty);
 
     /// <summary>Whether the words may take nearly the full height: set when no one stands on the stage.</summary>
     public bool Tall
@@ -98,9 +111,16 @@ public sealed class StageLayout : Panel
         set => SetValue(PairProperty, value);
     }
 
+    /// <summary>Whether a moment shows: one picture with the people in it, so the box moves aside to the right.</summary>
+    public bool Moment
+    {
+        get => GetValue(MomentProperty);
+        set => SetValue(MomentProperty, value);
+    }
+
     public bool IsStacked { get; private set; }
 
-    public static StageRegions Split(Size size, bool tall, bool fullStage = false, bool pair = false)
+    public static StageRegions Split(Size size, bool tall, bool fullStage = false, bool pair = false, bool moment = false)
     {
         var width = size.Width;
         var height = size.Height;
@@ -108,6 +128,20 @@ public sealed class StageLayout : Panel
         if (width >= height)
         {
             var boxHeight = BoxHeight(height, tall);
+
+            if (moment)
+            {
+                // Nobody stands at the left: the picture has them. The figure's column still holds what is said over it
+                // (a spinner, a warning), and the box keeps to the right.
+                var momentBoxWidth = Math.Min(Math.Min(Math.Max(MinMomentBoxWidth, width * MomentBoxShare), MaxBoxWidth), Math.Max(0, width - (2 * Inset)));
+                var figure = Math.Min(Math.Max(MinFigureWidth, Math.Min(width * FigureShare, height * MaxFigureWidthPerHeight)), width / 2);
+
+                return new StageRegions(
+                    new Rect(size),
+                    new Rect(0, 0, figure, height),
+                    new Rect(width - Inset - momentBoxWidth, height - Inset - boxHeight, momentBoxWidth, boxHeight),
+                    false);
+            }
 
             if (pair)
             {
@@ -167,7 +201,7 @@ public sealed class StageLayout : Panel
             double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
 
-        var rects = Rects(Split(size, Tall, FullStage, Pair));
+        var rects = Rects(Split(size, Tall, FullStage, Pair, Moment));
         for (var i = 0; i < Children.Count; i++)
         {
             Children[i].Measure(i < rects.Length ? rects[i].Size : size);
@@ -178,7 +212,7 @@ public sealed class StageLayout : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var regions = Split(finalSize, Tall, FullStage, Pair);
+        var regions = Split(finalSize, Tall, FullStage, Pair, Moment);
         var rects = Rects(regions);
         for (var i = 0; i < Children.Count; i++)
         {

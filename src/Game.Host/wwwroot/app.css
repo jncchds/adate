@@ -882,6 +882,82 @@ a.choice small {
     to { left: 100%; }
 }
 
+/*
+ * A moment worth seeing, as the app's StageLayout with Moment: one picture with the people drawn into it fills the
+ * stage, keeping its left side (where the people are) when an upright screen crops it, nobody stands as a figure, and
+ * the words keep to the right: 40% of the width, at least 320px, at most 880px. "Hide" puts them away to see the
+ * picture whole, upright too, and a tap anywhere brings them back.
+ */
+.play-moment {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: left center;
+    animation: picture-in 300ms ease-out;
+}
+
+.play-area.moment .play-figure .sprite-frame,
+.play-area.moment .play-figure .drawn-none {
+    display: none;
+}
+
+.play-area.moment {
+    --box-w: min(max(320px, 40cqw), 880px, calc(100cqw - 2 * var(--inset)));
+}
+
+.play-area.moment .play-textbox {
+    left: auto;
+    right: var(--inset);
+}
+
+.hide-words {
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.19);
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.play-area.words-hidden .play-textbox,
+.play-area.words-hidden .caption {
+    display: none;
+}
+
+.reveal {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.moment-note {
+    position: absolute;
+    top: 56px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(16, 16, 18, 0.69);
+}
+
+@container play (orientation: portrait) {
+    .play-area.moment .play-textbox {
+        right: 0;
+    }
+
+    .play-area.words-hidden .play-stage,
+    .play-area.words-hidden .play-figure {
+        height: 100%;
+    }
+}
+
 /* A conversation by text: the place blurred and darkened behind a phone, with bubbles for the messages. */
 .play-area.phone .play-background {
     filter: blur(18px) brightness(0.5);

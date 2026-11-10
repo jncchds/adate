@@ -37,7 +37,8 @@ public sealed record SceneResponse(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     SceneResponseOutfit? Outfit = null,
-    IReadOnlyList<SceneResponsePresence>? Present = null);
+    IReadOnlyList<SceneResponsePresence>? Present = null,
+    string? Moment = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -49,6 +50,7 @@ public sealed record SceneResponse(
 /// <param name="Routines">What people said about their own weeks, for C# to check against their schedules.</param>
 /// <param name="Outfit">What the main person wears, when the answer picked one of the codes offered.</param>
 /// <param name="Present">Who the answer says is here at the end and how they look; null when it said nothing or nobody is drawn.</param>
+/// <param name="Moment">The shot of a moment worth seeing, uncleaned; null for an ordinary one or when nobody is drawn.</param>
 public sealed record WrittenScene(
     string Text,
     string? Expression,
@@ -64,7 +66,8 @@ public sealed record WrittenScene(
     IReadOnlyList<long>? Resolved = null,
     IReadOnlyList<ProposedRoutine>? Routines = null,
     Game.Core.Story.Outfit? Outfit = null,
-    IReadOnlyList<Presence>? Present = null);
+    IReadOnlyList<Presence>? Present = null,
+    string? Moment = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -244,7 +247,8 @@ public sealed class SceneWriter(
                         Settled(packet, response.Resolved),
                         [.. (response.Routines ?? []).Where(r => r is not null)],
                         Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
-                        Present(packet, response.Present));
+                        Present(packet, response.Present),
+                        Moment(packet, response.Moment));
                 }
 
                 lastReasons = reasons;
@@ -350,7 +354,8 @@ public sealed class SceneWriter(
         if (packet.Drawn is { Count: > 0 })
         {
             properties["present"] = PresenceProperty(packet);
-            required.Add("present");
+            properties["moment"] = MomentProperty();
+            required.AddRange(["present", "moment"]);
         }
 
         if (packet.LooseEnds is not null)
@@ -409,6 +414,25 @@ public sealed class SceneWriter(
             ["additionalProperties"] = false,
         },
     };
+
+    /// <summary>The moment field: the shot of a moment worth seeing, or null. Shared with the reaction writer's schema.</summary>
+    internal static JsonObject MomentProperty() => new() { ["type"] = new JsonArray("string", "null") };
+
+    /// <summary>The shot an answer calls for, uncleaned; null when nobody here is drawn or it called for none.</summary>
+    internal static string? Moment(ScenePacket packet, string? moment) =>
+        packet.Drawn is not { Count: > 0 } || string.IsNullOrWhiteSpace(moment) ? null : moment.Trim();
+
+    /// <summary>
+    /// Why a moment's shot is sent back: the image model reads English, so a shot in another alphabet would be drawn as
+    /// nothing. Too long is cut, not sent back. Shared with the reaction writer.
+    /// </summary>
+    internal static void CheckMoment(string? moment, List<string> reasons)
+    {
+        if (!string.IsNullOrWhiteSpace(moment) && !Moments.IsDrawable(moment))
+        {
+            reasons.Add("The moment is drawn by a model that reads only English: describe it in English, whatever language the scene is in.");
+        }
+    }
 
     /// <summary>Who an answer says is here at its end, unchecked: the stage keeps only people the scene is with.</summary>
     internal static IReadOnlyList<Presence>? Present(ScenePacket packet, IReadOnlyList<SceneResponsePresence>? present) =>
@@ -567,6 +591,11 @@ public sealed class SceneWriter(
             {
                 reasons.Add("The text stops mid-sentence or leaves a quote open. Finish it.");
             }
+        }
+
+        if (packet.Drawn is { Count: > 0 })
+        {
+            CheckMoment(response.Moment, reasons);
         }
 
         if (!packet.Expressions.Contains(response.Expression, StringComparer.OrdinalIgnoreCase))

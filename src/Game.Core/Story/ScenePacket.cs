@@ -63,6 +63,7 @@ public enum ScenePart
 /// The ids of the people who can stand on the stage, the person the scene is about first; the answer says which of them
 /// are here at its end. Null when nobody is drawn, such as texting.
 /// </param>
+/// <param name="Showing">The shot of the moment drawn on screen now, for an answer to keep, change or end; null for none.</param>
 public sealed record ScenePacket(
     string SettingName,
     string Tone,
@@ -89,7 +90,8 @@ public sealed record ScenePacket(
     bool VariedChoices = false,
     PacketOutfit? Outfit = null,
     IReadOnlyList<PacketOutfit>? OtherOutfits = null,
-    IReadOnlyList<string>? Drawn = null);
+    IReadOnlyList<string>? Drawn = null,
+    string? Showing = null);
 
 public static class ScenePacketBuilder
 {
@@ -251,6 +253,40 @@ public static class ScenePacketBuilder
         var people = drawn.Select(id => packet.Present.FirstOrDefault(p => p.Id == id) is { } person ? $"{person.Name} ({id})" : id);
         return $"present: of {string.Join(", ", people)}, each one who is here at the end, with their id and how they look (one of {string.Join(", ", packet.Expressions)}). " +
                "Leave out anyone who has left or has not come in yet; an empty list if nobody is.";
+    }
+
+    /// <summary>
+    /// What the answer's moment is: null for an ordinary moment, or the shot of one worth seeing, which is drawn as one
+    /// picture with the people in it instead of their figures on the place (user request). For scenes and reactions
+    /// alike; null when nobody here is drawn.
+    /// </summary>
+    public static string? MomentRule(ScenePacket packet)
+    {
+        ArgumentNullException.ThrowIfNull(packet);
+
+        if (packet.Drawn is not { Count: > 0 } drawn)
+        {
+            return null;
+        }
+
+        var names = drawn.Select(id => packet.Present.FirstOrDefault(p => p.Id == id)?.Name ?? id).ToList();
+        var who = names.Count == 1 ? names[0] : string.Join(" and ", names);
+        var shot =
+            $"a short description in English of the picture: what {who} {(names.Count == 1 ? "is" : "are")} doing at the end and how " +
+            $"(pose, action, gesture, where they look), under {Moments.MaxShotLength} characters, such as \"leaning in for a kiss, eyes closed\" " +
+            "or \"laughing, spinning in the rain with arms flung wide\". No names, clothes, place, time or weather: those are drawn already. " +
+            "The player is never drawn: anything they share in is seen through their eyes, as \"the viewer\" " +
+            "(\"reaching for the viewer's hand\", \"looking up at the viewer\").";
+
+        if (packet.Showing is { } showing)
+        {
+            return $"moment: a picture of this moment is on screen now: \"{showing}\". Repeat those exact words while it still shows " +
+                   $"what is happening at the end; for a new moment worth seeing, {shot} Null once it has passed and they simply stand there again.";
+        }
+
+        return "moment: null for an ordinary moment. Only when this reaches a moment worth seeing for itself, one the player " +
+               $"would want to look at, such as a first kiss, a slow dance, an embrace, a confession, a gift opened, a rescue, " +
+               $"or real joy, fear or tenderness between them and {who}: {shot}";
     }
 
     /// <summary>What makes proposed replies worth choosing between, for scenes and reactions alike.</summary>
@@ -459,6 +495,11 @@ public static class ScenePacketBuilder
         if (packet.Outfit is { Settled: false } offered)
         {
             text.AppendLine($"- {OutfitRule(offered)}");
+        }
+
+        if (MomentRule(packet) is { } moment)
+        {
+            text.AppendLine($"- {moment}");
         }
 
         text.AppendLine("- facts: only new things the scene shows or someone claims, using the ids above as subjects. Claims may be untrue.");

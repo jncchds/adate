@@ -138,4 +138,35 @@ public class SceneLogTests
         await log.SetFiguresAsync(id, []);
         Assert.Empty((await log.ListAsync(save.Id)).Single().Figures!);
     }
+
+    [Fact]
+    public async Task A_moment_is_kept_with_the_scene_and_its_picture_lands_only_while_it_is_still_on_screen()
+    {
+        using var db = new TempDatabase();
+        var saves = new SaveRepository(db.Database);
+        var log = new SceneLogRepository(db.Database);
+        var save = await saves.CreateAsync("zimage-anime", "fingerprint", Ceiling.PG13);
+        var rin = Guid.NewGuid();
+        var kai = Guid.NewGuid();
+
+        var id = await log.StartAsync(save.Id, new ClockState(2, TimeOfDay.Evening), "corner-cafe", "quiet.company", "{\"placeId\":\"corner-cafe\"}", "Rin is here.");
+        Assert.Null((await log.GetOpenAsync(save.Id))!.Moment);
+
+        var dancing = new SceneMoment("slow dancing, eyes closed", [rin, kai]);
+        await log.SetMomentAsync(id, dancing);
+        Assert.Equal(dancing.Shot, (await log.GetOpenAsync(save.Id))!.Moment!.Shot);
+
+        await log.SetMomentPictureAsync(id, dancing with { PicturePath = "img/m1.png" });
+        var drawn = (await log.GetOpenAsync(save.Id))!.Moment!;
+        Assert.Equal("img/m1.png", drawn.PicturePath);
+        Assert.Equal([rin, kai], drawn.People);
+
+        // The words moved on while a picture was drawn: it does not land on the moment that replaced it.
+        await log.SetMomentAsync(id, new SceneMoment("laughing in the rain", [rin]));
+        await log.SetMomentPictureAsync(id, dancing with { PicturePath = "img/stale.png" });
+        Assert.Null((await log.GetOpenAsync(save.Id))!.Moment!.PicturePath);
+
+        await log.SetMomentAsync(id, null);
+        Assert.Null((await log.ListAsync(save.Id)).Single().Moment);
+    }
 }

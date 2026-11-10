@@ -309,19 +309,10 @@ public sealed class CharacterStudio(
         var compiler = compilers.For(pack.Dialect);
         var subject = pack.SubjectFor(character.Appearance.Subject);
 
-        // The clothes the words named are what is drawn, so the picture shows the outfit the scene describes
-        // (user feedback: a girl in shorts and a t-shirt under prose about a dress). Without them, casual with
-        // no layer is the everyday outfit, the same prompt as before dress codes, so sprites already drawn stay valid.
-        IReadOnlyList<string> outfit = Garments(garments) ?? subject.OutfitFor(aesthetic, dress);
-        if (!string.IsNullOrWhiteSpace(layer))
-        {
-            outfit = [layer, .. outfit];
-        }
-
         var approved = Approve(character, pack, new SceneIntent(
             "studio",
             TimeOfDay.Midday,
-            string.Join(", ", outfit),
+            OutfitWords(subject, aesthetic, dress, layer, garments),
             "standing",
             pack.ExpressionFor(expression),
             Framing.FullBody));
@@ -349,6 +340,135 @@ public sealed class CharacterStudio(
             .ConfigureAwait(false);
 
         return image.RelativePath;
+    }
+
+    /// <summary>
+    /// What someone is drawn wearing. The clothes the words named are what is drawn, so the picture shows the outfit the
+    /// scene describes (user feedback: a girl in shorts and a t-shirt under prose about a dress). Without them, casual
+    /// with no layer is the everyday outfit, the same prompt as before dress codes, so sprites already drawn stay valid.
+    /// </summary>
+    private static string OutfitWords(SubjectProfile subject, string aesthetic, string dress, string? layer, string? garments)
+    {
+        IReadOnlyList<string> outfit = Garments(garments) ?? subject.OutfitFor(aesthetic, dress);
+        if (!string.IsNullOrWhiteSpace(layer))
+        {
+            outfit = [layer, .. outfit];
+        }
+
+        return string.Join(", ", outfit);
+    }
+
+    // -------------------------------------------------------------------- moments
+
+    /// <summary>
+    /// A moment worth seeing, drawn as one picture: the place at the scene's time and weather, with the people in it
+    /// in what they wear there, doing what the shot says (user request: on special occasions the love interests are
+    /// drawn into the scene itself). Drawn at the background's size with no matting, and cached like everything else.
+    /// </summary>
+    /// <remarks>
+    /// HANDOFF 1.1 composites and never generates whole scenes, and that still holds for every ordinary scene: this is
+    /// the exception the writer calls for. It costs what the composite was protecting: the person is held together by
+    /// their description alone, so they look like themselves rather than exactly like their sprite.
+    /// </remarks>
+    /// <param name="shot">What they are doing, already cleaned; it passes the gate at the strictest ceiling of anyone in it.</param>
+    /// <param name="people">Who is in it, left to right, at most two.</param>
+    public Task<string> GenerateMomentAsync(
+        SaveId saveId, PlaceRecord place, TimeOfDay time, string weather, string shot, IReadOnlyList<MomentFigure> people)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentException.ThrowIfNullOrWhiteSpace(shot);
+        ArgumentNullException.ThrowIfNull(people);
+
+        var who = string.Join(",", people.Select(p => $"{p.CharacterId}/{p.Aesthetic}/{p.Expression}/{p.Dress}/{p.Layer}/{p.Garments}"));
+        return jobs.RunAsync(
+            $"moment:{saveId}:{place.Id}:{time}:{weather}:{shot}:{who}",
+            ct => GenerateMomentCoreAsync(saveId, place, time, weather, shot, people, ct));
+    }
+
+    private async Task<string> GenerateMomentCoreAsync(
+        SaveId saveId,
+        PlaceRecord place,
+        TimeOfDay time,
+        string weather,
+        string shot,
+        IReadOnlyList<MomentFigure> people,
+        CancellationToken ct)
+    {
+        if (people.Count == 0)
+        {
+            throw new ArgumentException("A moment is a picture of someone; it needs at least one person.", nameof(people));
+        }
+
+        var pack = await GetPackAsync(saveId, ct).ConfigureAwait(false);
+        var compiler = compilers.For(pack.Dialect);
+
+        var subjects = new List<MomentSubject>(people.Count);
+        var decisions = new List<ContentDecision>(people.Count);
+        foreach (var figure in people)
+        {
+            var character = await characters.GetAsync(figure.CharacterId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"No character with id {figure.CharacterId}.");
+            var subject = pack.SubjectFor(character.Appearance.Subject);
+
+            // Each person's clothes and expression pass the gate at their own ceiling, from their own age.
+            subjects.Add(new MomentSubject(character.Appearance, Approve(character, pack, new SceneIntent(
+                "studio",
+                time,
+                OutfitWords(subject, figure.Aesthetic, figure.Dress, figure.Layer, figure.Garments),
+                "",
+                pack.ExpressionFor(figure.Expression),
+                Framing.FullBody))));
+            decisions.Add(DecisionFor(character, pack, Intimacy.None));
+        }
+
+        // What they do together is shown to everyone in it, so it passes at the strictest of their ceilings: anyone under
+        // 18 keeps the whole picture at PG13.
+        var strictest = decisions.MinBy(d => d.Ceiling)!;
+        var scene = ApprovedIntent.Approve(
+            strictest,
+            new SceneIntent(place.TypeId, time, "", shot, "", Framing.FullBody, place.Details, weather == "clear" ? null : weather, place.Look),
+            pack);
+
+        if (scene.Removed.Count > 0)
+        {
+            log.LogInformation(
+                "Content gate removed {Count} term(s) from a {Ceiling} moment: {Terms}",
+                scene.Removed.Count, strictest.Ceiling, string.Join(", ", scene.Removed));
+        }
+
+        // Every subject's negatives, so each person in it is protected as their own sprite would be.
+        var negative = string.Join(", ", subjects
+            .SelectMany(s => compiler.CompileNegative(pack, strictest.Ceiling, RenderTarget.Moment, s.Appearance.Subject)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+
+        var first = await characters.GetAsync(people[0].CharacterId, ct).ConfigureAwait(false);
+        var image = await images.GenerateAsync(
+            new ImageRequest(
+                WorkflowId: pack.Workflows.Background,
+                Positive: compiler.CompileMoment(subjects, scene, pack),
+                Negative: negative,
+                // The first person's seed moved by the shot and the place: the same moment draws the same picture again,
+                // and a different one draws another.
+                Seed: StableSeed(first?.AnchorSeed ?? DeriveSeed(people[0].CharacterId, 0), $"{place.Id}|{shot}"),
+                Width: pack.Resolutions.Background.Width,
+                Height: pack.Resolutions.Background.Height,
+                PackFingerprint: PackFingerprint(),
+                AnchorImageHash: null,
+                AnchorWeight: null,
+                PoseImageHash: null,
+                PoseStrength: null,
+                Ceiling: strictest.Ceiling),
+            ct).ConfigureAwait(false);
+
+        return image.RelativePath;
+    }
+
+    /// <summary>A seed from another and some text, the same on every run: string hashes are randomised per process.</summary>
+    private static long StableSeed(long seed, string text)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text));
+        return Math.Abs((seed ^ BitConverter.ToInt64(hash)) % int.MaxValue);
     }
 
     /// <summary>
@@ -617,6 +737,12 @@ public sealed record Candidate(
     IReadOnlyList<FeatureChange> Changes);
 
 public sealed record CastPortrait(CastMember Member, string RelativePath);
+
+/// <summary>Someone in a moment's picture, dressed as their figure on the stage would be drawn.</summary>
+/// <param name="Dress">A <see cref="DressCode"/>.</param>
+/// <param name="Layer">Something worn over the outfit, for the weather or as the words put it on; null for none.</param>
+/// <param name="Garments">The clothes the words named; null leaves them to the wardrobe for <paramref name="Dress"/>.</param>
+public sealed record MomentFigure(Guid CharacterId, string Aesthetic, string Expression, string Dress, string? Layer = null, string? Garments = null);
 
 public sealed class StudioOptions
 {

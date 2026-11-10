@@ -591,4 +591,23 @@ public class SceneWriterTests
         Assert.Contains("400", ex.Message, StringComparison.Ordinal);
         Assert.Contains("model not loaded", ex.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task A_moment_worth_seeing_comes_back_in_English_and_is_asked_for_only_where_someone_is_drawn()
+    {
+        var drawn = Packet() with { Drawn = [Rin] };
+        string WithMoment(string moment) => Answer().TrimEnd().TrimEnd('}') + $$""", "present": [], "moment": "{{moment}}" }""";
+
+        var llm = new FakeLlm(() => WithMoment("танцює під дощем"), () => WithMoment("laughing, spinning in the rain"));
+        var scene = await Writer(llm).WriteAsync(drawn, World(), "Placeholder.");
+
+        Assert.False(scene.Fallback);
+        Assert.Equal("laughing, spinning in the rain", scene.Moment);
+        Assert.Contains("only English", llm.Requests[1].User, StringComparison.Ordinal);
+        Assert.True(llm.Requests[0].Schema["properties"]!.AsObject().ContainsKey("moment"));
+
+        var nobody = new FakeLlm(() => Answer());
+        await Writer(nobody).WriteAsync(Packet(), World(), "Placeholder.");
+        Assert.False(nobody.Requests[0].Schema["properties"]!.AsObject().ContainsKey("moment"));
+    }
 }

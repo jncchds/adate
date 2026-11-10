@@ -44,4 +44,19 @@ public interface IPromptCompiler
     /// male chest through, so each subject carries the terms its own ceiling needs.
     /// </param>
     string CompileNegative(StylePack pack, Ceiling ceiling, RenderTarget target, string? subject);
+
+    /// <summary>
+    /// A moment worth seeing (<see cref="RenderTarget.Moment"/>): the people in it, each in their own clothes and look,
+    /// doing what the shot says, at the place. The same fixed order as <see cref="CompilePositive"/>, and the same rule:
+    /// every word comes from the pack, the catalog, a character record or an already-approved intent.
+    /// </summary>
+    /// <param name="people">Who is in it, left to right, each with an intent approved for them: their outfit and expression.</param>
+    /// <param name="scene">
+    /// The place as a background intent, with the shot in <see cref="SceneIntent.Pose"/>, approved at the strictest
+    /// ceiling of anyone in the picture.
+    /// </param>
+    string CompileMoment(IReadOnlyList<MomentSubject> people, Content.ApprovedIntent scene, StylePack pack);
 }
+
+/// <summary>Someone in a moment's picture: who they are, and what they wear and look like there, already through the gate.</summary>
+public sealed record MomentSubject(CharacterAppearance Appearance, Content.ApprovedIntent Approved);
