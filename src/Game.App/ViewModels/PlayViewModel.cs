@@ -595,11 +595,14 @@ public sealed partial class PlayViewModel : PageViewModel
         }
     }
 
+    /// <summary>Why the model is not answering, when it said (a spent quota), to follow a warning.</summary>
+    private string ProblemSuffix() => _world.LlmProblem is { } problem ? " " + problem : "";
+
     /// <summary>The warning beside placeholder words, offering the scene's words again before anything is said in it.</summary>
     /// <param name="canRetry">False once the conversation has started, when the warning is only a mark.</param>
     private WarningItem ScenePlaceholderWarning(bool canRetry) =>
         new(
-            "These are placeholder words: the scene could not be written.",
+            "These are placeholder words: the scene could not be written." + ProblemSuffix(),
             "The scene could not be written, so these words stand in for it. Write it again?",
             RewriteSceneAsync)
         {
@@ -610,7 +613,7 @@ public sealed partial class PlayViewModel : PageViewModel
     /// <param name="canRetry">False for an earlier answer, once the conversation has moved past it.</param>
     private WarningItem AnswerPlaceholderWarning(bool canRetry) =>
         new(
-            "This is a placeholder answer: the reply could not be answered.",
+            "This is a placeholder answer: the reply could not be answered." + ProblemSuffix(),
             "Your reply could not be answered, so these words stand in for it. Answer it again?",
             RewriteReactionAsync)
         {

@@ -1859,3 +1859,68 @@ or in any answer; the picture is composed around the UI, with a button to hide t
   web alike.
 * **Not yet measured.** Whether Gemma calls for moments at sensible times, and how well Z-Image keeps two people apart
   and the right side clear, are to be seen in play.
+
+## A spent quota is said, not retried; the model can suggest happenings, C# decides
+
+Live play on Gemini's free tier (20 requests a day per model) gave a placeholder for every scene, and the
+retry added in the settings page spent the rest of the quota retrying 429s.
+
+* **A 429 is read, not retried blindly.** A per-day limit (`...PerDay...` in Google's quota id) is never
+  retried; a per-minute one is waited out once, and only when Google's `retryDelay` is 15 s or less. 5xx
+  "high demand" keeps its short backoff (two tries). `LlmQuotaException` carries Google's message.
+* **The writers stop at once on it** (scene, reaction, epilogue) rather than spending their retries, and
+  `LlmUsage` remembers the problem: calls are not made at all for ten minutes after a daily 429, then one is
+  tried to see whether it reset. The player sees the reason beside the placeholder (`WorldService.LlmProblem`,
+  both frontends). Embeddings count but never block chat; they are another model's quota.
+* **Calls are counted per kind** (`CountingLlmClient`, the schema name), and each scene and reaction turn log
+  has `llmCalls`. A first scene is bible 1, voices 1, scene 1, judge 1, embed 2; each reply afterwards is one
+  call. Use `gemini-3.5-flash-lite` for tests and live play on the free tier.
+* **The warning mark is its own line**, with the reason and a separate "Try again…" button, instead of a tiny
+  button at the end of the text.
+* **Model-proposed happenings.** The scene answer may carry up to two `happenings`; `HappeningIdeas.Accept`
+  keeps one only if it is a plain sentence of 15-140 characters with no name, digit, "you" or word that
+  settles feelings, and not a repeat. Kept ideas (migration 021) are used by a later scene at that kind of
+  place 60% of the time, once each and stable across a rewrite; the authored list is the fallback. No extra
+  call: the idea rides on the scene's own answer. The model never owns state.
+
+## Days have a shape, people have a mood and a goal, and both move who turns up
+
+Follow-up to the above, for "make it less scripted". All of it is C#, rolled per save and day (the same on a
+reload); the model only colours scenes with it, and no extra call is made.
+
+* **Day shape** (`DayShapes`): ordinary 50%, quiet 20%, busy 15%, lively 15%. It scales how often people are
+  off their routine (`WorldMoves.Where`), how often a stranger is met by chance, and how often someone seeks
+  the player out; a non-ordinary day also adds one line to the packet's weather ("The town is lively today").
+* **Mood and goal** (`Disposition`): per person and day. Four days or more unseen makes them wistful; the
+  goal (company, alone, errand, show something) follows the mood. Their `InitiativeScale` multiplies the
+  seek-out chance (company x1.6, alone x0.3), and the packet gets one line for each present person, to be
+  shown in small ways and never stated. The debug screen lists both.
+* **Something left open** (an open thread with that person: a promise, a question) makes them x1.3 likelier
+  to seek the player out. The cap `Initiative.MaxChance` still holds.
+* **Measure policy** `--policy company` goes to where a met person is now (`WorldService.WhereAreTheyAsync`)
+  instead of the least visited place.
+* **Fewer calls:** the retrieval embedding is skipped while there are hardly more memories than a packet takes
+  (recency picks the same ones). A first scene is now bible 1, voices 1, scene 1, judge 1, embed 1.
+* **`gemini-3.5-flash-lite` is the default Google AI model** when none is set, and no longer needs to be
+  entered in Settings; it is also what tests and live runs use.
+* **Still open:** the model does not yet propose goals or moods itself (they are rolled, not generated), and
+  promises are acted on through the seek-out chance and the packet's loose ends, not through new scenes of
+  their own.
+
+## What a play-through showed (flash-lite, 15 scenes over 3 days, 97 model turns, no fallback)
+
+* **Thinking tokens were eating the output cap.** With reasoning effort "medium" the budget is 8192 tokens
+  inside a 2-3k `maxOutputTokens`, so the JSON was cut off mid-string and the first scene needed a retry. The
+  Google client now adds the thinking budget to the cap. After that every remaining retry (13% of turns) was
+  a real check: first person in narration, narration deciding for the player, an unfinished quote.
+* **The model reworded the happening it had just been given** and offered it back as a "new" idea (a delivery
+  driver buzzing the wrong flat, twice in a row). Ideas are now compared by the stems of their longer words
+  against the authored list, the kept ideas and the scene's own happening, and the prompt says not to repeat
+  what is going on.
+* **Moods show.** A person with the goal "show or share something" held out a paper parcel; a restless one
+  tapped a boot. Day shapes read as a line in the weather and change who is about.
+* **Replies are the cost.** 93 of 155 calls were reactions, because a scene runs six or seven exchanges. The
+  next lever for a small quota is a lower reply ceiling per scene (`SceneConversation.CeilingFor`), or the
+  judge off (`UseJudge`), which is one call per scene.
+* **The measure runner** now puts a closed scene away and goes to the agreed place when heading somewhere
+  together (it stopped on both), and takes `--max-turns`.

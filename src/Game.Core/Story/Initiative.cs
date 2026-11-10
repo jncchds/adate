@@ -15,6 +15,9 @@ public static class Initiative
     public const double PerDayUnseen = 0.04;
     public const double MaxChance = 0.6;
 
+    /// <summary>How much likelier someone is to seek the player out with something still open between them.</summary>
+    public const double OpenThreadBoost = 1.3;
+
     /// <summary>Days after seeking the player out before the same person does it again.</summary>
     public const int CooldownDays = 3;
 

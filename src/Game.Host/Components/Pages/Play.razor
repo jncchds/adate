@@ -136,7 +136,7 @@
                     case Mode.Scene:
                         @if (!string.IsNullOrEmpty(_sceneText))
                         {
-                            <p class="story">@_sceneText@if (_sceneFallback) {<text> </text>@Mark(Warned.Scene, _exchanges.Count == 0)}</p>
+                            <p class="story">@_sceneText@if (_sceneFallback) {@Mark(Warned.Scene, _exchanges.Count == 0)}</p>
                             @Asked(Warned.Scene)
                         }
                         @if (_withLine is not null)
@@ -161,7 +161,7 @@
                                 </div>
                                 @if (exchange.Reaction is not null)
                                 {
-                                    <p class="story reaction">@exchange.Reaction@if (exchange.Fallback) {<text> </text>@Mark(Warned.Reaction, exchange == _exchanges[^1])}</p>
+                                    <p class="story reaction">@exchange.Reaction@if (exchange.Fallback) {@Mark(Warned.Reaction, exchange == _exchanges[^1])}</p>
                                     @if (exchange.Fallback && exchange == _exchanges[^1])
                                     {
                                         @Asked(Warned.Reaction)
@@ -343,7 +343,7 @@
                 <div class="thread" @ref="_thread">
                     @foreach (var message in _messages)
                     {
-                        <p class="bubble @(message.Mine ? "mine" : null) @(message.Note ? "note" : null)">@message.Text@if (message.Warn is { } warned) {<text> </text>@Mark(warned, message.CanRetry)}</p>
+                        <p class="bubble @(message.Mine ? "mine" : null) @(message.Note ? "note" : null)">@message.Text@if (message.Warn is { } warned) {@Mark(warned, message.CanRetry)}</p>
                         @if (message.Warn is { } asked && message.CanRetry)
                         {
                             @Asked(asked)
@@ -560,10 +560,10 @@
         Moment,
     }
 
-    private static string Label(Warned what) => what switch
+    private string Label(Warned what) => what switch
     {
-        Warned.Scene => "These are placeholder words: the scene could not be written.",
-        Warned.Reaction => "This is a placeholder answer: the reply could not be answered.",
+        Warned.Scene => "These are placeholder words: the scene could not be written." + Problem(),
+        Warned.Reaction => "This is a placeholder answer: the reply could not be answered." + Problem(),
         Warned.Background => "The place could not be drawn.",
         Warned.Moment => "This moment could not be drawn.",
         _ => "This person could not be drawn.",
@@ -578,18 +578,23 @@
         _ => $"{_spriteMissing ?? _speaker ?? "This person"} could not be drawn. Draw them again?",
     };
 
+    /// <summary>Why the model is not answering, when it said (a spent quota), to follow the warning.</summary>
+    private string Problem() => World.LlmProblem is { } problem ? " " + problem : "";
+
     /// <summary>The warning beside something that came out wrong; pressing it asks whether to try again.</summary>
     /// <param name="canRetry">False once it is too late to try again, when the warning is only a mark.</param>
     private RenderFragment Mark(Warned what, bool canRetry = true) => __builder =>
     {
-        @if (canRetry)
-        {
-            <button type="button" class="warn" title="@Label(what)" aria-label="@Label(what)" disabled="@_working" @onclick="() => Ask(what)">⚠</button>
-        }
-        else
-        {
-            <span class="warn" title="@Label(what)" role="img" aria-label="@Label(what)">⚠</span>
-        }
+        // Its own line, with the reason in words and a button well apart from the text above it: a mark
+        // at the end of a line of words was too easy to press by mistake.
+        <span class="warn-note" role="status">
+            <span class="warn" aria-hidden="true">⚠</span>
+            <span class="warn-text">@Label(what)</span>
+            @if (canRetry)
+            {
+                <button type="button" class="warn-retry" disabled="@_working" @onclick="() => Ask(what)">Try again…</button>
+            }
+        </span>
     };
 
     /// <summary>The confirmation the warning opens: nothing is asked for again until the player says so.</summary>

@@ -38,7 +38,8 @@ public sealed record SceneResponse(
     IReadOnlyList<ProposedRoutine>? Routines = null,
     SceneResponseOutfit? Outfit = null,
     IReadOnlyList<SceneResponsePresence>? Present = null,
-    string? Moment = null);
+    string? Moment = null,
+    IReadOnlyList<string>? Happenings = null);
 
 /// <param name="Places">New places the scene named, checked against the place-type catalog.</param>
 /// <param name="Fallback">Whether the authored text was used because no answer passed.</param>
@@ -67,7 +68,8 @@ public sealed record WrittenScene(
     IReadOnlyList<ProposedRoutine>? Routines = null,
     Game.Core.Story.Outfit? Outfit = null,
     IReadOnlyList<Presence>? Present = null,
-    string? Moment = null);
+    string? Moment = null,
+    IReadOnlyList<string>? Happenings = null);
 
 /// <summary>
 /// Writes one scene (plan §8). C# assembles the packet; the model returns prose plus JSON; C# checks
@@ -170,6 +172,12 @@ public sealed class SceneWriter(
                     raw = await llm.CompleteJsonAsync(new LlmRequest(SystemPrompt, request + feedback, "scene", schema, maxTokens), ct).ConfigureAwait(false);
                 }
             }
+            catch (LlmQuotaException quota)
+            {
+                // A spent quota is not the answer's fault and another try spends more of it.
+                rejections.Add($"attempt {attempts}: {quota.Message}");
+                return Fallback(fallbackText, attempts, rejections);
+            }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
             {
@@ -248,7 +256,8 @@ public sealed class SceneWriter(
                         [.. (response.Routines ?? []).Where(r => r is not null)],
                         Outfits.Accept(packet.Outfit, response.Outfit?.Dress, response.Outfit?.Over, response.Outfit?.Garments),
                         Present(packet, response.Present),
-                        Moment(packet, response.Moment));
+                        Moment(packet, response.Moment),
+                        packet.ProposeHappenings ? [.. (response.Happenings ?? []).Where(h => h is not null)] : null);
                 }
 
                 lastReasons = reasons;
@@ -356,6 +365,12 @@ public sealed class SceneWriter(
             properties["present"] = PresenceProperty(packet);
             properties["moment"] = MomentProperty();
             required.AddRange(["present", "moment"]);
+        }
+
+        if (packet.ProposeHappenings)
+        {
+            properties["happenings"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } };
+            required.Add("happenings");
         }
 
         if (packet.LooseEnds is not null)

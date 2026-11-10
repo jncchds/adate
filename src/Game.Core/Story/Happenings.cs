@@ -43,6 +43,9 @@ public sealed record HappeningContent(
         return content;
     }
 
+    /// <summary>Every authored happening for a place type, to keep a proposed one from repeating it.</summary>
+    public IEnumerable<string> AllTexts(string placeTypeId) => (Places.GetValueOrDefault(placeTypeId) ?? []).Select(h => h.Text);
+
     /// <summary>Refuses happenings for a place type or weather that does not exist, which would silently never be used.</summary>
     public void ValidateAgainst(IEnumerable<string> placeTypeIds, IEnumerable<string> weatherIds)
     {

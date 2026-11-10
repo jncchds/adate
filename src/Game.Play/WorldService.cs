@@ -174,6 +174,7 @@ public sealed class WorldService(
     StoryStateRepository story,
     SceneLogRepository sceneLog,
     ThreadRepository threads,
+    HappeningIdeaRepository happeningIdeas,
     PlanRepository plans,
     Game.Core.Content.ILocationCatalog placeTypes,
     ISettingCatalog settings,
@@ -195,6 +196,7 @@ public sealed class WorldService(
     MemoryRepository memoryStore,
     MemoryCompactor compactor,
     IEmbeddingClient embeddings,
+    LlmUsage llmUsage,
     CharacterStudio studio,
     IOptions<LlmOptions> llmOptions,
     IOptions<StudioOptions> options)
@@ -215,6 +217,36 @@ public sealed class WorldService(
     /// The places the player can choose between, after making sure the save has its setting's
     /// authored places. A save created before settings existed is given the default setting, once.
     /// </summary>
+    /// <summary>
+    /// Where each person the player has met is now, by name, among the places the player knows. For measuring
+    /// with a player who goes where company is; a real player has to look or be told.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> WhereAreTheyAsync(SaveId saveId, CancellationToken ct = default)
+    {
+        var play = await GetPlayStateAsync(saveId, ct).ConfigureAwait(false);
+        var flags = await state.GetFlagsAsync(saveId, ct).ConfigureAwait(false);
+        var found = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var li in await CastAsync(saveId, play.Setting, ct).ConfigureAwait(false))
+        {
+            if (!EncounterEvaluator.Holds(flags, $"{li.Key}.met") || HasLeft(flags, li))
+            {
+                continue;
+            }
+
+            var now = WorldMoves.Where(saveId.ToString(), ScheduleFor(saveId, play.Setting, li, flags), [.. play.Setting.Places.Select(p => p.Id)], play.Clock);
+            if (now is not null && play.KnownPlaces.Any(p => p.Id == now))
+            {
+                found[li.Name] = now;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>Why the model is not answering right now (a spent quota), for the player; null when nothing is wrong.</summary>
+    public string? LlmProblem => llmOptions.Value.Enabled ? llmUsage.Problem : null;
+
     public async Task<IReadOnlyList<PlaceRecord>> KnownPlacesAsync(SaveId saveId, CancellationToken ct = default)
     {
         await EnsureSettingAsync(saveId, ct).ConfigureAwait(false);
@@ -741,7 +773,7 @@ public sealed class WorldService(
                 $"setting: {play.Setting.Id} ({play.Setting.DisplayName}), {play.Setting.Days} days",
                 $"player: {await saves.GetPlayerNameAsync(saveId, ct).ConfigureAwait(false)} ({await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false) ?? "-"})",
                 $"narration: {await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false) ?? "English"}",
-                $"clock: day {play.Clock.Day} (weekday {CharacterSchedule.Weekday(play.Clock.Day)}), {play.Clock.Slot}",
+                $"clock: day {play.Clock.Day} (weekday {CharacterSchedule.Weekday(play.Clock.Day)}), {play.Clock.Slot}   day shape: {DayShapes.For(saveId.ToString(), play.Clock.Day)}",
                 $"opening: {play.Opening?.Id ?? "-"}   over: {play.Over}   ending: {(play.Ending is null ? "-" : "reached")}   offer: {(play.EndingOffer is null ? "-" : "open")}",
                 $"job: {(play.Job is { } shown ? JobText(shown.Title, PlaceName(play.Setting, play.KnownPlaces, shown.Place)) : "-")}   on shift now: {play.OnShift}",
                 $"pending choice: {(play.Pending is null ? "-" : string.Join(" | ", play.Pending.Choices.Select(c => c.Id)))}",
@@ -750,6 +782,7 @@ public sealed class WorldService(
         };
 
         var people = new List<string>();
+        var seenDays = await state.GetLastSeenAsync(saveId, ct).ConfigureAwait(false);
         foreach (var li in cast)
         {
             var relationship = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
@@ -759,6 +792,8 @@ public sealed class WorldService(
             people.Add($"  profile: {JsonSerializer.Serialize(li.Profile, Json)}");
             var schedule = ScheduleFor(saveId, play.Setting, li, flags);
             var now = WorldMoves.Where(saveId.ToString(), schedule, [.. play.Setting.Places.Select(p => p.Id)], play.Clock);
+            var today = DispositionOf(saveId, li, play.Clock.Day, seenDays);
+            people.Add($"  today: {today.Mood}, wants {today.Goal} (initiative x{today.InitiativeScale:0.##})");
             people.Add($"  usually at: {schedule.Where(play.Clock) ?? "-"}   now at: {now ?? "-"}   met: {EncounterEvaluator.Holds(flags, $"{li.Key}.met")}   left: {HasLeft(flags, li)}");
             people.Add($"  week: {RoutineKnowledge.Describe(RoutineKnowledge.Entries(schedule), id => PlaceName(play.Setting, play.KnownPlaces, id))}");
             people.Add($"  player knows: {RoutineKnowledge.Describe(KnownRoutine(play.Setting, li, schedule, flags), id => PlaceName(play.Setting, play.KnownPlaces, id))}   home: {flags.GetValueOrDefault($"{li.Key}.home") ?? "-"}");
@@ -1430,6 +1465,7 @@ public sealed class WorldService(
             return unwritten;
         }
 
+        var callsBefore = llmUsage.Calls;
         var built = await BuildScenePacketAsync(saveId, outcome, presented, looseEndsOverride: null, ct, progress).ConfigureAwait(false);
         var (known, packet, world, memoryLines) = (built.Known, built.Packet, built.World, built.MemoryLines);
         var presentIds = packet.Present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1445,6 +1481,11 @@ public sealed class WorldService(
         if (!written.Fallback && packet.LooseEnds is not null)
         {
             await KeepThreadsAsync(saveId, Owner(built.Cast, outcome.With)?.Id, written.Threads, written.Resolved, day, ct).ConfigureAwait(false);
+        }
+
+        if (!written.Fallback && known.FirstOrDefault(p => p.Id == outcome.PlaceId) is { } sceneSpot)
+        {
+            await KeepHappeningsAsync(saveId, sceneSpot.TypeId, written.Happenings, built.Cast.Select(li => li.Name).Append(packet.PlayerName), packet.Happening, day, ct).ConfigureAwait(false);
         }
 
         foreach (var fact in written.Facts)
@@ -1490,6 +1531,7 @@ public sealed class WorldService(
             written.Resolved,
             written.Attempts,
             written.Rejections,
+            LlmCalls = llmUsage.Since(callsBefore),
         }, ct).ConfigureAwait(false);
 
         // A scene without authored choices waits for the player: a proposed reply or their own words, or Continue
@@ -1596,6 +1638,7 @@ public sealed class WorldService(
         var duty = outcome.Duty;
         var stages = new Dictionary<string, RelationshipStage>(StringComparer.Ordinal);
         var present = new List<PacketPerson>();
+        var lastSeenDays = await state.GetLastSeenAsync(saveId, ct).ConfigureAwait(false);
         foreach (var li in cast.Where(li => outcome.With.Contains(li.Ref)))
         {
             var relationship = await story.GetRelationshipAsync(saveId, li.Id, ct).ConfigureAwait(false);
@@ -1608,7 +1651,8 @@ public sealed class WorldService(
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
                 quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct, progress).ConfigureAwait(false) : null,
                 RoutineForWriter(saveId, setting, li, flags, known),
-                (outcome.Arrives ?? []).Contains(li.Ref) ? PersonAway.Arriving : null));
+                (outcome.Arrives ?? []).Contains(li.Ref) ? PersonAway.Arriving : null,
+                DispositionOf(saveId, li, outcome.VisitedAt.Day, lastSeenDays).Line(li.Name)));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -1622,7 +1666,13 @@ public sealed class WorldService(
         var remembered = await memoryStore.ListAsync(saveId, ct).ConfigureAwait(false);
         var lastShared = MemoryRetrieval.LastShared(remembered, presentIds);
         var retrieved = MemoryRetrieval.Retrieve(
-            remembered, await EmbedAsync(outcome.Text, ct).ConfigureAwait(false), presentIds, day, llmOptions.Value.RetrievedMemories, lastShared?.Id);
+            // With hardly more memories than a packet takes, ranking them by similarity picks the same ones as
+            // recency does, so the embedding call is saved.
+            remembered,
+            remembered.Count(m => m.CompactedInto is null) <= llmOptions.Value.RetrievedMemories + 2
+                ? null
+                : await EmbedAsync(outcome.Text, ct).ConfigureAwait(false),
+            presentIds, day, llmOptions.Value.RetrievedMemories, lastShared?.Id);
         var lastWeek = MemoryRetrieval.LastWeek(remembered, day);
 
         List<string> memoryLines = [];
@@ -1690,7 +1740,7 @@ public sealed class WorldService(
             [.. pack.Expressions.Keys],
             [.. known.Select(p => p.Name)],
             memoryLines,
-            WeatherOn(saveId, setting, day).Writing,
+            WeatherAndDay(saveId, setting, day),
             // Alone, the choices are things to do here (user feedback: not a fixed list of activities).
             OffersChoices: (outcome.Choices ?? []).Count == 0,
             PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
@@ -1700,8 +1750,9 @@ public sealed class WorldService(
             LooseEnds: quality.Threads ? await LooseEndsAsync(saveId, cast, presentIds, day, looseEndsOverride, ct).ConfigureAwait(false) : null,
             Happening: quality.Happenings && place is not null && outcome.EncounterId is JsonEncounterCatalog.QuietAloneId
                 or JsonEncounterCatalog.QuietCompanyId or JsonEncounterCatalog.ChanceMeetingId or JsonEncounterCatalog.PromisedMeetingId or JsonEncounterCatalog.InitiativeId
-                ? happenings.Pick(saveId.ToString(), place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt)
+                ? await HappeningForAsync(saveId, place.TypeId, WeatherOn(saveId, setting, day).Id, outcome.VisitedAt, ct).ConfigureAwait(false)
                 : null,
+            ProposeHappenings: quality.Happenings,
             VariedChoices: quality.VariedChoices,
             Outfit: outfit,
             OtherOutfits: otherOutfits,
@@ -1962,6 +2013,7 @@ public sealed class WorldService(
     {
         var openScene = await sceneLog.GetOpenAsync(saveId, ct).ConfigureAwait(false);
         var duty = openScene is null ? null : TurnOutcomeJson.Deserialize(openScene.OutcomeJson).Duty;
+        var callsBefore = llmUsage.Calls;
         var shown = openScene?.Figures;
         var built = await BuildReactionPacketAsync(saveId, scene, duty, looseEndsOverride: null, ct, shown, openScene?.Moment?.Shot).ConfigureAwait(false);
         var (setting, cast, flags, known, presentPeople, before, packet) =
@@ -2051,6 +2103,7 @@ public sealed class WorldService(
             reaction.Moment,
             reaction.Attempts,
             reaction.Rejections,
+            LlmCalls = llmUsage.Since(callsBefore),
         }, ct).ConfigureAwait(false);
 
         var popup = choicePopup ?? (owner is not null && relationships.TryGetValue(owner.Id, out var changed)
@@ -2176,6 +2229,7 @@ public sealed class WorldService(
 
         var ends = castContent.Temper.SelectMany(a => a.Ends).ToDictionary(e => e.Id, e => e.Writing, StringComparer.Ordinal);
         var presentPeople = cast.Where(li => scene.With.Contains(li.Ref)).ToList();
+        var lastSeenDays = await state.GetLastSeenAsync(saveId, ct).ConfigureAwait(false);
         var present = new List<PacketPerson>();
         var before = new Dictionary<Guid, RelationshipState>();
         foreach (var li in presentPeople)
@@ -2189,7 +2243,8 @@ public sealed class WorldService(
                 EncounterEvaluator.Holds(flags, $"{li.Key}.want_revealed") ? castContent.Want(li.Member.WantId).Label : null,
                 quality.Voices ? await VoiceOfAsync(saveId, setting, cast, li, facts, ct).ConfigureAwait(false) : null,
                 RoutineForWriter(saveId, setting, li, flags, known),
-                !byText && shown is not null && shown.All(f => f.CharacterId != li.Id) ? PersonAway.Left : null));
+                !byText && shown is not null && shown.All(f => f.CharacterId != li.Id) ? PersonAway.Left : null,
+                DispositionOf(saveId, li, scene.Clock.Day, lastSeenDays).Line(li.Name)));
         }
 
         var presentIds = present.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
@@ -2224,7 +2279,7 @@ public sealed class WorldService(
             ceiling,
             [.. pack.Expressions.Keys],
             KnownPlaces: [.. known.Select(p => p.Name)],
-            Weather: WeatherOn(saveId, setting, scene.Clock.Day).Writing,
+            Weather: WeatherAndDay(saveId, setting, scene.Clock.Day),
             PlayerGender: await saves.GetPlayerGenderAsync(saveId, ct).ConfigureAwait(false),
             Language: await saves.GetNarrationLanguageAsync(saveId, ct).ConfigureAwait(false),
             PlayerLife: await PlayerLifeLinesAsync(saveId, setting, known, names.Player, ct).ConfigureAwait(false),
@@ -2241,6 +2296,46 @@ public sealed class WorldService(
             Showing: dressed is null ? null : showing);
 
         return new BuiltReaction(setting, cast, flags, known, presentPeople, before, packet);
+    }
+
+    /// <summary>The weather's words, with a line about what sort of day it is in town when it is not an ordinary one.</summary>
+    private string WeatherAndDay(SaveId saveId, SettingDefinition setting, int day) =>
+        (WeatherOn(saveId, setting, day).Writing + " " + DayShapes.Effects(DayShapes.For(saveId.ToString(), day)).Line).Trim();
+
+    /// <summary>How someone is today: their mood and what they want of the day, longer away making them wistful.</summary>
+    private static Disposition DispositionOf(SaveId saveId, LoveInterest li, int day, IReadOnlyDictionary<string, int> lastSeen) =>
+        Disposition.For(saveId.ToString(), li.Key, day, lastSeen.TryGetValue(li.Ref, out var seen) ? day - seen : null);
+
+    /// <summary>
+    /// The small happening for a scene: sometimes one the model proposed for this kind of place in an earlier
+    /// scene (kept by <see cref="HappeningIdeas"/>), otherwise the authored list's. The same scene gets the same
+    /// one however often its packet is built.
+    /// </summary>
+    private async Task<string?> HappeningForAsync(SaveId saveId, string placeTypeId, string? weatherId, ClockState clock, CancellationToken ct)
+    {
+        if (Initiative.Unit($"{saveId}|{placeTypeId}|{clock.Day}|{clock.Slot}|idea") < HappeningIdeas.UseChance
+            && await happeningIdeas.TakeAsync(saveId, placeTypeId, $"{clock.Day}|{clock.Slot}", ct).ConfigureAwait(false) is { } idea)
+        {
+            return idea;
+        }
+
+        return happenings.Pick(saveId.ToString(), placeTypeId, weatherId, clock);
+    }
+
+    /// <summary>Keeps the happenings a written scene proposed for its kind of place, those C# accepts.</summary>
+    private async Task KeepHappeningsAsync(SaveId saveId, string placeTypeId, IReadOnlyList<string>? proposed, IEnumerable<string> names, string? current, int day, CancellationToken ct)
+    {
+        if (proposed is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var existing = (await happeningIdeas.TextsAsync(saveId, ct).ConfigureAwait(false)).Concat(happenings.AllTexts(placeTypeId)).Concat(current is null ? [] : [current]);
+        var accepted = HappeningIdeas.Accept(proposed, names, existing);
+        if (accepted.Count > 0)
+        {
+            await happeningIdeas.AddAsync(saveId, placeTypeId, accepted, day, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>An embedding for retrieval, or null when none is configured or the service does not answer.</summary>
@@ -2365,6 +2460,7 @@ public sealed class WorldService(
 
         LoveInterest? seeker = null;
         var best = 0.0;
+        var openThreads = await threads.ListAsync(saveId, openOnly: true, ct).ConfigureAwait(false);
         foreach (var status in await StatusesAsync(saveId, cast, flags, new Dictionary<Guid, RelationshipState>(), ct).ConfigureAwait(false))
         {
             if (Initiative.CoolingDown(flags.GetValueOrDefault($"{status.Key}.initiative_day"), clock.Day))
@@ -2374,6 +2470,14 @@ public sealed class WorldService(
 
             var invites = int.TryParse(flags.GetValueOrDefault($"{status.Key}.invites"), out var n) ? n : 0;
             var chance = Initiative.Chance(status, storyContent.TemperScale(status.Temper, m => m.Initiative), invites, clock.Day);
+
+            // Today's shape, their mood and goal, and something left open between them (a promise, a question)
+            // make it likelier; the cap still holds.
+            var person = cast.First(li => li.Key == status.Key);
+            chance *= DayShapes.Effects(DayShapes.For(saveId.ToString(), clock.Day)).Initiative
+                * Disposition.For(saveId.ToString(), status.Key, clock.Day, status.LastSeenDay is { } seen ? clock.Day - seen : null).InitiativeScale
+                * (openThreads.Any(t => t.CharacterId == person.Id.ToString()) ? Initiative.OpenThreadBoost : 1.0);
+            chance = Math.Min(Initiative.MaxChance, chance);
 
             if (chance > best && Initiative.Rolls(saveId.ToString(), status.Key, clock, chance))
             {

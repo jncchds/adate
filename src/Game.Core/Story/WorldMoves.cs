@@ -34,7 +34,8 @@ public static class WorldMoves
 
         // Nights are spent at home, somewhere the player never goes.
         if (clock.Slot is TimeOfDay.Night || places.Count == 0
-            || Initiative.Unit($"{saveKey}|{schedule.CharacterId}|{clock.Day}|{clock.Slot}|wander") >= WanderChance)
+            || Initiative.Unit($"{saveKey}|{schedule.CharacterId}|{clock.Day}|{clock.Slot}|wander")
+                >= WanderChance * DayShapes.Effects(DayShapes.For(saveKey, clock.Day)).Wander)
         {
             return schedule.Where(clock);
         }
@@ -54,7 +55,8 @@ public static class WorldMoves
             return false;
         }
 
-        var chance = whereNow == placeId ? MeetHereChance : MeetAnywhereChance;
+        var chance = (whereNow == placeId ? MeetHereChance : MeetAnywhereChance)
+            * DayShapes.Effects(DayShapes.For(saveKey, clock.Day)).MeetByChance;
         return Initiative.Unit($"{saveKey}|{key}|{clock.Day}|{clock.Slot}|chance-meeting") < chance;
     }
 }

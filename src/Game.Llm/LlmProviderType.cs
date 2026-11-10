@@ -43,7 +43,10 @@ public static class LlmProviders
     public static bool NeedsApiKey(LlmProviderType provider) => provider is LlmProviderType.OpenAi or LlmProviderType.GoogleAi;
 
     /// <summary>Only an OpenAI-compatible server with one model loaded can pick the model itself.</summary>
-    public static bool NeedsModel(LlmProviderType provider) => provider is not LlmProviderType.OpenAiCompatible;
+    public static bool NeedsModel(LlmProviderType provider) => provider is LlmProviderType.Ollama;
+
+    /// <summary>The model Google AI uses when none is set: the free tier's cheapest, which is also what tests and live runs use.</summary>
+    public const string DefaultGoogleModel = "gemini-3.5-flash-lite";
 
     /// <summary>
     /// Whether the model runs on the GPU the pictures share, so its calls hold the GPU lease (HANDOFF 1.6).

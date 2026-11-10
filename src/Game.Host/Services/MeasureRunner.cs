@@ -99,6 +99,12 @@ public static class MeasureRunner
         var opening = setting.Openings.FirstOrDefault(o => o.Id == Arg(args, "--opening")) ?? setting.Openings[0];
         var varied = Arg(args, "--policy") == "varied";
 
+        // --policy company: go where someone met is now, and otherwise spread visits out as usual.
+        var company = Arg(args, "--policy") == "company";
+
+        // --max-turns <n> stops after n scenes (a quick look at a few days without a whole game's calls).
+        var maxTurns = int.TryParse(Arg(args, "--max-turns"), out var limit) ? limit : int.MaxValue;
+
         // A new game the way the form makes one, with the first option of every feature.
         // --save <id> carries on an existing save instead of starting one; --stop-at-ending leaves the
         // ending offer on screen for a person to pick, rather than taking the first route.
@@ -146,6 +152,11 @@ public static class MeasureRunner
         {
             var play = await world.GetPlayStateAsync(save.Id);
 
+            if (turns >= maxTurns)
+            {
+                break;
+            }
+
             if (play.Ending is not null)
             {
                 break;
@@ -167,6 +178,13 @@ public static class MeasureRunner
 
             if (play.PendingScene is { } waiting)
             {
+                // A conversation that has closed has no reply to offer: the scene is put away, as Continue does.
+                if (waiting.Choices.Count == 0)
+                {
+                    await world.CloseSceneAsync(save.Id);
+                    continue;
+                }
+
                 // The first proposed reply, or with --policy varied each one in turn.
                 await world.RespondAsync(save.Id, varied ? choices % waiting.Choices.Count : 0, null);
                 choices++;
@@ -184,6 +202,17 @@ public static class MeasureRunner
             // Follow the story's hints, bring someone along whenever an encounter would honour it,
             // and otherwise spread visits over the places the player knows.
             var place = PlaceFor(play, opening, visits);
+
+            // Going somewhere together is a commitment the map offers one place for.
+            if (play.Heading is { } heading)
+            {
+                place = heading.PlaceId;
+            }
+            else if (company && play.Clock.Slot is not Game.Core.Scenes.TimeOfDay.Night
+                && (await world.WhereAreTheyAsync(save.Id)).Values.FirstOrDefault() is { } where)
+            {
+                place = where;
+            }
             var invite = play.Invitees.FirstOrDefault()?.Key;
 
             Game.Core.Encounters.TurnOutcome outcome;

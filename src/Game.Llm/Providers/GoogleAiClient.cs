@@ -21,9 +21,13 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
         var settings = options.Value;
         var generation = new JsonObject { ["temperature"] = settings.Temperature };
 
+        var thinking = !LlmProviders.IsGemma(settings.Model) ? ThinkingBudget(settings.ReasoningEffort) : null;
+
+        // Thinking tokens are spent from the same output cap: an 8k budget under a 2-3k cap cut the JSON off
+        // mid-string and cost a retry on most turns (seen in live play), so the cap is raised by the budget.
         if (request.MaxTokens is { } maxTokens)
         {
-            generation["maxOutputTokens"] = maxTokens;
+            generation["maxOutputTokens"] = maxTokens + (thinking ?? 0);
         }
 
         if (json)
@@ -32,7 +36,7 @@ public sealed class GoogleAiClient(HttpClient http, IOptions<LlmOptions> options
             generation["responseJsonSchema"] = request.Schema.DeepClone();
         }
 
-        if (!LlmProviders.IsGemma(settings.Model) && ThinkingBudget(settings.ReasoningEffort) is { } budget)
+        if (thinking is { } budget)
         {
             generation["thinkingConfig"] = new JsonObject { ["thinkingBudget"] = budget };
         }
@@ -112,36 +116,105 @@ internal static class GoogleAiHttp
     /// <summary>Model ids are accepted with or without the <c>models/</c> prefix Google lists them with.</summary>
     public static string ModelPath(string model)
     {
-        if (string.IsNullOrWhiteSpace(model))
-        {
-            throw new InvalidOperationException("Google AI Studio needs a model id, such as gemini-3.6-flash.");
-        }
-
-        var id = model.Trim();
+        var id = string.IsNullOrWhiteSpace(model) ? LlmProviders.DefaultGoogleModel : model.Trim();
         return id.StartsWith("models/", StringComparison.Ordinal) ? id : "models/" + id;
     }
 
+    internal const int BusyRetries = 2;
+
+    /// <summary>A rate-limit wait longer than this is not waited out in a turn: the player is told instead.</summary>
+    internal static readonly TimeSpan LongestWait = TimeSpan.FromSeconds(15);
+
+    /// <summary>The model is overloaded ("high demand" is common on the free tier): worth trying again shortly.</summary>
+    internal static bool IsBusy(System.Net.HttpStatusCode status) => status is System.Net.HttpStatusCode.InternalServerError
+        or System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout;
+
+    /// <summary>Wait before try number <paramref name="attempt"/> (1-based): 2, 4, 8 s.</summary>
+    internal static TimeSpan RetryDelay(int attempt) => TimeSpan.FromSeconds(Math.Pow(2, attempt));
+
+    /// <summary>
+    /// Reads a 429. A limit "per day" cannot be waited out; Google's own <c>retryDelay</c> is the wait for a
+    /// per-minute one. Every request that gets through counts against the quota, so a daily 429 is never retried.
+    /// </summary>
+    internal static LlmQuotaException ReadQuota(string payload, TimeSpan? header, string model)
+    {
+        string? message = null;
+        var wait = header;
+        var daily = payload.Contains("PerDay", StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            var error = JsonNode.Parse(payload)?["error"];
+            message = error?["message"]?.GetValue<string>();
+            foreach (var detail in error?["details"]?.AsArray() ?? [])
+            {
+                var delay = detail?["retryDelay"]?.GetValue<string>();
+                if (delay is { Length: > 1 } && delay.EndsWith('s')
+                    && double.TryParse(delay[..^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+                {
+                    wait = TimeSpan.FromSeconds(seconds);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        {
+            // Not Google's usual error body: the raw text below says what there is.
+        }
+
+        var first = (message ?? payload).Split('\n')[0].Trim();
+        var text = daily
+            ? $"Google AI's daily limit for {model} is used up, so the writing is a placeholder until it resets (another model can be chosen in Settings). {first}"
+            : $"Google AI is rate-limiting {model}{(wait is { } w ? $" (try again in {Math.Ceiling(w.TotalSeconds)} s)" : "")}. {first}";
+        return new LlmQuotaException(text.Length > 400 ? text[..400] : text, wait, daily);
+    }
     public static async Task<string> PostAsync(HttpClient http, LlmOptions settings, string path, JsonObject body, CancellationToken ct)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, path)
-        {
-            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
-        };
+        var json = body.ToJsonString();
+        var busy = 0;
 
-        if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+        while (true)
         {
-            message.Headers.Add("x-goog-api-key", settings.ApiKey.Trim());
-        }
+            using var message = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
 
-        using var response = await http.SendAsync(message, ct).ConfigureAwait(false);
-        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(settings.ApiKey))
+            {
+                message.Headers.Add("x-goog-api-key", settings.ApiKey.Trim());
+            }
 
-        if (!response.IsSuccessStatusCode)
-        {
+            using var response = await http.SendAsync(message, ct).ConfigureAwait(false);
+            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return payload;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                var quota = ReadQuota(payload, response.Headers.RetryAfter?.Delta, settings.Model);
+                if (!quota.Daily && busy < 1 && quota.RetryAfter is { } wait && wait <= LongestWait)
+                {
+                    busy++;
+                    await Task.Delay(wait + TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                throw quota;
+            }
+
+            if (IsBusy(response.StatusCode) && busy < BusyRetries)
+            {
+                await Task.Delay(RetryDelay(++busy), ct).ConfigureAwait(false);
+                continue;
+            }
+
             throw new HttpRequestException(
-                $"Google AI Studio answered {(int)response.StatusCode}: {payload[..Math.Min(300, payload.Length)]}");
+                $"Google AI Studio answered {(int)response.StatusCode}: {payload[..Math.Min(300, payload.Length)]}",
+                null,
+                response.StatusCode);
         }
-
-        return payload;
     }
 }
